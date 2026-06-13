@@ -1,16 +1,33 @@
 import pytest
-
+from unittest.mock import MagicMock
 from src.agents.graph import agent
 
 
 @pytest.mark.asyncio
 async def test_agent_basic_flow():
-    result = await agent.ainvoke({"query": "Hello"})
-    assert "response" in result
+    # Cung cấp đầy đủ các trường bắt buộc trong AgentState
+    state_input = {
+        "user_message": "Hello",
+        "messages": [{"role": "user", "content": "Hello"}],
+        "course_id": 1,
+        "user_id": 1,
+        "db": MagicMock()
+    }
+    result = await agent.ainvoke(state_input)
+    assert "final_text" in result
+    assert result["status"] == "answered"
 
 
 @pytest.mark.asyncio
 async def test_agent_state_structure():
-    result = await agent.ainvoke({"query": "Test query"})
+    state_input = {
+        "user_message": "Test query",
+        "messages": [{"role": "user", "content": "Test query"}],
+        "course_id": 1,
+        "user_id": 1,
+        "db": MagicMock()
+    }
+    result = await agent.ainvoke(state_input)
     assert isinstance(result, dict)
-    assert "query" in result
+    assert "user_message" in result
+    assert "status" in result
