@@ -1,0 +1,272 @@
+/* ============================================================
+   Login.css - VinUni Luxury & Refined Academy Stylesheet
+   ============================================================ */
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  /* Premium luxury animated background mesh gradient */
+  background: linear-gradient(-45deg, #050811, #0b1121, #0b2545, #131b30);
+  background-size: 400% 400%;
+  animation: meshMovement 15s ease infinite;
+  color: var(--text-primary);
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+}
+
+/* Ambient Gold & Navy Bubbles/Blobs */
+.login-bubble-1 {
+  position: absolute;
+  width: 450px;
+  height: 450px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(197, 168, 128, 0.15) 0%, rgba(11, 37, 69, 0) 70%);
+  top: -100px;
+  left: -100px;
+  filter: blur(50px);
+  z-index: 1;
+}
+
+.login-bubble-2 {
+  position: absolute;
+  width: 550px;
+  height: 550px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(197, 168, 128, 0.1) 0%, rgba(19, 64, 116, 0) 70%);
+  bottom: -150px;
+  right: -150px;
+  filter: blur(70px);
+  z-index: 1;
+}
+
+/* Glassmorphism Luxury Card with Fine Gold Border */
+.login-card {
+  width: 100%;
+  max-width: 450px;
+  background: rgba(11, 17, 33, 0.75);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(197, 168, 128, 0.25); /* Elegant gold card border */
+  border-radius: 28px;
+  padding: 45px 40px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+[data-theme="light"] .login-card,
+[data-theme="academic"] .login-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(197, 168, 128, 0.4);
+  box-shadow: 0 20px 45px rgba(11, 37, 69, 0.12);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 35px;
+}
+
+.login-title {
+  color: #ffffff;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  margin: 0 0 10px 0;
+  background: linear-gradient(135deg, #f5ede0 0%, #c5a880 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .login-title,
+[data-theme="academic"] .login-title {
+  background: linear-gradient(135deg, #0b2545 0%, #c5a880 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+.login-subtitle {
+  color: #94a3b8;
+  font-size: 13.5px;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: 0.2px;
+}
+
+[data-theme="light"] .login-subtitle,
+[data-theme="academic"] .login-subtitle {
+  color: var(--text-secondary);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.login-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.login-label {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+[data-theme="light"] .login-label,
+[data-theme="academic"] .login-label {
+  color: var(--text-secondary);
+}
+
+.login-input {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(197, 168, 128, 0.2);
+  border-radius: 14px;
+  padding: 15px 18px;
+  color: #f8fafc;
+  font-size: 14px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+  font-family: inherit;
+}
+
+[data-theme="light"] .login-input,
+[data-theme="academic"] .login-input {
+  background: #ffffff;
+  border: 1px solid #d1c5b2;
+  color: var(--text-primary);
+}
+
+.login-input::placeholder {
+  color: #64748b;
+}
+
+.login-input:focus {
+  border-color: var(--vinuni-gold);
+  box-shadow: 0 0 0 3px rgba(197, 168, 128, 0.25);
+  background: rgba(15, 23, 42, 0.85);
+}
+
+[data-theme="light"] .login-input:focus,
+[data-theme="academic"] .login-input:focus {
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(197, 168, 128, 0.15);
+}
+
+.login-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--danger-color);
+  color: #f87171;
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-size: 13px;
+  margin-bottom: 15px;
+  text-align: center;
+  font-weight: 600;
+}
+
+[data-theme="light"] .login-error,
+[data-theme="academic"] .login-error {
+  background: var(--danger-bg);
+  color: var(--danger-color);
+}
+
+/* Premium Gold-Navy action button */
+.login-submit-btn {
+  background: linear-gradient(135deg, #0b2545 0%, #134074 100%);
+  border: 1px solid var(--vinuni-gold);
+  color: #ffffff;
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 14.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  margin-top: 12px;
+  letter-spacing: 0.5px;
+}
+
+[data-theme="dark"] .login-submit-btn {
+  background: linear-gradient(135deg, #c5a880 0%, #a3875f 100%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #0b2545;
+  box-shadow: 0 4px 15px rgba(197, 168, 128, 0.2);
+}
+
+.login-submit-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(197, 168, 128, 0.45);
+  background: linear-gradient(135deg, #134074 0%, #0b2545 100%);
+}
+
+[data-theme="dark"] .login-submit-btn:hover {
+  background: linear-gradient(135deg, #d8c2a3 0%, #c5a880 100%);
+  box-shadow: 0 8px 25px rgba(197, 168, 128, 0.6);
+}
+
+.login-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.login-footer {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.login-footer-text {
+  color: #94a3b8;
+  font-size: 13px;
+  margin: 0;
+}
+
+[data-theme="light"] .login-footer-text,
+[data-theme="academic"] .login-footer-text {
+  color: var(--text-muted);
+}
+
+.login-switch-btn {
+  background: none;
+  border: none;
+  color: var(--vinuni-gold);
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 0;
+  text-decoration: underline;
+  transition: all 0.2s ease;
+}
+
+[data-theme="light"] .login-switch-btn,
+[data-theme="academic"] .login-switch-btn {
+  color: var(--vinuni-navy);
+}
+
+.login-switch-btn:hover {
+  color: #ffffff;
+  text-shadow: 0 0 5px rgba(197, 168, 128, 0.6);
+}
+
+[data-theme="light"] .login-switch-btn:hover,
+[data-theme="academic"] .login-switch-btn:hover {
+  color: var(--vinuni-gold-dark);
+  text-shadow: none;
+}
+
+.login-btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}

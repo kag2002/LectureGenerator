@@ -1,0 +1,949 @@
+/* ============================================================
+   AppShell.css - VinUni Luxury & Refined Academy Layout
+   ============================================================ */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+}
+
+/* ---- Sidebar CONTAINER ---- */
+.app-sidebar {
+  width: 260px;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  z-index: 50;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .app-sidebar {
+  border-right: 1px solid rgba(197, 168, 128, 0.18);
+  background-color: #060a14;
+}
+
+.app-sidebar.collapsed {
+  width: 72px;
+}
+
+/* Sidebar Header & Brand */
+.sidebar-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .sidebar-header {
+  border-bottom: 1px solid rgba(197, 168, 128, 0.15);
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'Lora', serif;
+  overflow: hidden;
+}
+
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--accent-gradient);
+  border: 1px solid var(--vinuni-gold);
+  color: #ffffff;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px var(--border-glow);
+}
+
+[data-theme="dark"] .logo-icon {
+  color: #0b2545;
+  box-shadow: 0 4px 10px rgba(197, 168, 128, 0.25);
+}
+
+.logo-text {
+  font-family: 'Lora', serif;
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+.collapse-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.collapse-btn:hover {
+  background: var(--vinuni-gold);
+  border-color: var(--vinuni-gold);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
+[data-theme="dark"] .collapse-btn:hover {
+  color: #0b2545;
+}
+
+/* Course Context Card */
+.course-context {
+  padding: 16px;
+  margin: 15px 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  transition: padding 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.app-sidebar.collapsed .course-context {
+  padding: 12px 6px;
+  margin: 12px 8px;
+  justify-content: center;
+}
+
+.course-badge {
+  background: var(--vinuni-navy);
+  border: 1px solid var(--vinuni-gold);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  text-align: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .course-badge {
+  background: rgba(197, 168, 128, 0.15);
+  color: var(--vinuni-gold);
+  border: 1px solid var(--vinuni-gold);
+}
+
+.course-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.course-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+.course-role {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Sidebar Nav Items */
+.sidebar-nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+}
+
+.app-sidebar.collapsed .sidebar-nav {
+  padding: 10px 8px;
+}
+
+.nav-item {
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+.nav-item:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-primary);
+  transform: translateX(2px);
+}
+
+.app-sidebar.collapsed .nav-item:hover {
+  transform: none;
+}
+
+.nav-item.active {
+  background-color: var(--accent-light);
+  color: var(--vinuni-navy);
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+}
+
+[data-theme="dark"] .nav-item.active {
+  color: var(--vinuni-gold);
+  border-color: rgba(197, 168, 128, 0.25);
+  background-color: rgba(197, 168, 128, 0.08);
+}
+
+.nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+}
+
+.nav-item:hover .nav-icon {
+  transform: scale(1.08);
+}
+
+.nav-label {
+  font-size: 13.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.2px;
+}
+
+/* Shining gold active indicator bar */
+.active-indicator {
+  position: absolute;
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 4px;
+  background-color: var(--vinuni-gold);
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 0 8px var(--vinuni-gold);
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+  padding: 15px 12px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-theme="dark"] .sidebar-footer {
+  border-top: 1px solid rgba(197, 168, 128, 0.15);
+}
+
+.footer-btn {
+  width: 100%;
+  height: 42px;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+}
+
+.footer-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--vinuni-gold);
+  box-shadow: 0 4px 10px rgba(197, 168, 128, 0.15);
+}
+
+.app-sidebar.collapsed .sidebar-footer {
+  padding: 15px 8px;
+  align-items: center;
+}
+
+.app-sidebar.collapsed .footer-btn {
+  padding: 0;
+  span {
+    display: none;
+  }
+}
+
+/* Sidebar User Card */
+.sidebar-user-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  border-radius: 12px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .sidebar-user-card {
+  border-color: rgba(197, 168, 128, 0.15);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-user-card .user-profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  height: auto;
+  box-shadow: none;
+}
+
+.sidebar-user-card .user-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sidebar-user-card .username {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-user-card .user-role {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.sidebar-actions-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.sidebar-actions-row .theme-toggle {
+  flex-shrink: 0;
+  height: 36px;
+  width: 36px;
+  border-radius: 10px;
+}
+
+.sidebar-actions-row .logout-btn {
+  flex: 1;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--danger-color);
+  border-radius: 10px;
+  height: 36px;
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  white-space: nowrap;
+}
+
+.sidebar-actions-row .logout-btn:hover {
+  background: var(--danger-color);
+  color: #ffffff;
+  border-color: var(--danger-color);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+/* Sidebar Collapsed Actions */
+.sidebar-collapsed-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.sidebar-collapsed-actions .collapsed-avatar {
+  background: transparent;
+  border: none;
+  padding: 0;
+  height: auto;
+  box-shadow: none;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.sidebar-collapsed-actions .avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="dark"] .sidebar-collapsed-actions .avatar {
+  border-color: rgba(197, 168, 128, 0.15);
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.sidebar-collapsed-actions .theme-toggle {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.sidebar-collapsed-actions .logout-btn.icon-only {
+  width: 38px;
+  height: 38px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--danger-color);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 0;
+}
+
+.sidebar-collapsed-actions .logout-btn.icon-only:hover {
+  background: var(--danger-color);
+  color: #ffffff;
+  border-color: var(--danger-color);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+/* ---- Main Area Wrappers ---- */
+.app-main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  position: relative;
+}
+
+.app-main-wrapper:has(.planner-editor-panel.fullscreen) {
+  z-index: 10000 !important;
+}
+
+body.editor-fullscreen .app-sidebar {
+  z-index: 10 !important;
+}
+
+body.editor-fullscreen .app-top-header {
+  z-index: 10 !important;
+}
+
+body.editor-fullscreen .app-main-wrapper {
+  z-index: 10000 !important;
+}
+
+body.editor-fullscreen .app-main-content {
+  z-index: 10001 !important;
+  position: relative;
+}
+
+/* Top Sticky Header Bar */
+.app-top-header {
+  height: 64px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  z-index: 40;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .app-top-header {
+  background-color: #060a14;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.18);
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.breadcrumb-parent {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.breadcrumb-parent.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.breadcrumb-parent.clickable:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.breadcrumb-separator {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+.breadcrumb-current {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.breadcrumb-current.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.breadcrumb-current.clickable:hover {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
+
+/* For course info clickability */
+.header-course-info.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.header-course-info.clickable:hover .course-name {
+  color: var(--accent-color);
+  text-decoration: underline;
+}
+
+.header-course-info.clickable:hover .course-badge {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Light / Dark Mode Toggle button */
+.theme-toggle {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-toggle:hover {
+  background: var(--accent-light);
+  border-color: var(--vinuni-gold);
+  color: var(--text-primary);
+  transform: translateY(-1px) scale(1.05);
+}
+
+/* Glassmorphic user profile pill with gold boundary */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  border-radius: 10px;
+  height: 36px;
+  transition: all 0.25s ease;
+}
+
+.user-profile:hover {
+  border-color: var(--vinuni-gold);
+  box-shadow: 0 4px 10px rgba(197, 168, 128, 0.1);
+}
+
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.username {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* Logout Button */
+.app-top-header .logout-btn {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--danger-color);
+  border-radius: 10px;
+  padding: 0 14px;
+  height: 36px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-top-header .logout-btn:hover {
+  background: var(--danger-color);
+  color: #ffffff;
+  border-color: var(--danger-color);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Content Container */
+.app-main-content {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  background-color: var(--bg-primary);
+}
+
+.app-main-content:has(.chatbot-container) {
+  overflow: hidden;
+}
+
+
+.content-container {
+  min-height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+/* Rescale default views paddings when inside AppShell */
+.app-main-content .container,
+.app-main-content .roadmap-page,
+.app-main-content .config-page,
+.app-main-content .planner-page {
+  padding: 24px 30px;
+  min-height: calc(100vh - 64px);
+}
+
+.app-main-content .roadmap-viewport {
+  height: calc(100vh - 220px);
+  min-height: 450px;
+}
+
+/* ============================================================
+   Header Portal Slot Layout & Child Overrides
+   ============================================================ */
+.header-portal-slot {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  height: 100%;
+  margin-right: 20px;
+}
+
+.header-portal-slot .planner-work-tab-container-new {
+  box-shadow: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.header-portal-slot .planner-work-tab-btn {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.header-portal-slot .planner-back-btn,
+.header-portal-slot .qb-back-btn,
+.header-portal-slot .matrix-back-btn,
+.header-portal-slot .course-config-back-btn,
+.header-portal-slot .rag-back-btn,
+.header-back-btn {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  background: var(--accent-light);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.header-portal-slot .planner-back-btn:hover,
+.header-portal-slot .qb-back-btn:hover,
+.header-portal-slot .matrix-back-btn:hover,
+.header-portal-slot .course-config-back-btn:hover,
+.header-portal-slot .rag-back-btn:hover,
+.header-back-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
+
+.header-portal-slot .qb-title,
+.header-portal-slot .matrix-course-title,
+.header-portal-slot .course-config-title,
+.header-portal-slot .rag-course-title,
+.header-page-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  margin: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 250px;
+}
+
+.header-portal-slot .qb-dashboard-btn,
+.header-portal-slot .qb-export-btn,
+.header-portal-slot .planner-export-btn,
+.header-portal-slot .planner-save-btn,
+.header-portal-slot .editor-header-btn-green-outline,
+.header-portal-slot .planner-qbank-btn,
+.header-portal-slot .course-config-start-planning-btn {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header-portal-slot .planner-monitor-badge {
+  padding: 0 12px;
+  height: 34px;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+.header-portal-slot .planner-collapse-header-btn,
+.header-portal-slot .editor-header-icon-btn {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s;
+}
+
+.header-portal-slot .editor-header-icon-btn:hover,
+.header-portal-slot .planner-collapse-header-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--vinuni-gold);
+  color: var(--text-primary);
+}
+
+.header-portal-slot .editor-header-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0 8px;
+  height: 34px;
+  box-sizing: border-box;
+}
+
+.header-portal-slot .editor-header-select {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  padding: 0;
+  height: 100%;
+}
+
+/* ============================================================
+   Refining Header Portal Layout, Color Balance & Stepper
+   ============================================================ */
+
+/* 1. Integrate FlowSteps timeline flatly into the top header (no double-container clutter) */
+.header-portal-slot .flow-steps-container,
+.header-center .flow-steps-container {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  backdrop-filter: none !important;
+}
+
+/* 2. Clear high-contrast text ratios for active, past, and future stepper nodes */
+.header-portal-slot .flow-step-item.active,
+.header-center .flow-step-item.active {
+  color: var(--text-primary) !important;
+  background: var(--accent-light) !important;
+  border: 1px solid var(--border-color) !important;
+  font-weight: 700 !important;
+}
+
+.header-portal-slot .flow-step-item.past,
+.header-center .flow-step-item.past {
+  color: var(--success-color) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+}
+
+.header-portal-slot .flow-step-item.future,
+.header-center .flow-step-item.future {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+}
+
+/* Make stepper arrows more subtle & consistent */
+.header-portal-slot .flow-step-arrow,
+.header-center .flow-step-arrow {
+  color: var(--border-color) !important;
+  opacity: 0.7;
+}
+
+/* 3. Tighten layout constraints inside portal slot (no wrapping, clean spacing) */
+.header-portal-slot .qb-header-left,
+.header-portal-slot .header-merged-left,
+.header-portal-slot .matrix-header-left,
+.header-portal-slot .course-config-header-left,
+.header-portal-slot .rag-header-left {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.header-portal-slot .qb-header-right,
+.header-portal-slot .header-merged-right {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+}
+
+/* Adjust title size inside header slot to prevent pushing elements */
+.header-portal-slot .qb-title,
+.header-portal-slot .matrix-course-title,
+.header-portal-slot .course-config-title,
+.header-portal-slot .rag-course-title {
+  font-size: 15px !important;
+  max-width: 200px !important;
+}
+
+/* 4. Responsive adjustments for mid-sized screens (e.g. laptops, smaller monitors) */
+@media (max-width: 1400px) {
+  .header-portal-slot .flow-step-label,
+  .header-center .flow-step-label {
+    display: none !important;
+  }
+  .header-portal-slot .flow-step-item,
+  .header-center .flow-step-item {
+    padding: 6px 10px !important;
+    gap: 0 !important;
+  }
+  .header-portal-slot .flow-step-arrow,
+  .header-center .flow-step-arrow {
+    padding: 0 1px !important;
+  }
+}
+
+/* Hide flow-steps timeline on smaller screens to avoid overlapping action buttons */
+@media (max-width: 1150px) {
+  .header-portal-slot .flow-steps-container,
+  .header-center .flow-steps-container {
+    display: none !important;
+  }
+}
+
+

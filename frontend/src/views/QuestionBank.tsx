@@ -1,0 +1,582 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import client from '../api/client';
+import FlowSteps from '../components/FlowSteps';
+import QuestionConfigForm from '../components/QuestionConfigForm';
+import QuestionEditorForm from '../components/QuestionEditorForm';
+import QuestionCard from '../components/QuestionCard';
+import { ArrowLeft, BookOpen, BarChart2, Download, Plus } from 'lucide-react';
+import { Course, CLO, Chapter, Question } from '@/types';
+import '../styles/QuestionBank.css';
+
+export interface QuestionBankProps {
+  course: Course;
+  initialChapterId: number | null;
+  initialCloId: number | null;
+  initialBloomLevel: number | null;
+  onBack: () => void;
+  onGoToLessonPlanner?: () => void;
+  onViewDashboard: () => void;
+  onNavigate: (view: string, extra?: any) => void;
+  onRecordAIUsage: (usage: {
+    operation: string;
+    model?: string;
+    latency: number;
+    cost?: number;
+    tokens?: { prompt: number; completion: number };
+    status: 'success' | 'error';
+  }) => void;
+  setAIProcessingStatus: (isProcessing: boolean, message?: string) => void;
+  isActive?: boolean;
+}
+
+export default function QuestionBank({
+  course,
+  initialChapterId,
+  initialCloId,
+  initialBloomLevel,
+  onBack,
+  onGoToLessonPlanner,
+  onViewDashboard,
+  onNavigate,
+  onRecordAIUsage,
+  setAIProcessingStatus,
+  isActive
+}: QuestionBankProps) {
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById('app-header-portal-slot'));
+  }, []);
+
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [clos, setClos] = useState<CLO[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  
+  // States cho Form Sinh Câu hỏi
+  const [selectedClo, setSelectedClo] = useState<string | number>('');
+  const [selectedChapter, setSelectedChapter] = useState<string | number>('');
+  const [bloomLevel, setBloomLevel] = useState<number>(3);
+  const [count, setCount] = useState<string | number>(3);
+  const [generating, setGenerating] = useState(false);
+  const [genLog, setGenLog] = useState('');
+  const [isFastMode, setIsFastMode] = useState(false);
+
+  // General States
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
+
+  // Load ban đầu
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // 1. Load questions
+      const qRes = await client.get(`/api/courses/${course.id}/questions`);
+      setQuestions(qRes.data);
+      
+      // 2. Load CLOs
+      const cloRes = await client.get(`/api/courses/${course.id}/clos`);
+      setClos(cloRes.data);
+      if (initialCloId) {
+        setSelectedClo(initialCloId);
+      } else if (cloRes.data.length > 0) {
+        setSelectedClo(cloRes.data[0].id);
+      }
+      
+      // 3. Load Chapters
+      const capRes = await client.get(`/api/courses/${course.id}/chapters`);
+      setChapters(capRes.data);
+      if (capRes.data.length > 0) {
+        const found = initialChapterId && capRes.data.some((c: Chapter) => c.id === initialChapterId);
+        setSelectedChapter(found ? (initialChapterId as number) : capRes.data[0].id);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Không thể tải dữ liệu ngân hàng câu hỏi.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [course.id]);
+
+  // Đồng bộ hóa chương học được chọn khi prop initialChapterId thay đổi từ Roadmap
+  useEffect(() => {
+    if (initialChapterId && chapters.length > 0) {
+      const found = chapters.some((c: Chapter) => c.id === initialChapterId);
+      if (found && selectedChapter !== initialChapterId) {
+        setSelectedChapter(initialChapterId);
+      }
+    }
+  }, [initialChapterId, chapters, selectedChapter]);
+
+  // Đồng bộ hóa chuẩn đầu ra và mức Bloom khi được chuyển vùng từ Ma trận
+  useEffect(() => {
+    if (initialCloId) {
+      setSelectedClo(initialCloId);
+    }
+  }, [initialCloId]);
+
+  useEffect(() => {
+    if (initialBloomLevel) {
+      setBloomLevel(initialBloomLevel);
+    }
+  }, [initialBloomLevel]);
+
+  const handleGenerateQuestions = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    setGenerating(true);
+    setGenLog('Khởi động AI Generator... đang kết nối OpenRouter...');
+
+    const token = localStorage.getItem('token');
+    const opStartTime = Date.now();
+    setAIProcessingStatus(true, 'AI đang khởi động generator sinh câu hỏi...');
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/courses/${course.id}/questions/generate-stream`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            clo_id: selectedClo ? parseInt(selectedClo.toString()) : null,
+            chapter_id: selectedChapter ? parseInt(selectedChapter.toString()) : null,
+            bloom_level: parseInt(bloomLevel.toString()),
+            count: parseInt(count.toString()),
+            fast_mode: isFastMode
+          })
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Lỗi server: ${response.status}`);
+      }
+
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const newQuestions: any[] = [];
+      let currentEvent = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Giữ lại dòng chưa hoàn chỉnh
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (currentEvent === 'stage') {
+                setGenLog(data.message);
+                setAIProcessingStatus(true, `Sinh câu hỏi: ${data.message}`);
+              } else if (currentEvent === 'question') {
+                newQuestions.push(data.question);
+                setQuestions(prev => [...prev, data.question]);
+                setGenLog(`Câu ${data.index}/${data.total} đã xác minh và lưu vào CSDL!`);
+              } else if (currentEvent === 'done') {
+                setMessage(data.message);
+                setGenerating(false);
+                setGenLog('');
+                setAIProcessingStatus(false);
+                const opLatency = (Date.now() - opStartTime) / 1000;
+                onRecordAIUsage({
+                  operation: `Sinh câu hỏi tự động - ${count} câu`,
+                  latency: Number(opLatency.toFixed(1)),
+                  cost: data.usage?.total_cost !== undefined ? Number(data.usage.total_cost) : Number((parseInt(count.toString()) * 0.005).toFixed(4)),
+                  tokens: data.usage ? {
+                    prompt: data.usage.prompt_tokens || 0,
+                    completion: data.usage.completion_tokens || 0
+                  } : undefined,
+                  model: data.usage?.model_name,
+                  status: 'success'
+                });
+              } else if (currentEvent === 'error') {
+                setError(data.message);
+                setGenerating(false);
+                setGenLog('');
+                setAIProcessingStatus(false);
+                const opLatency = (Date.now() - opStartTime) / 1000;
+                onRecordAIUsage({
+                  operation: `Sinh câu hỏi tự động - ${count} câu`,
+                  latency: Number(opLatency.toFixed(1)),
+                  cost: 0,
+                  status: 'error'
+                });
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setError(`Lỗi kết nối stream: ${err.message}`);
+      setGenerating(false);
+      setGenLog('');
+      setAIProcessingStatus(false);
+      const opLatency = (Date.now() - opStartTime) / 1000;
+      onRecordAIUsage({
+        operation: `Sinh câu hỏi tự động - ${count} câu`,
+        latency: Number(opLatency.toFixed(1)),
+        cost: 0,
+        status: 'error'
+      });
+    }
+  };
+
+  // Sinh câu hỏi isomorphic
+  const handleGenerateIsomorphic = async (qId: number) => {
+    setError('');
+    setMessage('');
+    setLoading(true);
+    const opStartTime = Date.now();
+    setAIProcessingStatus(true, 'AI đang sinh câu hỏi đồng cấu tương tự...');
+    try {
+      const response = await client.post(`/api/courses/questions/${qId}/generate-isomorphic`);
+      setQuestions([...questions, response.data.question]);
+      setMessage('Đã sinh thành công 1 câu hỏi đồng cấu tương tự!');
+      
+      const opLatency = (Date.now() - opStartTime) / 1000;
+      const usage = response.data.usage;
+      onRecordAIUsage({
+        operation: `Sinh câu hỏi đồng cấu - ID: ${qId}`,
+        latency: Number(opLatency.toFixed(1)),
+        cost: usage?.total_cost !== undefined ? Number(usage.total_cost) : 0.005,
+        tokens: usage ? {
+          prompt: usage.prompt_tokens || 0,
+          completion: usage.completion_tokens || 0
+        } : undefined,
+        model: usage?.model_name,
+        status: 'success'
+      });
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi khi sinh câu hỏi đồng cấu.');
+      
+      const opLatency = (Date.now() - opStartTime) / 1000;
+      onRecordAIUsage({
+        operation: `Sinh câu hỏi đồng cấu - ID: ${qId}`,
+        latency: Number(opLatency.toFixed(1)),
+        cost: 0,
+        status: 'error'
+      });
+    } finally {
+      setLoading(false);
+      setAIProcessingStatus(false);
+    }
+  };
+
+  // Sửa câu hỏi
+  const handleEditClick = (q: Question) => {
+    let options: string[] = [];
+    if (q.options_json) {
+      try {
+        options = JSON.parse(q.options_json);
+      } catch (e) {
+        options = ["", "", "", ""];
+      }
+    } else {
+      options = ["", "", "", ""];
+    }
+    setEditingQuestion({
+      ...q,
+      options
+    });
+  };
+
+  const handleCreateManualClick = () => {
+    setEditingQuestion({
+      id: 'new',
+      question_text: '',
+      options: ['', '', '', ''],
+      correct_answer: '',
+      bloom_level: 3,
+      clo_id: clos.length > 0 ? clos[0].id : null,
+      chapter_id: selectedChapter ? parseInt(selectedChapter.toString()) : null
+    });
+  };
+
+  const handleUpdateQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    
+    // Đảm bảo đáp án đúng phải trùng khớp với một trong các lựa chọn
+    if (!editingQuestion.options.includes(editingQuestion.correct_answer)) {
+      setError('Đáp án đúng phải trùng với một trong bốn lựa chọn đã nhập.');
+      return;
+    }
+
+    try {
+      if (editingQuestion.id === 'new') {
+        const response = await client.post(`/api/courses/${course.id}/questions`, {
+          chapter_id: editingQuestion.chapter_id ? parseInt(editingQuestion.chapter_id.toString()) : null,
+          question_text: editingQuestion.question_text,
+          options_json: JSON.stringify(editingQuestion.options),
+          correct_answer: editingQuestion.correct_answer,
+          bloom_level: parseInt(editingQuestion.bloom_level.toString()),
+          clo_id: editingQuestion.clo_id ? parseInt(editingQuestion.clo_id.toString()) : null
+        });
+        setQuestions([...questions, response.data]);
+        setMessage('Tạo câu hỏi thủ công thành công!');
+      } else {
+        const response = await client.put(`/api/courses/questions/${editingQuestion.id}`, {
+          question_text: editingQuestion.question_text,
+          options_json: JSON.stringify(editingQuestion.options),
+          correct_answer: editingQuestion.correct_answer,
+          bloom_level: parseInt(editingQuestion.bloom_level.toString()),
+          clo_id: editingQuestion.clo_id ? parseInt(editingQuestion.clo_id.toString()) : null
+        });
+        setQuestions(questions.map(q => q.id === editingQuestion.id ? response.data : q));
+        setMessage('Cập nhật câu hỏi thành công!');
+      }
+      setEditingQuestion(null);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Lỗi khi lưu câu hỏi.');
+    }
+  };
+
+  // Xóa câu hỏi
+  const handleDeleteQuestion = async (qId: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa câu hỏi này?')) return;
+    setError('');
+    setMessage('');
+    
+    try {
+      await client.delete(`/api/courses/questions/${qId}`);
+      setQuestions(questions.filter(q => q.id !== qId));
+      setMessage('Đã xóa câu hỏi thành công.');
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi khi xóa câu hỏi.');
+    }
+  };
+
+  // Xuất bản đề thi (tải file Markdown)
+  const handleExportExam = () => {
+    if (questions.length === 0) {
+      setError('Chưa có câu hỏi nào để xuất bản.');
+      return;
+    }
+    
+    let content = `# ĐỀ THI TRẮC NGHIỆM MÔN HỌC: ${(course.course_name || '').toUpperCase()}\n`;
+    content += `Mã môn học: ${course.course_code || ''}\n`;
+    content += `Số lượng câu hỏi: ${questions.length} câu\n`;
+    content += `Sinh tự động bởi AI Lecture Assistant (G02-Team023)\n\n`;
+    content += `--------------------------------------------------------\n\n`;
+    
+    questions.forEach((q, idx) => {
+      content += `Câu ${idx + 1}: ${q.question_text || ''}\n`;
+      let opts: string[] = [];
+      if (q.options_json) {
+        try {
+          opts = JSON.parse(q.options_json);
+        } catch(e) {
+          opts = [];
+        }
+      }
+      
+      const labels = ["A", "B", "C", "D"];
+      opts.forEach((opt, oIdx) => {
+        content += `${labels[oIdx]}. ${opt}\n`;
+      });
+      
+      content += `\n* Đáp án đúng: ${q.correct_answer || ''}\n`;
+      const clo = clos.find(c => c.id === q.clo_id);
+      content += `* Phân loại: [${clo ? (clo.clo_code || clo.code) : 'N/A'}] - Bloom level: ${q.bloom_level}\n\n`;
+      content += `----------------\n\n`;
+    });
+    
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `De_thi_${course.course_code || 'export'}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Helpers hiển thị Bloom text
+  const getBloomText = (lvl: number) => {
+    const texts = ["Nhớ (B1)", "Hiểu (B2)", "Vận dụng (B3)", "Phân tích (B4)", "Đánh giá (B5)", "Sáng tạo (B6)"];
+    return texts[lvl - 1] || `B${lvl}`;
+  };
+
+  return (
+    <div className="qb-container">
+      {/* HEADER */}
+      {isActive && portalTarget ? createPortal(
+        <div className="qb-header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onGoToLessonPlanner && (
+            <button onClick={onGoToLessonPlanner} className="qb-dashboard-btn">
+              <BookOpen size={15} /> Soạn Slide & Giáo án
+            </button>
+          )}
+          <button onClick={onViewDashboard} className="qb-dashboard-btn">
+            <BarChart2 size={15} /> Xem Ma trận Bloom-CLO
+          </button>
+          <button onClick={handleExportExam} className="qb-export-btn">
+            <Download size={15} /> Xuất bản Đề thi (.md)
+          </button>
+        </div>,
+        portalTarget
+      ) : !portalTarget ? (
+        <header className="qb-header">
+          <div className="qb-header-left">
+            <button onClick={onBack} className="qb-back-btn">
+              <ArrowLeft size={15} /> Sơ đồ
+            </button>
+            <div className="qb-course-info">
+              <h2 className="qb-title">Ngân Hàng Đề Thi & Câu Hỏi</h2>
+            </div>
+          </div>
+          <div className="qb-header-right">
+            {onGoToLessonPlanner && (
+              <button onClick={onGoToLessonPlanner} className="qb-dashboard-btn">
+                <BookOpen size={15} /> Soạn Slide & Giáo án
+              </button>
+            )}
+            <button onClick={onViewDashboard} className="qb-dashboard-btn">
+              <BarChart2 size={15} /> Xem Ma trận Bloom-CLO
+            </button>
+            <button onClick={handleExportExam} className="qb-export-btn">
+              <Download size={15} /> Xuất bản Đề thi (.md)
+            </button>
+          </div>
+        </header>
+      ) : null}
+
+      {error && <div className="qb-error-alert">{error}</div>}
+      {message && <div className="qb-success-alert">{message}</div>}
+
+      {initialCloId && initialBloomLevel && (
+        <div className="qb-remedy-alert">
+          <div>
+            🎯 <strong>Đang khắc phục điểm mù chất lượng:</strong> AI Generator và Bộ lọc đã được tự động điều chỉnh chọn chuẩn đầu ra và mức Bloom tương ứng. Nhấn <strong>"Bắt đầu tạo câu hỏi"</strong> ở bảng bên trái hoặc thêm thủ công để bù đắp.
+          </div>
+        </div>
+      )}
+
+      {questions.length > 0 && (
+        <div className="qb-whats-next-banner animate-fade-in">
+          <div className="qb-whats-next-content">
+            <span className="whats-next-sparkle">✨</span>
+            <div style={{ textAlign: 'left' }}>
+              <strong>Ngân hàng đề thi hiện có {questions.length} câu hỏi!</strong> Bạn có thể xuất bản toàn bộ đề thi, xem ma trận bao phủ hoặc quay về bảng tiến độ:
+            </div>
+          </div>
+          <div className="qb-whats-next-actions">
+            <button 
+              onClick={handleExportExam} 
+              className="whats-next-action-btn questions"
+              title="Tải toàn bộ bộ câu hỏi trắc nghiệm dưới dạng tệp Markdown (.md)"
+            >
+              📥 Tải Đề thi (.md)
+            </button>
+            <button 
+              onClick={onViewDashboard} 
+              className="whats-next-action-btn matrix"
+              title="Xem ma trận phân loại phân bố mức Bloom và CLO"
+            >
+              📊 Xem Ma trận Bloom-CLO
+            </button>
+            <button 
+              onClick={() => onNavigate('course_roadmap')}
+              className="whats-next-action-btn roadmap"
+              title="Quay lại sơ đồ tổng thể và trung tâm tải học liệu"
+            >
+              🗺️ Quay về Sơ đồ Lộ trình
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="qb-main-grid">
+
+        <QuestionConfigForm
+          selectedClo={selectedClo}
+          setSelectedClo={setSelectedClo}
+          clos={clos}
+          selectedChapter={selectedChapter}
+          setSelectedChapter={setSelectedChapter}
+          chapters={chapters}
+          bloomLevel={bloomLevel}
+          setBloomLevel={setBloomLevel}
+          count={count}
+          setCount={setCount}
+          generating={generating}
+          loading={loading}
+          genLog={genLog}
+          handleGenerateQuestions={handleGenerateQuestions}
+          isFastMode={isFastMode}
+          setIsFastMode={setIsFastMode}
+        />
+
+        {/* BẢNG CHÍNH BÊN PHẢI: CHI TIẾT CÂU HỎI */}
+        <main className="qb-content-area">
+          <QuestionEditorForm
+            editingQuestion={editingQuestion}
+            setEditingQuestion={setEditingQuestion}
+            clos={clos}
+            handleUpdateQuestion={handleUpdateQuestion}
+          />
+
+          {/* DANH SÁCH CÂU HỎI */}
+          <div className="qb-questions-list">
+            <div className="qb-list-header">
+              <h3>Danh sách Câu hỏi Hiện tại ({questions.length} câu)</h3>
+              <button 
+                onClick={handleCreateManualClick} 
+                className="qb-add-manual-btn"
+              >
+                <Plus size={14} /> Thêm câu hỏi thủ công
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="qb-loading-state">Đang đồng bộ dữ liệu ngân hàng đề thi...</div>
+            ) : questions.length === 0 ? (
+              <div className="qb-empty-state">
+                <p>Chưa có câu hỏi nào trong môn học này.</p>
+                <p className="qb-empty-desc">Hãy cấu hình bảng AI Generator ở bên trái để sinh tự động.</p>
+              </div>
+            ) : (
+              questions.map((q, index) => (
+                <QuestionCard
+                  key={q.id || index}
+                  q={q}
+                  index={index}
+                  clos={clos}
+                  handleGenerateIsomorphic={handleGenerateIsomorphic}
+                  handleEditClick={handleEditClick}
+                  handleDeleteQuestion={handleDeleteQuestion}
+                  getBloomText={getBloomText}
+                />
+              ))
+            )}
+          </div>
+        </main>
+      </div>
+    </div>
+  );
+}

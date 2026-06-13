@@ -1,0 +1,275 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap');
+
+/* ============================================================
+   DESIGN SYSTEM - CSS DESIGN TOKENS (LIGHT/DARK MODE)
+   ============================================================ */
+:root,
+[data-theme="light"] {
+  /* Brand Colors (VinUni Branding) */
+  --vinuni-navy: #0b2545;
+  --vinuni-gold: #c5a880;
+  --vinuni-navy-light: #134074;
+  --vinuni-gold-light: #e6d8c3;
+  --vinuni-navy-dark: #081a30;
+  --vinuni-gold-dark: #a3875f;
+
+  /* default: NEW LIGHT THEME (Deep Blue & White) */
+  --bg-primary: #f8fafc;        /* Clean light slate-50 background */
+  --bg-secondary: #ffffff;      /* White card/sidebar/surface background */
+  --bg-tertiary: #f1f5f9;       /* Slate-100 secondary/tab background */
+  --border-color: #cbd5e1;      /* Slate-300 clean grey border */
+  --border-glow: rgba(11, 37, 69, 0.08);
+  --text-primary: #0f172a;      /* Slate-900 main text */
+  --text-secondary: #334155;    /* Slate-700 secondary text */
+  --text-muted: #64748b;        /* Slate-500 muted text */
+  --accent-color: #0b2545;      /* Navy blue accent */
+  --accent-light: rgba(11, 37, 69, 0.08); /* Light navy background */
+  --accent-gradient: linear-gradient(135deg, #0b2545 0%, #134074 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #134074 0%, #1e5c99 100%);
+  --success-color: #10b981;
+  --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --success-bg: rgba(16, 185, 129, 0.08);
+  --warning-color: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.06);
+  --danger-color: #dc2626;
+  --danger-bg: rgba(220, 38, 38, 0.06);
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 6px 16px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 32px rgba(15, 23, 42, 0.08);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(15, 23, 42, 0.08);
+
+  /* Markdown Preview Theme Tokens - Clean Modern styling */
+  --markdown-bg: #ffffff;
+  --markdown-border: #e2e8f0;
+  --markdown-text: #0f172a;
+  --markdown-text-muted: #64748b;
+  --markdown-bold: #0b2545;
+  --markdown-h1: #0b2545;
+  --markdown-h2: #134074;
+  --markdown-h3: #0b2545;
+  --markdown-table-header-bg: rgba(15, 23, 42, 0.04);
+}
+
+[data-theme="academic"] {
+  /* Brand Colors (VinUni Branding) */
+  --vinuni-navy: #0b2545;
+  --vinuni-gold: #c5a880;
+  --vinuni-navy-light: #134074;
+  --vinuni-gold-light: #e6d8c3;
+  --vinuni-navy-dark: #081a30;
+  --vinuni-gold-dark: #a3875f;
+
+  /* WARM ACADEMIC LIGHT THEME (Old default light mode) */
+  --bg-primary: #faf8f5;        /* Warm light marble/champagne background */
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f2ede4;       /* Warm secondary/card background */
+  --border-color: #d1c5b2;      /* Golden sand border */
+  --border-glow: rgba(197, 168, 128, 0.25);
+  --text-primary: #0b2545;      /* Deep navy for text */
+  --text-secondary: #243c5a;
+  --text-muted: #57708c;
+  --accent-color: #c5a880;      /* Gold accent */
+  --accent-light: rgba(197, 168, 128, 0.12);
+  --accent-gradient: linear-gradient(135deg, #0b2545 0%, #134074 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #134074 0%, #1e5c99 100%);
+  --success-color: #1a5c43;
+  --success-gradient: linear-gradient(135deg, #278f69 0%, #1a5c43 100%);
+  --success-bg: rgba(39, 143, 105, 0.08);
+  --warning-color: #a86c00;
+  --warning-bg: rgba(168, 108, 0, 0.06);
+  --danger-color: #9e1a1a;
+  --danger-bg: rgba(158, 26, 26, 0.06);
+  --shadow-sm: 0 1px 3px rgba(11, 37, 69, 0.04);
+  --shadow-md: 0 8px 20px rgba(11, 37, 69, 0.06);
+  --shadow-lg: 0 16px 40px rgba(11, 37, 69, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(197, 168, 128, 0.2);
+
+  /* Markdown Preview Theme Tokens - Academic Luxury styling */
+  --markdown-bg: #faf8f5;        /* Warm champagne paper background */
+  --markdown-border: #d1c5b2;    /* Soft gold border */
+  --markdown-text: #0b2545;      /* Deep navy primary text */
+  --markdown-text-muted: #57708c; /* Navy secondary text */
+  --markdown-bold: #0b2545;      /* Deep navy bold highlight */
+  --markdown-h1: #0b2545;        /* Deep navy title */
+  --markdown-h2: #a3875f;        /* Deep gold subtitle */
+  --markdown-h3: #0b2545;        /* Deep navy subheading */
+  --markdown-table-header-bg: rgba(11, 37, 69, 0.05);
+}
+
+[data-theme="dark"] {
+  /* DARK THEME COLORS - Luxury Velvet Dark Mode */
+  --bg-primary: #050811;        /* Extremely deep luxury dark blue */
+  --bg-secondary: #0b1121;      /* Deep velvet dark blue secondary */
+  --bg-tertiary: #131b30;       /* Lighter dark surface */
+  --border-color: rgba(197, 168, 128, 0.18); /* Fine gold borders */
+  --border-glow: rgba(197, 168, 128, 0.3);
+  --text-primary: #f5ede0;      /* Warm white/cream primary text */
+  --text-secondary: #cbd5e1;
+  --text-muted: #7f92ac;
+  --accent-color: #c5a880;      /* Luxury gold accent remains gold */
+  --accent-light: rgba(197, 168, 128, 0.18);
+  --accent-gradient: linear-gradient(135deg, #c5a880 0%, #a3875f 100%); /* Gold gradient for dark mode buttons/titles! */
+  --accent-gradient-hover: linear-gradient(135deg, #d8c2a3 0%, #c5a880 100%);
+  --success-color: #34d399;
+  --success-gradient: linear-gradient(135deg, #34d399 0%, #059669 100%);
+  --success-bg: rgba(52, 211, 153, 0.15);
+  --warning-color: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.15);
+  --danger-color: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.15);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md: 0 6px 24px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.7);
+  --glass-bg: rgba(11, 17, 33, 0.85);
+  --glass-border: rgba(197, 168, 128, 0.15);
+
+  /* Markdown Preview Theme Tokens - Velvet Dark Mode */
+  --markdown-bg: #0b1121;        /* Velvet deep navy background */
+  --markdown-border: rgba(197, 168, 128, 0.2); /* Soft gold border */
+  --markdown-text: #f5ede0;      /* Warm white text */
+  --markdown-text-muted: #cbd5e1; /* Slate text */
+  --markdown-bold: #c5a880;      /* Bright gold bold highlight */
+  --markdown-h1: #f5ede0;        /* Warm white title */
+  --markdown-h2: #c5a880;        /* Gold subtitle */
+  --markdown-h3: #cbd5e1;        /* Slate subheading */
+  --markdown-table-header-bg: rgba(197, 168, 128, 0.1);
+}
+
+/* ============================================================
+   GLOBAL STYLES & TYPOGRAPHY
+   ============================================================ */
+body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+h1, h2, h3, h4, h5, h6, .brand-logo, .login-title, .roadmap-title, .planner-title, .modal-title {
+  font-family: 'Lora', serif;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+/* ============================================================
+   ANIMATIONS & KEYFRAMES
+   ============================================================ */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 var(--border-glow);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(0, 0, 0, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes meshMovement {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Luxury mesh background overlay class */
+.luxury-mesh-bg {
+  background: linear-gradient(-45deg, #0b2545, #134074, #050811, #1e293b);
+  background-size: 400% 400%;
+  animation: meshMovement 15s ease infinite;
+}
+
+[data-theme="dark"] .luxury-mesh-bg {
+  background: linear-gradient(-45deg, #050811, #0b1121, #0b2545, #131b30);
+  background-size: 400% 400%;
+  animation: meshMovement 15s ease infinite;
+}
+
+/* Helper utility classes */
+.animated-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulse {
+  animation: pulse 2s infinite;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
