@@ -2,6 +2,8 @@ import json
 import os
 import re
 import subprocess
+from typing import List, Optional
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
@@ -860,3 +862,157 @@ def export_lesson_plan(chapter_id: int, current_user: User = Depends(get_current
 </body>
 </html>"""
     return HTMLResponse(content=html_content, status_code=200)
+
+
+class SlideItemPayload(BaseModel):
+    type: str
+    rawText: Optional[str] = None
+    bullet: Optional[bool] = True
+
+
+class SlidePayload(BaseModel):
+    title: str
+    layout: str
+    items: List[SlideItemPayload]
+    notes: Optional[str] = None
+    screenshot: Optional[str] = None  # Full slide screenshot
+    has_visual: Optional[bool] = False
+    visual_screenshot: Optional[str] = None  # Base64 of diagram/chart/table
+
+
+class ExportCanvasPayload(BaseModel):
+    slides: List[SlidePayload]
+    theme: Optional[str] = "warm_academic"
+
+
+@router.post("/chapters/{chapter_id}/export-pptx-canvas")
+def export_chapter_pptx_canvas(
+    chapter_id: int,
+    payload: ExportCanvasPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # 1. Xác thực chương học và quyền sở hữu môn học
+    chapter = (
+        db.query(Chapter)
+        .join(Course)
+        .filter(Chapter.id == chapter_id, Course.user_id == current_user.id, Chapter.is_active)
+        .first()
+    )
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    # 2. Setup presentation
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+
+    # 3. Choose theme colors
+    themes_colors = {
+        "deep_space": {"bg": "#0A0A1A", "text": "#FFFFFF", "accent": "#00D2FF", "sub": "#8899BB"},
+        "warm_academic": {"bg": "#FAF6EE", "text": "#1A202C", "accent": "#8C6239", "sub": "#5A6A80"},
+        "mint_techno": {"bg": "#0B132B", "text": "#FFFFFF", "accent": "#1DE9B6", "sub": "#B2DFDB"},
+        "sunset_crimson": {"bg": "#1A0813", "text": "#FFFFFF", "accent": "#FF5252", "sub": "#FF8A80"},
+        "mckinsey_consulting": {"bg": "#041E42", "text": "#FFFFFF", "accent": "#00A3A6", "sub": "#80CBC4"},
+    }
+
+    theme_name = payload.theme or "warm_academic"
+    colors = themes_colors.get(theme_name, themes_colors["warm_academic"])
+
+    def hex_to_rgb(hex_str):
+        hex_str = hex_str.lstrip("#")
+        return RGBColor(int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+
+    blank_layout = prs.slide_layouts[6]  # Blank layout
+
+    for s_idx, s in enumerate(payload.slides):
+        slide = prs.slides.add_slide(blank_layout)
+
+        # Set slide background
+        background = slide.background
+        fill = background.fill
+        fill.solid()
+        fill.fore_color.rgb = hex_to_rgb(colors["bg"])
+
+        # Add slide title
+        title_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.5), Inches(11.7), Inches(1.0))
+        tf_title = title_box.text_frame
+        tf_title.word_wrap = True
+        p_title = tf_title.paragraphs[0]
+        p_title.text = s.title
+        p_title.font.name = "Arial"
+        p_title.font.size = Pt(32)
+        p_title.font.bold = True
+        p_title.font.color.rgb = hex_to_rgb(colors["accent"])
+
+        # Determine if slide has a visual element (Mermaid, Chart, Table)
+        has_visual = s.has_visual and s.visual_screenshot
+
+        # Write slide items (bullet points)
+        if has_visual:
+            # Dựng 2 cột
+            # Cột trái: Văn bản (Bullet points)
+            text_box = slide.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(5.5), Inches(4.8))
+            tf = text_box.text_frame
+            tf.word_wrap = True
+
+            # Cột phải: Chèn ảnh chụp cấu phần trực quan
+            try:
+                img_data = s.visual_screenshot
+                if "," in img_data:
+                    img_data = img_data.split(",")[1]
+                image_bytes = base64.b64decode(img_data)
+                image_stream = BytesIO(image_bytes)
+
+                # Insert picture with right position (centered in the right column)
+                slide.shapes.add_picture(image_stream, Inches(6.8), Inches(1.8), width=Inches(5.7))
+            except Exception as e:
+                print(f"Error inserting visual screenshot on slide {s_idx + 1}: {e}")
+                # Fallback: make text box wider
+                text_box.width = Inches(11.7)
+        else:
+            # Slide chỉ có văn bản (Text-only)
+            text_box = slide.shapes.add_textbox(Inches(0.8), Inches(1.8), Inches(11.7), Inches(4.8))
+            tf = text_box.text_frame
+            tf.word_wrap = True
+
+        # Add items to text box
+        text_items = [it for it in s.items if it.type == "text" or it.rawText]
+        for item_idx, item in enumerate(text_items):
+            raw_text = item.rawText or ""
+            clean_text = raw_text.replace("**", "").replace("* ", "").strip()
+            if not clean_text:
+                continue
+
+            if item_idx == 0 and len(tf.paragraphs) > 0 and not tf.paragraphs[0].text:
+                p = tf.paragraphs[0]
+            else:
+                p = tf.add_paragraph()
+
+            p.text = "• " + clean_text if item.bullet else clean_text
+            p.font.name = "Arial"
+            p.font.size = Pt(18 if len(text_items) > 5 else 20)
+            p.font.color.rgb = hex_to_rgb(colors["text"])
+            # Space after paragraphs
+            p.space_after = Pt(12)
+
+        # Add slide notes
+        if s.notes:
+            notes_slide = slide.notes_slide
+            text_frame = notes_slide.notes_text_frame
+            text_frame.text = s.notes
+
+    # Save presentation to a temporary path
+    project_dir = os.path.join("temp", f"ppt_canvas_{chapter_id}")
+    os.makedirs(project_dir, exist_ok=True)
+    output_pptx = os.path.join(project_dir, f"chapter_{chapter_id}_canvas.pptx")
+    prs.save(output_pptx)
+
+    return FileResponse(
+        output_pptx,
+        media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        filename=f"Bai_Giang_Chuong_{chapter_id}.pptx",
+    )
+
