@@ -1,5 +1,8 @@
 # Architecture Diagram
 
+> [!NOTE]
+> **Last updated:** 2026-06-09. This document is a simplified version; please refer to [ARCHITECTURE.md](file:///c:/Users/Admin/Documents/VinUni/CodeLab/C2-App-023/ARCHITECTURE.md) for the active, detailed system architecture.
+
 ## System Overview
 
 ```mermaid

@@ -1,5 +1,8 @@
 # Architecture Document
 
+> [!NOTE]
+> **Last updated:** 2026-06-13. Active system architecture overview.
+
 ## System Overview
 
 Dự án VinUni AI Lecture Assistant được phát triển theo kiến trúc 3 tầng chuẩn hóa, hỗ trợ đắc lực giảng viên thiết kế bài giảng, soạn storyboard slide hoạt động và tạo bộ câu hỏi thi trắc nghiệm theo chuẩn đầu ra (CLO) và thang Bloom.

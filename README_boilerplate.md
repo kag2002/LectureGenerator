@@ -1,5 +1,8 @@
 # [Tên Dự Án]
 
+> [!NOTE]
+> **Last updated:** 2026-06-09. Note: This is a template boilerplate README. Copy its contents to customize [README.md](file:///c:/Users/Admin/Documents/VinUni/CodeLab/C2-App-023/README.md) when the team is ready to document their custom project details.
+
 > Tóm tắt 1 câu: [Vấn đề] → [Giải pháp AI] cho [Target User]
 
 ## Vấn đề (Problem)

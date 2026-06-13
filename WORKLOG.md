@@ -1,5 +1,8 @@
 # Worklog — Team 023
 
+> [!NOTE]
+> **Last updated:** 2026-06-13. Active development worklog.
+
 > Ghi lại tất cả công việc đã làm theo ngày. Ai làm gì, kết quả gì.
 
 ---

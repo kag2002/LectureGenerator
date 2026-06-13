@@ -1,5 +1,8 @@
 # 🤖 AI20K Agent Template
 
+> [!NOTE]
+> **Last updated:** 2026-06-09. Note: This is the official VinUni AI20K Build Phase starter-code-template README. The team will customize it using [README_boilerplate.md](file:///c:/Users/Admin/Documents/VinUni/CodeLab/C2-App-023/README_boilerplate.md) once development is complete.
+
 Template chính thức cho học viên **VinUni AI20K Build Phase** — cung cấp sẵn cấu trúc dự án, code mẫu, và hướng dẫn kỹ thuật chi tiết để xây dựng AI Agent đạt điểm cao (35+/50).
 
 > 📖 **Technical Guidebook:** [phoenix.note.transformerlabs.ai/technical-book](https://phoenix.note.transformerlabs.ai/technical-book)

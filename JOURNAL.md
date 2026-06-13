@@ -1,5 +1,8 @@
 # Weekly Journal — Team [Tên Team]
 
+> [!NOTE]
+> **Last updated:** 2026-06-09. Note: This is a boilerplate/template file. The team has not started updating weekly journal entries yet.
+
 > Ghi lại mỗi tuần: học được gì, khó khăn gì, quyết định gì, kế hoạch tiếp.
 
 ---

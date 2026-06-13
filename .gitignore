@@ -60,3 +60,13 @@ out/
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
 .ai-log/archive/
+
+# Caches
+.pytest_cache/
+.ruff_cache/
+*.tsbuildinfo
+
+# Temp slide output and local agent workspaces
+temp/
+.agents/
+
