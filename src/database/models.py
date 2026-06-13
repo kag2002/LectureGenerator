@@ -1,0 +1,184 @@
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import relationship
+
+from src.database.session import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(100), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    courses = relationship("Course", back_populates="user", cascade="all, delete-orphan")
+
+
+class Course(Base):
+    __tablename__ = "courses"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    course_code = Column(String(50), nullable=False)
+    course_name = Column(String(255), nullable=False)
+    required_textbooks = Column(Text, nullable=True)
+    recommended_readings = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    user = relationship("User", back_populates="courses")
+    clos = relationship("CLO", back_populates="course", cascade="all, delete-orphan")
+    chapters = relationship("Chapter", back_populates="course", cascade="all, delete-orphan")
+    questions = relationship("Question", back_populates="course", cascade="all, delete-orphan")
+
+
+class CLO(Base):
+    __tablename__ = "clos"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    clo_code = Column(String(20), nullable=False)  # ví dụ: CLO1, CLO2
+    description = Column(Text, nullable=False)
+    bloom_level = Column(Integer, nullable=False)  # 1 đến 6
+
+    # Quan hệ
+    course = relationship("Course", back_populates="clos")
+    questions = relationship("Question", back_populates="clo")
+
+
+class Chapter(Base):
+    __tablename__ = "chapters"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    sort_order = Column(Integer, nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    course = relationship("Course", back_populates="chapters")
+    materials = relationship("ChapterMaterial", back_populates="chapter", uselist=False, cascade="all, delete-orphan")
+    questions = relationship("Question", back_populates="chapter")
+
+
+class ChapterMaterial(Base):
+    __tablename__ = "chapter_materials"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False)
+    slide_content = Column(Text, nullable=True)  # Markdown text
+    active_learning_script = Column(Text, nullable=True)  # Text guide
+    is_active = Column(Boolean, default=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Quan hệ
+    chapter = relationship("Chapter", back_populates="materials")
+
+
+class Question(Base):
+    __tablename__ = "questions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    question_text = Column(Text, nullable=False)
+    question_type = Column(String(20), default="MCQ")  # MCQ | Short Answer
+    options_json = Column(Text, nullable=True)  # JSON array of options for MCQ
+    correct_answer = Column(String(50), nullable=False)
+    bloom_level = Column(Integer, nullable=False)
+    clo_id = Column(Integer, ForeignKey("clos.id", ondelete="SET NULL"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    course = relationship("Course", back_populates="questions")
+    chapter = relationship("Chapter", back_populates="questions")
+    clo = relationship("CLO", back_populates="questions")
+
+
+class MaterialRevision(Base):
+    """Lưu lịch sử chỉnh sửa nội dung bài giảng/kịch bản để hỗ trợ rollback."""
+
+    __tablename__ = "material_revisions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False)
+
+    field = Column(String(50), nullable=False)  # "slide_content" hoặc "active_learning_script"
+    content_before = Column(Text, nullable=False)
+    content_after = Column(Text, nullable=False)
+    user_prompt = Column(Text, nullable=True)  # Yêu cầu sửa của giảng viên
+    ai_consistency_note = Column(Text, nullable=True)  # Ghi chú AI kiểm tra xung đột
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    chapter = relationship("Chapter")
+
+
+class ChatSession(Base):
+    """Lưu phiên trò chuyện của giảng viên."""
+
+    __tablename__ = "chat_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=True)
+    title = Column(String(255), default="Cuộc trò chuyện mới")
+    active_leaf_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    course = relationship("Course")
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    """Lưu tin nhắn chi tiết trong phiên chat kèm siêu dữ liệu token."""
+
+    __tablename__ = "chat_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(50), nullable=False)  # "user", "assistant", "system"
+    content = Column(Text, nullable=False)
+    parent_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    tool_calls = Column(Text, nullable=True)  # JSON string của tool calls
+    tool_results = Column(Text, nullable=True)  # JSON string của kết quả tool
+
+    # Token & Latency tracking
+    prompt_tokens = Column(Integer, default=0)
+    completion_tokens = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    latency_ms = Column(Float, default=0.0)
+    trace_id = Column(String(255), nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    session = relationship("ChatSession", back_populates="messages")
+
+
+class ChatEvalRun(Base):
+    """Lưu trữ lịch sử chạy đánh giá chất lượng tự động."""
+
+    __tablename__ = "chat_eval_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    eval_run_id = Column(String(255), unique=True, nullable=False)
+    provider = Column(String(100), nullable=False)
+    model = Column(String(100), nullable=True)
+
+    total_cases = Column(Integer, default=0)
+    passed_cases = Column(Integer, default=0)
+    accuracy = Column(Float, default=0.0)
+    guardrail_violations_count = Column(Integer, default=0)
+    results_json = Column(Text, nullable=True)  # JSON string lưu chi tiết kết quả từng ca kiểm thử
+
+    run_at = Column(DateTime, server_default=func.now())

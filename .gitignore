@@ -31,6 +31,8 @@ Thumbs.db
 # Data (never commit large data)
 data/
 *.db
+*.db-shm
+*.db-wal
 *.sqlite3
 
 # Logs

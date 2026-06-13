@@ -26,10 +26,26 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
 
     # Database
-    database_url: str = "sqlite:///./data/app.db"
+    database_url: str = "sqlite:///./lecture_generator.db"
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
+
+    # Project specific settings (G02-Team023-LectureGenerator-V2)
+    gemini_api_key: str = ""
+    tavily_api_key: str = ""
+    openrouter_api_key: str = ""
+
+    # Local LLM config
+    local_llm_url: str = ""
+    local_llm_tunnel_url: str = ""
+    local_llm_api_key: str = ""
+    local_llm_model: str = ""
+
+    # Langfuse config
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = ""
 
 
 @lru_cache

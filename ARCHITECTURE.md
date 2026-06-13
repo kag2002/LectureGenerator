@@ -2,7 +2,7 @@
 
 ## System Overview
 
-[Tóm tắt 2-3 câu về kiến trúc hệ thống]
+Dự án VinUni AI Lecture Assistant được phát triển theo kiến trúc 3 tầng chuẩn hóa, hỗ trợ đắc lực giảng viên thiết kế bài giảng, soạn storyboard slide hoạt động và tạo bộ câu hỏi thi trắc nghiệm theo chuẩn đầu ra (CLO) và thang Bloom.
 
 ## Architecture Diagram
 
@@ -36,50 +36,53 @@ graph TB
 ## Components
 
 ### 1. Frontend (React/Next.js)
-- **Purpose:** [mô tả]
-- **Key Features:** [danh sách]
-- **State Management:** [approach]
+- **Purpose:** Cung cấp giao diện Web tương tác trực quan cho giảng viên.
+- **Key Features:** ChatBot hỗ trợ, thiết kế bài giảng chi tiết (Storyboard/Materials), ngân hàng câu hỏi trắc nghiệm, quản lý môn học, thống kê coverage ma trận CLO x Bloom, và giám sát telemetry cuộc gọi LLM/chi phí.
+- **State Management:** React useState/useEffect hooks và custom events để đồng bộ hóa trạng thái giữa các views và dashboards.
 
 ### 2. Backend (FastAPI)
-- **Purpose:** [mô tả]
+- **Purpose:** API server xử lý business logic, quản lý phiên chat, phân quyền người dùng, lưu dữ liệu hệ thống, kết nối ChromaDB, và xoay vòng các LLM providers.
 - **API Design:** RESTful
-- **Authentication:** [JWT/None]
+- **Authentication:** JWT token-based authentication (lưu trữ trong localStorage và truyền qua Header `Authorization: Bearer <token>`).
 
 ### 3. AI Agent (LangGraph)
-- **Agent Type:** [ReAct / Plan-and-Execute / Custom]
-- **State:** [mô tả state schema]
-- **Nodes:** [danh sách nodes]
-- **Tools:** [danh sách tools]
+- **Agent Type:** Custom State Machine Agent với cơ chế Intent Routing, Guardrail checking và Tool Execution.
+- **State:** `AgentState` TypedDict chứa lịch sử hội thoại, câu hỏi hiện tại, kết quả truy tìm từ Vector RAG, và số lượt lặp tối đa của Agent.
+- **Nodes:** Input Guardrails, Router, Web Search, DB Query, Evaluate, Generate Answer, Output Guardrails.
+- **Tools:** `search_course_knowledge` (RAG Vector Store query), `get_course_clos`, `get_matrix_coverage`, `clarify`, `get_course_chapters`, `generate_course_outline_action`, `generate_chapter_storyboard_action`, `generate_chapter_materials_action`, `generate_chapter_questions_action`.
 - **Flow:**
 
 ```mermaid
 graph LR
-    START --> A[Node A]
-    A --> B{Decision}
-    B -->|Yes| C[Node C]
-    B -->|No| D[Node D]
-    C --> E[END]
-    D --> E
+    START --> A[Input Guardrail]
+    A --> B{Router Node}
+    B -->|Câu hỏi đơn giản| C[Direct Answer]
+    B -->|Cần công cụ| D[Execute Tools]
+    D --> E[Evaluate]
+    E -->|Đủ thông tin| C
+    E -->|Chưa đủ| B
+    C --> F[Output Guardrail]
+    F --> END
 ```
 
 ### 4. Database
-- **Type:** [PostgreSQL / SQLite]
-- **Tables:** [danh sách]
+- **Type:** SQLite (được cấu hình ở chế độ WAL để hỗ trợ ghi đồng thời nhẹ nhàng trong giai đoạn development) và PostgreSQL cho production.
+- **Tables:** `users`, `courses`, `chapters`, `chapter_materials`, `questions`, `chat_sessions`, `chat_messages`, `chat_eval_runs`.
 - **Migrations:** Alembic
 
 ### 5. Vector Store
-- **Type:** [ChromaDB / FAISS / Pinecone]
-- **Embeddings:** [model]
-- **Purpose:** [RAG / similarity search]
+- **Type:** ChromaDB (Persisted local client)
+- **Embeddings:** SentenceTransformers (all-MiniLM-L6-v2), fallback sang OpenAI (text-embedding-3-small) hoặc Gemini (text-embedding-004).
+- **Purpose:** Truy vấn RAG cô lập theo Course ID và User ID nhằm cung cấp ngữ cảnh học liệu chính xác khi sinh bài giảng và câu hỏi.
 
 ## Data Flow
 
 1. User gửi request từ Frontend
-2. API route nhận và validate input
-3. Agent xử lý qua LangGraph pipeline
+2. API route nhận và validate input (Pydantic)
+3. Agent xử lý qua LangGraph pipeline (hoặc Agent loop)
 4. LLM generate response
 5. Tools thực thi actions (nếu cần)
-6. Response trả về Frontend
+6. Response trả về Frontend qua API (SSE Stream hoặc JSON)
 
 ## Deployment Architecture
 
@@ -99,6 +102,7 @@ graph LR
 - Input validation via Pydantic
 - Rate limiting on API endpoints
 - CORS configured for frontend domain
+- Trình bắt lỗi toàn cục (Global Exception Handler) ẩn chi tiết kỹ thuật ở môi trường production.
 
 ## Design Decisions
 
@@ -106,5 +110,5 @@ graph LR
 |----------|--------|--------|
 | Framework | FastAPI | Async, auto-docs, type-safe |
 | Agent | LangGraph | Flexible state management |
-| Database | [choice] | [reason] |
-| Frontend | Next.js | [reason] |
+| Database | SQLite & PostgreSQL | SQLite chạy local cực kỳ gọn nhẹ cho dev, PostgreSQL hỗ trợ chịu tải cao cho prod. |
+| Frontend | Next.js | Hỗ trợ server-side routing kết hợp client-side rendering mượt mà, tối ưu SEO. |
