@@ -352,12 +352,17 @@ HẠN MỨC KÝ TỰ (CHARACTER BUDGET) NGHIÊM NGẶT THEO LAYOUT:
 - 'standard_list': Tối đa 900 ký tự.
 - 'table': Tối đa 800 ký tự.
 
-HỖ TRỢ VẼ HÌNH VECTOR (SVG DIAGRAMS):
-- Nếu slide cần thể hiện mô hình tư duy, sơ đồ luồng (flowchart) hoặc cấu trúc dữ liệu trực quan (như cây nhị phân BST/AVL, đồ thị, danh sách liên kết), bạn ĐƯỢC PHÉP và KHUYẾN NGHỊ viết mã nhúng SVG thô đặt trực tiếp dưới dạng một khối mã trong slide Markdown (ví dụ: ngay dưới tiêu đề `# {title}` hoặc sau các bullet points).
-- Chỉ sử dụng các thẻ SVG cơ bản: `<svg>`, `<circle cx="..." cy="..." r="..." fill="..." stroke="..." />`, `<rect x="..." y="..." width="..." height="..." fill="..." stroke="..." rx="..." />`, `<line x1="..." y1="..." x2="..." y2="..." stroke="..." stroke-width="..." />`, `<text x="..." y="..." fill="..." font-size="...">Văn bản</text>`.
-- KHÔNG dùng CSS hay các bộ lọc phức tạp trong SVG, chỉ dùng các thuộc tính trực tiếp (`fill`, `stroke`, `stroke-width`, `font-size`, `text-anchor`).
-- Các thuộc tính màu sắc (`fill`, `stroke`) nên chọn các mã Hex sang trọng của theme (ví dụ: `#00D2FF`, `#00A3A6`, `#FFFFFF`, `#7C4DFF`).
-- Đảm bảo thẻ `<svg>` có đầy đủ thuộc tính `width` và `height` hợp lý (ví dụ: `width="400" height="250"`).
+HỖ TRỢ VẼ HÌNH VECTOR (SVG DIAGRAMS) VÀ HÌNH ẢNH MINH HỌA:
+- **Sơ đồ Vector (SVG)**: Nếu slide cần thể hiện mô hình tư duy, sơ đồ luồng (flowchart) hoặc cấu trúc dữ liệu trực quan (như cây nhị phân BST/AVL, đồ thị, danh sách liên kết), bạn ĐƯỢC PHÉP và KHUYẾN NGHỊ viết mã nhúng SVG thô đặt trực tiếp dưới dạng một khối mã trong slide Markdown (ví dụ: ngay dưới tiêu đề `# {title}` hoặc sau các bullet points).
+  + Chỉ sử dụng các thẻ SVG cơ bản: `<svg>`, `<circle cx="..." cy="..." r="..." fill="..." stroke="..." />`, `<rect x="..." y="..." width="..." height="..." fill="..." stroke="..." rx="..." />`, `<line x1="..." y1="..." x2="..." y2="..." stroke="..." stroke-width="..." />`, `<text x="..." y="..." fill="..." font-size="...">Văn bản</text>`.
+  + KHÔNG dùng CSS hay các bộ lọc phức tạp trong SVG, chỉ dùng các thuộc tính trực tiếp (`fill`, `stroke`, `stroke-width`, `font-size`, `text-anchor`).
+  + Các thuộc tính màu sắc (`fill`, `stroke`) nên chọn các mã Hex sang trọng của theme (ví dụ: `#00D2FF`, `#00A3A6`, `#FFFFFF`, `#7C4DFF`).
+  + Đảm bảo thẻ `<svg>` có đầy đủ thuộc tính `width` và `height` hợp lý (ví dụ: `width="400" height="250"`).
+- **Hình ảnh minh họa**: Nếu slide cần hình ảnh để giảng viên dễ giảng dạy và sinh động, hãy chèn một thẻ ảnh Markdown theo định dạng: `![Mô tả ảnh bằng tiếng Anh để tìm kiếm](https://images.unsplash.com/photo-placeholder)`. Ví dụ: `![AVL tree rotation diagram](https://images.unsplash.com/photo-placeholder)` hoặc `![business meeting discussion](https://images.unsplash.com/photo-placeholder)`. Giao diện client sẽ tự động parse và hiển thị khung ảnh đẹp mắt.
+
+ĐẢM BẢO KHÔNG TRÙNG LẶP VÀ DÀN TRANG ĐẸP MẮT (FIT LAYOUT):
+- Tránh dùng cùng một loại layout (ví dụ standard_list) cho tất cả các slide liên tiếp. Hãy đa dạng hóa đan xen các layout (split_intro, card_grid, timeline_flow, three_column, table, etc.).
+- Viết câu văn ngắn gọn, súc tích, in đậm từ khóa quan trọng bằng `**từ_khóa**` để đảm bảo vừa khít trong khung slide 16:9, tránh bị tràn chữ xuống dưới.
 
 QUY TẮC BẮT BUỘC:
 1. Slide phải bắt đầu bằng tiêu đề '#' dạng: `# {title}`.
