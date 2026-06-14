@@ -14,10 +14,12 @@ from src.prompts.materials import (
     build_consistency_checker_system_prompt,
     build_revision_system_prompt,
     build_single_slide_revision_system_prompt,
+    build_reconcile_active_learning_system_prompt,
 )
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
 from src.utils.task_manager import task_manager
+from src.services.image_service import process_markdown_images
 
 router = APIRouter(prefix="/api/courses", tags=["materials"])
 
@@ -46,6 +48,14 @@ class MaterialGenerateRequest(BaseModel):
         "vi", description="Ngôn ngữ bài giảng: 'vi' (Tiếng Việt) hoặc 'en' (Tiếng Anh) hoặc 'bilingual' (Song ngữ)"
     )
     session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
+
+
+class ReconcileActiveLearningRequest(BaseModel):
+    slide_content: str = Field(..., description="Nội dung slide mới đã chỉnh sửa")
+    class_size: int = Field(40, description="Sĩ số lớp")
+    has_wifi: bool = Field(True, description="Có wifi không")
+    furniture_type: str = Field("movable", description="Kiểu bàn ghế")
+    language: str = Field("vi", description="Ngôn ngữ kịch bản")
 
 
 # --- API CHAPTER MATERIALS ---
@@ -83,15 +93,16 @@ def save_chapter_materials(
         )
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
+    processed_slides = process_markdown_images(material_data.slide_content)
     if not material:
         material = ChapterMaterial(
             chapter_id=chapter_id,
-            slide_content=material_data.slide_content,
+            slide_content=processed_slides,
             active_learning_script=material_data.active_learning_script,
         )
         db.add(material)
     else:
-        material.slide_content = material_data.slide_content
+        material.slide_content = processed_slides
         material.active_learning_script = material_data.active_learning_script
 
     db.commit()
@@ -118,7 +129,7 @@ def generate_chapter_materials(
 
     # 2. Truy vấn RAG cô lập từ ChromaDB
     query = f"{chapter.title} {chapter.description or ''}"
-    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=4)
+    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=4, chapter_id=chapter_id)
 
     # 3. Lọc trùng bằng Cosine Similarity
     rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
@@ -169,7 +180,7 @@ def generate_chapter_materials(
         )
         orchestrator.run_logic_auditor(trace_or_span=mat_trace)
 
-        slide_content = "\n\n".join(orchestrator.state["generated_slides"])
+        slide_content = process_markdown_images("\n\n".join(orchestrator.state["generated_slides"]))
         active_learning_script = orchestrator.state["active_learning_script"]
 
         # 5. Lưu kết quả vào DB để giảng viên có thể load lại
@@ -382,7 +393,7 @@ def get_chapter_rag_references(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
     query = f"{chapter.title} {chapter.description or ''}"
-    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=6)
+    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=6, chapter_id=chapter_id)
     return {"references": rag_hits}
 
 
@@ -431,7 +442,7 @@ def append_slide_for_clo(
 
     # 3. Lấy RAG context
     query = f"{clo.clo_code} {clo.description} {chapter.title}"
-    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=3)
+    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=3, chapter_id=chapter_id)
     rag_context = ""
     if rag_hits:
         for hit in rag_hits:
@@ -463,6 +474,8 @@ Hãy soạn thảo duy nhất 1 slide Markdown hoàn chỉnh."""
         slide_markdown = res.get("slide_markdown", "").strip()
         if not slide_markdown:
             raise ValueError("Mô hình không trả về slide_markdown hợp lệ.")
+
+        slide_markdown = process_markdown_images(slide_markdown)
 
         # 5. Lưu hoặc bổ sung vào ChapterMaterial
         material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -692,7 +705,7 @@ def revise_slides(
         db.add(new_rev)
 
         # Cập nhật slide hiện tại
-        material.slide_content = revised_content
+        material.slide_content = process_markdown_images(revised_content)
         db.commit()
         db.refresh(material)
 
@@ -752,6 +765,8 @@ def revise_single_slide(
 
         if not revised_slide:
             raise ValueError("Không thể nhận diện nội dung slide được chỉnh sửa từ phản hồi của AI.")
+
+        revised_slide = process_markdown_images(revised_slide)
 
         usage = get_token_usage()
         return {
@@ -857,6 +872,90 @@ def revise_active_learning(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi AI thực hiện chỉnh sửa: {str(e)}"
+        )
+
+
+@router.post("/chapters/{chapter_id}/reconcile-active-learning")
+def reconcile_active_learning(
+    chapter_id: int,
+    req: ReconcileActiveLearningRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Đồng bộ nhanh kịch bản tương tác (Active Learning) với Slide mới chỉnh sửa."""
+    chapter = db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == current_user.id).first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
+    if not material or not material.active_learning_script:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không tìm thấy kịch bản Active Learning hiện tại để đồng bộ hóa.",
+        )
+
+    clos = db.query(CLO).filter(CLO.course_id == chapter.course_id).all()
+    clos_context = "Danh sách Chuẩn đầu ra (CLOs):\n" + "\n".join([f"- [{c.clo_code}] {c.description}" for c in clos])
+
+    target_lang = LANGUAGE_MAP.get(req.language, "Tiếng Việt (Vietnamese)")
+
+    # 1. Gọi Reconciler Agent để đồng bộ hóa cục bộ
+    system_prompt = build_reconcile_active_learning_system_prompt(
+        slides_content=req.slide_content,
+        active_learning_script=material.active_learning_script,
+        clos_context=clos_context,
+        class_size=req.class_size,
+        has_wifi=req.has_wifi,
+        furniture_type=req.furniture_type,
+        target_lang=target_lang,
+    )
+
+    init_token_tracker()
+    try:
+        reconcile_res = call_llm_json("Hãy thực hiện đồng bộ hóa kịch bản hoạt động.", system_instruction=system_prompt)
+        revised_script = reconcile_res.get("revised_active_learning_script", "").strip()
+        changes_summary = reconcile_res.get("changes_summary", "")
+
+        if not revised_script:
+            raise ValueError("Không thể nhận diện kịch bản active learning đã đồng bộ từ phản hồi của AI.")
+
+        # 2. Lưu lịch sử hiệu đính
+        new_rev = MaterialRevision(
+            chapter_id=chapter_id,
+            field="active_learning_script",
+            content_before=material.active_learning_script,
+            content_after=revised_script,
+            user_prompt=f"Đồng bộ hóa giáo án sau khi sửa slide: {changes_summary}",
+            ai_consistency_note="{}",
+        )
+        db.add(new_rev)
+
+        # 3. Cập nhật cơ sở dữ liệu
+        material.slide_content = process_markdown_images(req.slide_content)
+        material.active_learning_script = revised_script
+        db.commit()
+        db.refresh(material)
+
+        usage = get_token_usage()
+        return {
+            "slide_content": material.slide_content,
+            "active_learning_script": material.active_learning_script,
+            "changes_summary": changes_summary,
+            "usage": {
+                "prompt_tokens": usage.get("input_tokens", 0),
+                "completion_tokens": usage.get("output_tokens", 0),
+                "total_cost": usage.get("total_cost", 0.0),
+                "model_name": usage.get("model_name"),
+            }
+            if usage
+            else None,
+        }
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi AI đồng bộ giáo án: {str(e)}"
         )
 
 

@@ -15,6 +15,7 @@ from src.prompts.questions import (
 )
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import async_call_llm_json
+from src.utils.parser import safe_parse_bloom_level
 
 
 async def execute_chatbot_tool(
@@ -228,7 +229,7 @@ Nhiệm vụ: Dựa vào các Chuẩn đầu ra (CLOs) môn học được cung 
 
         # 1. Truy vấn RAG từ ChromaDB
         query = f"{chapter.title} {chapter.description or ''}"
-        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4)
+        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4, chapter_id=chapter_id)
         rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
 
         rag_context = ""
@@ -332,7 +333,7 @@ Nhiệm vụ: Dựa vào các Chuẩn đầu ra (CLOs) môn học được cung 
 
         # 2. Tìm kiếm RAG ngữ cảnh
         query_str = f"Câu hỏi trắc nghiệm {target_clo.description if target_clo else ''} {target_chapter.title if target_chapter else ''}"
-        rag_hits = search_rag_isolated(query_str, user_id=user_id, course_id=course_id, top_k=4)
+        rag_hits = search_rag_isolated(query_str, user_id=user_id, course_id=course_id, top_k=4, chapter_id=chapter_id)
         rag_context = ""
         if rag_hits:
             for hit in rag_hits:
@@ -455,7 +456,7 @@ Nhiệm vụ: Dựa vào các Chuẩn đầu ra (CLOs) môn học được cung 
                 question_type="MCQ",
                 options_json=opts_str,
                 correct_answer=q_data.get("correct_answer", ""),
-                bloom_level=q_data.get("bloom_level", bloom_level),
+                bloom_level=safe_parse_bloom_level(q_data.get("bloom_level", bloom_level), bloom_level),
                 clo_id=clo_id,
                 chat_message_id=chat_message_id,
                 is_active=True,

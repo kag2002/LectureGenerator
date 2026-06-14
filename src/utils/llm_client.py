@@ -47,7 +47,10 @@ def get_token_usage() -> dict | None:
 # Environment Loading
 # ═══════════════════════════════════════════════════════════════════════
 
-env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.env"))
+env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.env"))
+if not os.path.exists(env_path):
+    env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.env"))
+
 if os.path.exists(env_path):
     with open(env_path, encoding="utf-8") as f:
         for line in f:
@@ -85,6 +88,8 @@ def calculate_cost(model_name: str, input_tokens: int, output_tokens: int) -> di
     """Tính toán chi phí sử dụng dựa trên model và số lượng token."""
     pricing = {
         "gemini-2.5-flash": {"input": 0.075, "output": 0.30},
+        "gemini-flash-latest": {"input": 0.075, "output": 0.30},
+        "gemini-2.5-flash-lite": {"input": 0.075, "output": 0.30},
         "gpt-4o-mini": {"input": 0.150, "output": 0.600},
     }
     model_lower = model_name.lower()

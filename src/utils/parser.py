@@ -61,3 +61,27 @@ def parse_document(file_path: str) -> str:
                 return f.read()
     else:
         return ""
+
+
+def safe_parse_bloom_level(bloom_val, default: int = 3) -> int:
+    """Safely converts bloom_level string or other types to an integer between 1 and 6."""
+    if bloom_val is None:
+        return default
+    if isinstance(bloom_val, int):
+        if 1 <= bloom_val <= 6:
+            return bloom_val
+        return default
+
+    # Try converting to string and extract first digit
+    val_str = str(bloom_val).strip()
+    import re
+    match = re.search(r'\d+', val_str)
+    if match:
+        try:
+            val_int = int(match.group(0))
+            if 1 <= val_int <= 6:
+                return val_int
+        except ValueError:
+            pass
+    return default
+

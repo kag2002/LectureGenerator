@@ -2,14 +2,15 @@ import json
 import os
 import shutil
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import CLO, Course, User
+from src.database.models import CLO, Course, User, RAGDocument
 from src.database.session import SessionLocal, get_db
+from src.utils.parser import safe_parse_bloom_level
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
 
@@ -253,7 +254,7 @@ def upload_and_parse_syllabus(
                 course_id=course_id,
                 clo_code=clo_item.get("clo_code", "CLO"),
                 description=clo_item.get("description", ""),
-                bloom_level=clo_item.get("bloom_level", 2),
+                bloom_level=safe_parse_bloom_level(clo_item.get("bloom_level", 2), 2),
             )
             db.add(new_clo)
             created_clos.append(new_clo)
@@ -369,7 +370,7 @@ def upload_and_parse_syllabus_stream(
                     course_id=course_id,
                     clo_code=clo_item.get("clo_code", f"CLO{idx + 1}"),
                     description=clo_item.get("description", ""),
-                    bloom_level=clo_item.get("bloom_level", 2),
+                    bloom_level=safe_parse_bloom_level(clo_item.get("bloom_level", 2), 2),
                 )
                 new_db.add(new_clo)
                 new_db.commit()
@@ -433,13 +434,87 @@ def upload_and_parse_syllabus_stream(
     )
 
 
+class DocumentMetadataUpdate(BaseModel):
+    category: str | None = None
+    tags: str | None = None
+    chapter_id: int | None = None
+
+
+def process_document_background(
+    temp_file_path: str,
+    file_name: str,
+    user_id: int,
+    course_id: int,
+    category: str | None,
+    tags: str | None,
+    chapter_id: int | None,
+    document_id: int
+):
+    from src.database.session import SessionLocal
+    from src.database.models import RAGDocument
+    from src.utils.parser import parse_document
+    from src.database.vector_db import add_document_vector
+
+    db = SessionLocal()
+    try:
+        text_by_pages = []
+        _, ext = os.path.splitext(file_name.lower())
+        if ext == ".pdf":
+            import pdfplumber
+            with pdfplumber.open(temp_file_path) as pdf:
+                for page in pdf.pages:
+                    text_by_pages.append(page.extract_text() or "")
+        else:
+            text_content = parse_document(temp_file_path)
+            text_by_pages = [text_content]
+
+        if not text_by_pages or all(not t.strip() for t in text_by_pages):
+            raise ValueError("Tài liệu không chứa nội dung văn bản hợp lệ (Có thể là ảnh quét hoặc tài liệu rỗng). Vui lòng chuyển đổi OCR trước.")
+
+        add_document_vector(
+            file_name,
+            text_by_pages,
+            user_id=user_id,
+            course_id=course_id,
+            category=category,
+            tags=tags,
+            chapter_id=chapter_id
+        )
+
+        # Update status to ready
+        doc = db.query(RAGDocument).filter(RAGDocument.id == document_id).first()
+        if doc:
+            doc.status = "ready"
+            db.commit()
+
+    except Exception as e:
+        print(f"[BACKGROUND ERROR] Loi khi xử lý file {file_name}: {e}")
+        doc = db.query(RAGDocument).filter(RAGDocument.id == document_id).first()
+        if doc:
+            doc.status = "failed"
+            doc.error_message = str(e)
+            db.commit()
+    finally:
+        db.close()
+        # Xóa file tạm
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except Exception:
+                pass
+
+
 # --- API QUẢN LÝ TÀI LIỆU THAM CHIẾU (RAG DOCUMENTS) ---
 
 
 @router.post("/{course_id}/documents")
 def upload_course_document(
     course_id: int,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    category: str | None = None,
+    tags: str | None = None,
+    chapter_id: int | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -450,60 +525,134 @@ def upload_course_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    # Validate file type extension (first line of defense)
+    _, ext = os.path.splitext(file.filename.lower())
+    if ext not in [".pdf", ".docx", ".txt"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Định dạng tệp không hỗ trợ. Chỉ hỗ trợ .pdf, .docx, .txt."
+        )
+
+    # Check file size limit (20MB)
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+    if file_size > 20 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Dung lượng tệp vượt quá giới hạn cho phép (Tối đa 20MB)."
+        )
+
+    # Validate file content magic bytes (signatures)
+    header = file.file.read(4)
+    file.file.seek(0)
+    if ext == ".pdf" and not header.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tệp PDF không hợp lệ (Chữ ký định dạng không đúng)."
+        )
+    elif ext == ".docx" and not header.startswith(b"PK\x03\x04"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tệp Word (.docx) không hợp lệ (Chữ ký định dạng không đúng)."
+        )
+    elif ext == ".txt":
+        # Check for binary null byte in the first 1KB of content
+        sample = file.file.read(1024)
+        file.file.seek(0)
+        if b"\x00" in sample:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tệp văn bản (.txt) không hợp lệ (Phát hiện dữ liệu nhị phân)."
+            )
+
+    # Sanitize file name to prevent path traversal, keeping Unicode/Vietnamese letters
+    import re
+    filename_clean = os.path.basename(file.filename)
+    safe_name = re.sub(r'[^\w\s.-]', '_', filename_clean)
+    safe_name = re.sub(r'\s+', ' ', safe_name).strip()
+    if not safe_name:
+        safe_name = "unnamed_file" + ext
+
     # 2. Tạo thư mục tạm lưu file
     temp_dir = "./temp"
     os.makedirs(temp_dir, exist_ok=True)
-    temp_file_path = os.path.join(temp_dir, file.filename)
+    temp_file_path = os.path.join(temp_dir, f"{current_user.id}_{course_id}_{safe_name}")
+
+    # Check if the document with same name is currently processing
+    existing_doc = db.query(RAGDocument).filter(
+        RAGDocument.course_id == course_id,
+        RAGDocument.user_id == current_user.id,
+        RAGDocument.file_name == safe_name
+    ).first()
+    if existing_doc and existing_doc.status == "processing":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tài liệu cùng tên đang được xử lý trong nền. Vui lòng đợi hoàn tất trước khi tải lên lại."
+        )
 
     try:
         # Lưu file tạm xuống đĩa
         with open(temp_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # 3. Trích xuất văn bản theo trang
-        from src.utils.parser import parse_document
+        # 3. Tạo/Cập nhật bản ghi RAGDocument trong SQLite với status='processing'
+        # Xóa bản ghi cũ nếu trùng tên để đồng bộ
+        db.query(RAGDocument).filter(
+            RAGDocument.course_id == course_id,
+            RAGDocument.user_id == current_user.id,
+            RAGDocument.file_name == safe_name
+        ).delete()
+        db.commit()
 
-        text_by_pages = []
+        new_doc = RAGDocument(
+            user_id=current_user.id,
+            course_id=course_id,
+            file_name=safe_name,
+            category=category or "Textbook",
+            tags=tags,
+            chapter_id=chapter_id,
+            status="processing"
+        )
+        db.add(new_doc)
+        db.commit()
+        db.refresh(new_doc)
 
-        _, ext = os.path.splitext(file.filename.lower())
-        if ext == ".pdf":
-            import pdfplumber
-
-            with pdfplumber.open(temp_file_path) as pdf:
-                for page in pdf.pages:
-                    text_by_pages.append(page.extract_text() or "")
-        else:
-            # Với Word hoặc Txt, parse toàn bộ và gán cho trang 1
-            text_content = parse_document(temp_file_path)
-            text_by_pages = [text_content]
-
-        if not text_by_pages or all(not t.strip() for t in text_by_pages):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể đọc nội dung văn bản từ tài liệu tải lên."
-            )
-
-        # 4. Nạp các chunks vào ChromaDB
-        from src.database.vector_db import add_document_vector
-
-        add_document_vector(file.filename, text_by_pages, user_id=current_user.id, course_id=course_id)
+        # 4. Đăng ký background task để xử lý nặng
+        background_tasks.add_task(
+            process_document_background,
+            temp_file_path=temp_file_path,
+            file_name=safe_name,
+            user_id=current_user.id,
+            course_id=course_id,
+            category=category,
+            tags=tags,
+            chapter_id=chapter_id,
+            document_id=new_doc.id
+        )
 
         return {
-            "message": f"Tải lên và nạp tài liệu RAG '{file.filename}' thành công.",
-            "file_name": file.filename,
-            "total_pages": len(text_by_pages),
+            "message": f"Tài liệu '{safe_name}' đang được nạp vào Vector DB...",
+            "file_name": safe_name,
+            "status": "processing",
         }
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tải tài liệu lên RAG: {str(e)}"
-        )
-    finally:
-        # Xóa file tạm
+    except HTTPException:
         if os.path.exists(temp_file_path):
             try:
                 os.remove(temp_file_path)
             except Exception:
                 pass
+        raise
+    except Exception as e:
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except Exception:
+                pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tải tài liệu lên RAG: {str(e)}"
+        )
 
 
 @router.get("/{course_id}/documents")
@@ -515,22 +664,30 @@ def get_course_documents(course_id: int, current_user: User = Depends(get_curren
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.database.vector_db import collection
-
     try:
-        # Lấy metadatas của các vector thuộc môn học và user này để lọc ra file_name độc nhất
-        data = collection.get(
-            where={"$and": [{"user_id": {"$eq": current_user.id}}, {"course_id": {"$eq": course_id}}]},
-            include=["metadatas"],
-        )
+        docs = db.query(RAGDocument).filter(
+            RAGDocument.course_id == course_id,
+            RAGDocument.user_id == current_user.id
+        ).all()
 
-        file_names = set()
-        if data and data["metadatas"]:
-            for meta in data["metadatas"]:
-                if "file_name" in meta:
-                    file_names.add(meta["file_name"])
+        file_names = [d.file_name for d in docs]
+        detailed = [
+            {
+                "file_name": d.file_name,
+                "category": d.category or "Textbook",
+                "tags": d.tags or "",
+                "chapter_id": d.chapter_id,
+                "status": d.status,
+                "error_message": d.error_message,
+                "created_at": d.created_at.isoformat() if d.created_at else None
+            }
+            for d in docs
+        ]
 
-        return {"documents": list(file_names)}
+        return {
+            "documents": file_names,
+            "documents_detailed": detailed
+        }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi lấy danh sách tài liệu: {str(e)}"
@@ -560,11 +717,92 @@ def delete_course_document(
                 ]
             }
         )
+
+        # Xóa khỏi SQLite
+        db.query(RAGDocument).filter(
+            RAGDocument.course_id == course_id,
+            RAGDocument.user_id == current_user.id,
+            RAGDocument.file_name == file_name
+        ).delete()
+        db.commit()
+
         return {"message": f"Đã xóa thành công tài liệu '{file_name}' khỏi RAG."}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi xóa tài liệu RAG: {str(e)}"
         )
+
+
+@router.put("/{course_id}/documents/{file_name}/metadata")
+def update_document_metadata(
+    course_id: int,
+    file_name: str,
+    req: DocumentMetadataUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    # 1. Cập nhật trong SQLite
+    doc = db.query(RAGDocument).filter(
+        RAGDocument.course_id == course_id,
+        RAGDocument.user_id == current_user.id,
+        RAGDocument.file_name == file_name
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tài liệu không tồn tại."
+        )
+
+    if req.category is not None:
+        doc.category = req.category
+    if req.tags is not None:
+        doc.tags = req.tags
+    if req.chapter_id is not None:
+        doc.chapter_id = req.chapter_id if req.chapter_id != 0 else None
+
+    db.commit()
+
+    # 2. Cập nhật metadata của các chunks trong ChromaDB
+    from src.database.vector_db import collection
+    try:
+        data = collection.get(
+            where={
+                "$and": [
+                    {"user_id": {"$eq": current_user.id}},
+                    {"course_id": {"$eq": course_id}},
+                    {"file_name": {"$eq": file_name}},
+                ]
+            },
+            include=["metadatas"]
+        )
+
+        if data and data["ids"]:
+            new_metadatas = []
+            for meta in data["metadatas"]:
+                if req.category is not None:
+                    meta["category"] = req.category
+                if req.tags is not None:
+                    meta["tags"] = req.tags
+                if req.chapter_id is not None:
+                    if req.chapter_id != 0:
+                        meta["chapter_id"] = req.chapter_id
+                    else:
+                        meta.pop("chapter_id", None)
+                new_metadatas.append(meta)
+
+            collection.update(
+                ids=data["ids"],
+                metadatas=new_metadatas
+            )
+    except Exception as e:
+        print(f"[WARNING] Loi khi dong bo metadata sang ChromaDB: {e}")
+
+    return {"message": "Đã cập nhật metadata tài liệu thành công.", "file_name": file_name}
 
 
 @router.get("/{course_id}/documents/{file_name}")
@@ -610,4 +848,102 @@ def get_course_document_content(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tải nội dung tài liệu: {str(e)}"
+        )
+
+
+@router.get("/{course_id}/documents/{file_name}/chunks")
+def get_course_document_chunks(
+    course_id: int,
+    file_name: str,
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lấy danh sách các vector chunks phân trang của một tệp tài liệu trong RAG để kiểm tra trực quan.
+    """
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    from src.database.vector_db import collection
+
+    try:
+        data = collection.get(
+            where={
+                "$and": [
+                    {"user_id": {"$eq": current_user.id}},
+                    {"course_id": {"$eq": course_id}},
+                    {"file_name": {"$eq": file_name}},
+                ]
+            },
+            include=["documents", "metadatas"],
+        )
+
+        if not data or not data["documents"]:
+            return {"chunks": [], "total_chunks": 0, "page": page, "page_size": page_size}
+
+        chunks = []
+        for i in range(len(data["documents"])):
+            meta = data["metadatas"][i]
+            chunks.append({
+                "id": data["ids"][i],
+                "text": data["documents"][i],
+                "page_number": meta.get("page_number", 1),
+                "category": meta.get("category", "Chưa phân loại"),
+                "tags": meta.get("tags", ""),
+                "chapter_id": meta.get("chapter_id", None)
+            })
+
+        chunks.sort(key=lambda x: (x["page_number"], x["id"]))
+
+        total = len(chunks)
+        start = (page - 1) * page_size
+        end = start + page_size
+        paginated_chunks = chunks[start:end]
+
+        return {
+            "chunks": paginated_chunks,
+            "total_chunks": total,
+            "page": page,
+            "page_size": page_size
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tải chunks của tài liệu: {str(e)}"
+        )
+
+
+class SearchTestRequest(BaseModel):
+    query: str
+    top_k: int = 5
+
+
+@router.post("/{course_id}/documents/search-test")
+def search_test_rag(
+    course_id: int,
+    req: SearchTestRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Thực hiện truy vấn thử nghiệm RAG trực tiếp trên Vector DB để kiểm tra điểm tương đồng.
+    """
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    from src.database.vector_db import search_rag_isolated
+
+    try:
+        hits = search_rag_isolated(req.query, user_id=current_user.id, course_id=course_id, top_k=req.top_k)
+        return {"results": hits}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi truy vấn thử nghiệm RAG: {str(e)}"
         )

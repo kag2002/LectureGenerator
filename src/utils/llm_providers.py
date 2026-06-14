@@ -13,6 +13,7 @@ Telemetry logging is done via log_generation_to_langfuse imported from llm_clien
 
 import datetime
 import os
+import asyncio
 
 from google import genai
 from google.genai import types
@@ -96,11 +97,12 @@ def _log_and_return(
 # JSON providers (sync)
 # ═══════════════════════════════════════════════════════════════════════
 
-
 def call_local_json(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ) -> dict:
     """Call Local/Tunnel LLM and return parsed JSON dict."""
+    if os.environ.get("DISABLE_LOCAL_LLM") == "true":
+        raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
 
@@ -166,26 +168,68 @@ def call_local_json(
 def call_gemini_json(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ) -> dict:
-    """Call Google Gemini API and return parsed JSON dict."""
+    """Call Google Gemini API with automatic model rotation fallback to bypass free tier daily limits."""
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError("No Gemini API key available")
 
     print("[INFO] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key, http_options={"timeout": 8.0})
+    client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(response_mime_type="application/json", temperature=temperature)
     if system_instruction:
         config.system_instruction = system_instruction
 
     gemini_contents = format_gemini_contents(prompt)
     start_time = datetime.datetime.now(datetime.UTC)
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_contents, config=config)
+    
+    models_to_try = [
+        "gemini-3-flash-preview",
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash"
+    ]
+    
+    response = None
+    res_dict = None
+    last_err = None
+    chosen_model = None
+    
+    import time
+    for model_name in models_to_try:
+        chosen_model = model_name
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(model=model_name, contents=gemini_contents, config=config)
+                res_dict = robust_parse_json(response.text)
+                break
+            except Exception as e:
+                last_err = e
+                err_msg = str(e)
+                is_quota = "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg
+                is_json_err = isinstance(e, ValueError) and "parse json" in err_msg.lower()
+                
+                # If daily limit reached or model not found/available, fall back immediately
+                is_daily_limit = is_quota and ("limit: 20" in err_msg or "limit: 0" in err_msg or "limit: 5" not in err_msg)
+                if is_daily_limit or "not found" in err_msg.lower() or "404" in err_msg:
+                    print(f"[WARNING] Model {model_name} not available or hit daily quota limit. Falling back to next model...")
+                    break
+                
+                if attempt < 1 and (is_quota or is_json_err):
+                    print(f"[WARNING] Model {model_name} failed (attempt {attempt+1}): {e}. Retrying in 3s...")
+                    time.sleep(3.0)
+                    continue
+                else:
+                    break
+        if res_dict is not None:
+            break
+            
+    if res_dict is None:
+        raise last_err or RuntimeError("All Gemini models failed")
+        
     end_time = datetime.datetime.now(datetime.UTC)
-
-    res_dict = robust_parse_json(response.text)
     usage = _extract_gemini_usage(response, prompt)
     _log_and_return(
-        "gemini-2.5-flash",
+        chosen_model,
         prompt,
         system_instruction,
         response.text,
@@ -373,6 +417,8 @@ def call_openrouter_json(
 
 def call_local_stream(prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata):
     """Call Local/Tunnel LLM and yield tokens."""
+    if os.environ.get("DISABLE_LOCAL_LLM") == "true":
+        raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
 
@@ -427,14 +473,14 @@ def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, p
         raise RuntimeError("No Gemini API key available")
 
     print("[INFO] [Stream] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key, http_options={"timeout": 8.0})
+    client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(temperature=temperature)
     if system_instruction:
         config.system_instruction = system_instruction
 
     gemini_contents = format_gemini_contents(prompt)
     start_time = datetime.datetime.now(datetime.UTC)
-    response = client.models.generate_content_stream(model="gemini-2.5-flash", contents=gemini_contents, config=config)
+    response = client.models.generate_content_stream(model="gemini-3-flash-preview", contents=gemini_contents, config=config)
 
     accumulated_text = ""
     for chunk in response:
@@ -445,7 +491,7 @@ def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, p
     end_time = datetime.datetime.now(datetime.UTC)
     usage = {"input_tokens": len(str(prompt)) // 4, "output_tokens": len(accumulated_text) // 4}
     _log_and_return(
-        "gemini-2.5-flash",
+        "gemini-3-flash-preview",
         prompt,
         system_instruction,
         accumulated_text,
@@ -571,6 +617,8 @@ async def async_call_local_json(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ) -> dict:
     """Async call Local/Tunnel LLM and return parsed JSON dict."""
+    if os.environ.get("DISABLE_LOCAL_LLM") == "true":
+        raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
 
@@ -636,42 +684,21 @@ async def async_call_local_json(
 async def async_call_gemini_json(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ) -> dict:
-    """Async call Google Gemini API and return parsed JSON dict."""
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("No Gemini API key available")
-
-    print("[INFO] [Async] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key, http_options={"timeout": 8.0})
-    config = types.GenerateContentConfig(response_mime_type="application/json", temperature=temperature)
-    if system_instruction:
-        config.system_instruction = system_instruction
-
-    gemini_contents = format_gemini_contents(prompt)
-    start_time = datetime.datetime.now(datetime.UTC)
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash", contents=gemini_contents, config=config
-    )
-    end_time = datetime.datetime.now(datetime.UTC)
-
-    res_dict = robust_parse_json(response.text)
-    usage = _extract_gemini_usage(response, prompt)
-    _log_and_return(
-        "gemini-2.5-flash",
+    """Async call Google Gemini API by running the synchronous call in a thread.
+    This prevents async HTTP client hangs in Windows environments.
+    """
+    import asyncio
+    print("[INFO] [Async -> Sync Thread] Chuyen tiep cuoc goi Gemini qua thread dong bo de tranh loi treo cuoc goi...")
+    return await asyncio.to_thread(
+        call_gemini_json,
         prompt,
         system_instruction,
-        response.text,
-        usage,
-        start_time,
-        end_time,
+        temperature,
         trace_or_span,
         prompt_name,
         prompt_version,
         metadata,
-        temperature,
-        extra_meta={"async": True},
     )
-    return res_dict
 
 
 async def async_call_openai_json(
@@ -838,6 +865,8 @@ async def async_call_local_stream(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ):
     """Async call Local/Tunnel LLM and yield tokens."""
+    if os.environ.get("DISABLE_LOCAL_LLM") == "true":
+        raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
 
@@ -894,7 +923,7 @@ async def async_call_gemini_stream(
         raise RuntimeError("No Gemini API key available")
 
     print("[INFO] [AsyncStream] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key, http_options={"timeout": 8.0})
+    client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(temperature=temperature)
     if system_instruction:
         config.system_instruction = system_instruction
@@ -902,7 +931,7 @@ async def async_call_gemini_stream(
     gemini_contents = format_gemini_contents(prompt)
     start_time = datetime.datetime.now(datetime.UTC)
     response = await client.aio.models.generate_content_stream(
-        model="gemini-2.5-flash", contents=gemini_contents, config=config
+        model="gemini-3-flash-preview", contents=gemini_contents, config=config
     )
 
     accumulated_text = ""
@@ -914,7 +943,7 @@ async def async_call_gemini_stream(
     end_time = datetime.datetime.now(datetime.UTC)
     usage = {"input_tokens": len(str(prompt)) // 4, "output_tokens": len(accumulated_text) // 4}
     _log_and_return(
-        "gemini-2.5-flash",
+        "gemini-3-flash-preview",
         prompt,
         system_instruction,
         accumulated_text,

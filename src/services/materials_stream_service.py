@@ -13,6 +13,7 @@ from src.prompts.materials import (
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import call_llm_json, call_llm_stream, get_token_usage, init_token_tracker, langfuse
 from src.utils.task_manager import task_manager
+from src.services.image_service import process_markdown_images
 
 
 async def generate_chapter_materials_stream_generator(
@@ -45,11 +46,11 @@ async def generate_chapter_materials_stream_generator(
         task_manager.register_task(f"material_{chapter_id}", current_task)
 
     try:
-        yield send("stage", {"stage": 1, "message": "🔍 Đang tìm kiếm học liệu tham chiếu phù hợp..."})
+        yield send("stage", {"stage": 1, "message": "Đang tìm kiếm học liệu tham chiếu phù hợp..."})
 
         # 2. Truy vấn RAG cô lập từ ChromaDB
         query = f"{chapter_title} {chapter_description}"
-        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4)
+        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4, chapter_id=chapter_id)
 
         # 3. Lọc trùng bằng Cosine Similarity
         rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
@@ -93,7 +94,7 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 1: STORYBOARD ARCHITECT ---
         yield send(
-            "stage", {"stage": 1, "message": "🎨 Bước 1: Đang thiết kế cấu trúc đề cương bài giảng (Storyboard)..."}
+            "stage", {"stage": 1, "message": "Bước 1: Đang thiết kế cấu trúc đề cương bài giảng (Storyboard)..."}
         )
         try:
             await orchestrator.async_run_storyboard_architect(trace_or_span=mat_stream_trace)
@@ -104,7 +105,7 @@ async def generate_chapter_materials_stream_generator(
         # --- BƯỚC 2: CONTENT ALLOCATOR ---
         yield send(
             "stage",
-            {"stage": 2, "message": "🔍 Bước 2: Đang chọn lọc và sắp xếp nội dung cho từng slide..."},
+            {"stage": 2, "message": "Bước 2: Đang phân bổ nội dung cho từng slide..."},
         )
         try:
             await orchestrator.async_run_content_allocator(trace_or_span=mat_stream_trace)
@@ -113,7 +114,7 @@ async def generate_chapter_materials_stream_generator(
             return
 
         # --- BƯỚC 3: SLIDE WRITER & STREAM TOKENS ---
-        yield send("stage", {"stage": 3, "message": "✍️ Bước 3: Đang soạn nội dung slide chi tiết..."})
+        yield send("stage", {"stage": 3, "message": "Bước 3: Đang soạn nội dung slide chi tiết..."})
         yield send("token", {"token": "---SLIDES---\n"})
 
         slide_content = ""
@@ -121,8 +122,8 @@ async def generate_chapter_materials_stream_generator(
         try:
             progress_queue = asyncio.Queue()
 
-            async def on_slide_complete(slide_idx):
-                await progress_queue.put(slide_idx)
+            async def on_slide_complete(slide_idx, title, suggested_layout):
+                await progress_queue.put((slide_idx, title, suggested_layout))
 
             writer_task = asyncio.create_task(
                 orchestrator.async_run_slide_writer(trace_or_span=mat_stream_trace, progress_callback=on_slide_complete)
@@ -133,13 +134,13 @@ async def generate_chapter_materials_stream_generator(
 
             while not writer_task.done() or not progress_queue.empty():
                 try:
-                    await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                    slide_idx, title, layout = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
                     completed_slides += 1
                     yield send(
                         "stage",
                         {
                             "stage": 3,
-                            "message": f"✍️ Bước 3: Đang soạn nội dung slide chi tiết ({completed_slides}/{total_slides})...",
+                            "message": f"Bước 3: Đang viết Slide {completed_slides}/{total_slides}: '{title}' (Bố cục: {layout})...",
                             "current_slide": completed_slides,
                             "total_slides": total_slides,
                         },
@@ -159,6 +160,7 @@ async def generate_chapter_materials_stream_generator(
             return
 
         # Lưu tạm slide_content vào DB
+        slide_content = process_markdown_images(slide_content)
         new_db = SessionLocal()
         try:
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -179,7 +181,7 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 4: ACTIVE LEARNING PLANNER ---
         yield send(
-            "stage", {"stage": 4, "message": "🧩 Bước 4: Đang thiết kế các hoạt động tương tác trên lớp..."}
+            "stage", {"stage": 4, "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp..."}
         )
         yield send("token", {"token": "\n---ACTIVE_LEARNING---\n"})
 
@@ -196,7 +198,7 @@ async def generate_chapter_materials_stream_generator(
             return
 
         # --- BƯỚC 5: LOGIC AUDITOR (KIỂM TOÁN CHÉO) ---
-        yield send("stage", {"stage": 5, "message": "🛡️ Bước 5: Đang kiểm tra tính nhất quán sư phạm và chất lượng bài giảng..."})
+        yield send("stage", {"stage": 5, "message": "Bước 5: Rà soát tính nhất quán sư phạm..."})
         try:
             is_valid = await orchestrator.async_run_logic_auditor(trace_or_span=mat_stream_trace)
             if not is_valid:
@@ -205,7 +207,7 @@ async def generate_chapter_materials_stream_generator(
             print(f"[WARNING] Lỗi chạy Logic Auditor: {e}")
 
         # 6. Lưu kết quả cuối cùng vào DB
-        yield send("stage", {"stage": 6, "message": "💾 Đang lưu bài giảng và giáo án đã hoàn thiện..."})
+        yield send("stage", {"stage": 6, "message": "Bước 6: Đang lưu bài giảng và giáo án đã hoàn thiện..."})
 
         new_db = SessionLocal()
         try:
@@ -229,7 +231,7 @@ async def generate_chapter_materials_stream_generator(
         yield send(
             "done",
             {
-                "message": "✅ Đã thiết kế xong bài giảng và giáo án tương tác!",
+                "message": "Đã thiết kế xong bài giảng và giáo án tương tác!",
                 "slide_content": slide_content,
                 "active_learning_script": active_learning_script,
                 "warnings": orchestrator.state["warnings"],
@@ -237,11 +239,11 @@ async def generate_chapter_materials_stream_generator(
         )
     except asyncio.CancelledError:
         print(f"[MATERIAL STREAM] Task cancelled for chapter {chapter_id}")
-        yield send("stage", {"stage": 6, "message": "⚠️ Tiến trình thiết kế bài giảng đã bị hủy."})
+        yield send("stage", {"stage": 6, "message": "Tiến trình thiết kế bài giảng đã bị hủy."})
         yield send(
             "done",
             {
-                "message": "⚠️ Đã dừng thiết kế bài giảng.",
+                "message": "Đã dừng thiết kế bài giảng.",
                 "slide_content": "",
                 "active_learning_script": "",
                 "warnings": ["Đã hủy tác vụ theo yêu cầu."],
@@ -282,11 +284,11 @@ async def generate_materials_from_storyboard_stream_generator(
         task_manager.register_task(f"material_{chapter_id}", current_task)
 
     try:
-        yield send("stage", {"stage": 1, "message": "🔍 Đang tìm kiếm học liệu tham chiếu phù hợp..."})
+        yield send("stage", {"stage": 1, "message": "Đang tìm kiếm học liệu tham chiếu phù hợp..."})
 
         # 2. Truy vấn RAG cô lập từ ChromaDB
         query = f"{chapter_title} {chapter_description}"
-        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4)
+        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4, chapter_id=chapter_id)
         rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
 
         rag_context = ""
@@ -330,7 +332,7 @@ async def generate_materials_from_storyboard_stream_generator(
         # --- BƯỚC 2: CONTENT ALLOCATOR ---
         yield send(
             "stage",
-            {"stage": 2, "message": "🔍 Bước 2: Đang sắp xếp nội dung dựa trên đề cương đã duyệt..."},
+            {"stage": 2, "message": "Bước 2: Đang phân bổ nội dung dựa trên đề cương đã duyệt..."},
         )
         try:
             await orchestrator.async_run_content_allocator(trace_or_span=mat_stream_trace)
@@ -339,7 +341,7 @@ async def generate_materials_from_storyboard_stream_generator(
             return
 
         # --- BƯỚC 3: SLIDE WRITER & STREAM TOKENS ---
-        yield send("stage", {"stage": 3, "message": "✍️ Bước 3: Đang soạn nội dung slide chi tiết..."})
+        yield send("stage", {"stage": 3, "message": "Bước 3: Đang soạn nội dung slide chi tiết..."})
         yield send("token", {"token": "---SLIDES---\n"})
 
         slide_content = ""
@@ -347,8 +349,8 @@ async def generate_materials_from_storyboard_stream_generator(
         try:
             progress_queue = asyncio.Queue()
 
-            async def on_slide_complete(slide_idx):
-                await progress_queue.put(slide_idx)
+            async def on_slide_complete(slide_idx, title, suggested_layout):
+                await progress_queue.put((slide_idx, title, suggested_layout))
 
             writer_task = asyncio.create_task(
                 orchestrator.async_run_slide_writer(trace_or_span=mat_stream_trace, progress_callback=on_slide_complete)
@@ -359,13 +361,13 @@ async def generate_materials_from_storyboard_stream_generator(
 
             while not writer_task.done() or not progress_queue.empty():
                 try:
-                    await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                    slide_idx, title, layout = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
                     completed_slides += 1
                     yield send(
                         "stage",
                         {
                             "stage": 3,
-                            "message": f"✍️ Bước 3: Đang soạn nội dung slide chi tiết ({completed_slides}/{total_slides})...",
+                            "message": f"Bước 3: Đang viết Slide {completed_slides}/{total_slides}: '{title}' (Bố cục: {layout})...",
                             "current_slide": completed_slides,
                             "total_slides": total_slides,
                         },
@@ -385,6 +387,7 @@ async def generate_materials_from_storyboard_stream_generator(
             return
 
         # Lưu tạm slide_content vào DB
+        slide_content = process_markdown_images(slide_content)
         new_db = SessionLocal()
         try:
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -405,7 +408,7 @@ async def generate_materials_from_storyboard_stream_generator(
 
         # --- BƯỚC 4: ACTIVE LEARNING PLANNER ---
         yield send(
-            "stage", {"stage": 4, "message": "🧩 Bước 4: Đang thiết kế các hoạt động tương tác trên lớp..."}
+            "stage", {"stage": 4, "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp..."}
         )
         yield send("token", {"token": "\n---ACTIVE_LEARNING---\n"})
 
@@ -422,7 +425,7 @@ async def generate_materials_from_storyboard_stream_generator(
             return
 
         # --- BƯỚC 5: LOGIC AUDITOR ---
-        yield send("stage", {"stage": 5, "message": "🛡️ Bước 5: Đang kiểm tra tính nhất quán sư phạm và chất lượng bài giảng..."})
+        yield send("stage", {"stage": 5, "message": "Bước 5: Rà soát tính nhất quán sư phạm..."})
         try:
             is_valid = await orchestrator.async_run_logic_auditor(trace_or_span=mat_stream_trace)
             if not is_valid:
@@ -431,7 +434,7 @@ async def generate_materials_from_storyboard_stream_generator(
             print(f"[WARNING] Lỗi Logic Auditor: {e}")
 
         # 6. Lưu kết quả cuối cùng vào DB
-        yield send("stage", {"stage": 6, "message": "💾 Đang lưu bài giảng và giáo án..."})
+        yield send("stage", {"stage": 6, "message": "Bước 6: Đang lưu bài giảng và giáo án..."})
         new_db = SessionLocal()
         try:
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -454,7 +457,7 @@ async def generate_materials_from_storyboard_stream_generator(
         yield send(
             "done",
             {
-                "message": "✅ Đã hoàn thành thiết kế bài giảng và giáo án tương tác!",
+                "message": "Đã hoàn thành thiết kế bài giảng và giáo án tương tác!",
                 "slide_content": slide_content,
                 "active_learning_script": active_learning_script,
                 "warnings": orchestrator.state["warnings"],
@@ -462,11 +465,11 @@ async def generate_materials_from_storyboard_stream_generator(
         )
     except asyncio.CancelledError:
         print(f"[MATERIAL STREAM] Task cancelled for chapter {chapter_id}")
-        yield send("stage", {"stage": 6, "message": "⚠️ Tiến trình thiết kế bài giảng đã bị hủy."})
+        yield send("stage", {"stage": 6, "message": "Tiến trình thiết kế bài giảng đã bị hủy."})
         yield send(
             "done",
             {
-                "message": "⚠️ Đã dừng thiết kế bài giảng.",
+                "message": "Đã dừng thiết kế bài giảng.",
                 "slide_content": "",
                 "active_learning_script": "",
                 "warnings": ["Đã hủy tác vụ theo yêu cầu."],
@@ -474,8 +477,6 @@ async def generate_materials_from_storyboard_stream_generator(
         )
     finally:
         task_manager.unregister_task(f"material_{chapter_id}")
-
-
 async def append_slide_for_clo_stream_generator(
     chapter_id: int,
     course_id: int,
@@ -500,17 +501,17 @@ async def append_slide_for_clo_stream_generator(
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
     try:
-        yield send("stage", {"stage": 1, "message": "🔍 Đang tra cứu tài liệu tham khảo..."})
+        yield send("stage", {"stage": 1, "message": "Đang tra cứu tài liệu tham khảo..."})
 
         # 3. Lấy RAG context
         query = f"{clo_code} {clo_desc} {chapter_title}"
-        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=3)
+        rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=3, chapter_id=chapter_id)
         rag_context = ""
         if rag_hits:
             for hit in rag_hits:
                 rag_context += f"[Tài liệu: {hit['file_name']} - Trang: {hit['page_number']}]: {hit['text']}\n\n"
 
-        yield send("stage", {"stage": 2, "message": "⏳ Đang soạn nội dung slide..."})
+        yield send("stage", {"stage": 2, "message": "Đang soạn nội dung slide..."})
 
         system_prompt = f"""Bạn là chuyên gia sư phạm thiết kế slide bài giảng. Nhiệm vụ của bạn là soạn thảo duy nhất MỘT slide bài giảng dạng Markdown để bao phủ chuẩn đầu ra [{clo_code}] và mức Bloom B{bloom_level}.
 Quy tắc định dạng Slide:
@@ -537,8 +538,9 @@ Hãy soạn thảo duy nhất 1 slide Markdown hoàn chỉnh."""
         if not slide_markdown:
             raise ValueError("Mô hình không trả về slide_markdown hợp lệ.")
 
-        yield send("stage", {"stage": 3, "message": "💾 Đang lưu nội dung slide..."})
+        yield send("stage", {"stage": 3, "message": "Đang lưu nội dung slide..."})
 
+        slide_markdown = process_markdown_images(slide_markdown)
         new_db = SessionLocal()
         try:
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -562,7 +564,7 @@ Hãy soạn thảo duy nhất 1 slide Markdown hoàn chỉnh."""
         yield send(
             "done",
             {
-                "message": f"✅ Đã thêm slide thành công cho chuẩn đầu ra {clo_code} - Bloom B{bloom_level}",
+                "message": f"Đã thêm slide thành công cho chuẩn đầu ra {clo_code} - Bloom B{bloom_level}",
                 "chapter_title": chapter_title,
             },
         )
@@ -586,9 +588,9 @@ async def generate_slides_stream_generator(
             }
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-    yield send("stage", {"stage": 1, "message": "🔍 Đang tìm kiếm học liệu tham chiếu phù hợp..."})
+    yield send("stage", {"stage": 1, "message": "Đang tìm kiếm học liệu tham chiếu phù hợp..."})
     query = f"{chapter_title} {chapter_description}"
-    rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4)
+    rag_hits = search_rag_isolated(query, user_id=user_id, course_id=course_id, top_k=4, chapter_id=chapter_id)
     rag_context = ""
     if rag_hits:
         for hit in rag_hits:
@@ -613,7 +615,7 @@ async def generate_slides_stream_generator(
         rag_context=rag_context,
     )
 
-    yield send("stage", {"stage": 2, "message": "🎨 Đang thiết kế nội dung các slide bài giảng..."})
+    yield send("stage", {"stage": 2, "message": "Đang thiết kế nội dung các slide bài giảng..."})
     yield send("token", {"token": "---SLIDES---\n"})
 
     slide_system_prompt = build_slide_designer_system_prompt(target_lang=target_lang)
@@ -633,6 +635,7 @@ async def generate_slides_stream_generator(
         yield send("error", {"message": f"Lỗi sinh Slide: {str(e)}"})
         return
 
+    slide_content = process_markdown_images(slide_content)
     new_db = SessionLocal()
     try:
         material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -649,9 +652,7 @@ async def generate_slides_stream_generator(
     finally:
         new_db.close()
 
-    yield send("done", {"message": "✅ Đã hoàn tất thiết kế các slide bài giảng!", "slide_content": slide_content})
-
-
+    yield send("done", {"message": "Đã hoàn tất thiết kế các slide bài giảng!", "slide_content": slide_content})
 async def generate_active_learning_stream_generator(
     chapter_id: int,
     req_language: str,
@@ -676,7 +677,7 @@ async def generate_active_learning_stream_generator(
             }
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-    yield send("stage", {"stage": 1, "message": "🔍 Đang chuẩn bị dữ liệu bài học..."})
+    yield send("stage", {"stage": 1, "message": "Đang chuẩn bị dữ liệu bài học..."})
 
     new_db_for_clos = SessionLocal()
     clos_context = ""
@@ -697,7 +698,7 @@ async def generate_active_learning_stream_generator(
         rag_context="",  # Không dùng RAG cho bước 2
     )
 
-    yield send("stage", {"stage": 2, "message": "🧩 Đang thiết kế hoạt động tương tác..."})
+    yield send("stage", {"stage": 2, "message": "Đang thiết kế hoạt động tương tác..."})
     yield send("token", {"token": "---ACTIVE_LEARNING---\n"})
 
     al_system_prompt = build_active_learning_planner_system_prompt(
@@ -739,7 +740,7 @@ async def generate_active_learning_stream_generator(
     yield send(
         "done",
         {
-            "message": "✅ Đã hoàn tất thiết kế hoạt động tương tác!",
+            "message": "Đã hoàn tất thiết kế hoạt động tương tác!",
             "active_learning_script": active_learning_script,
         },
     )

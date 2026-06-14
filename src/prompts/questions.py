@@ -18,6 +18,7 @@ Nhiệm vụ: Hãy sinh {count} câu hỏi trắc nghiệm (MCQ) có chất lư�
 Yêu cầu:
 - Mức độ Bloom nhận thức: Mức {bloom_level}.
 - Câu hỏi phải bám sát theo chuẩn đầu ra CLO và ngữ cảnh tài liệu RAG đã cho.
+- TUYỆT ĐỐI KHÔNG sử dụng các biểu tượng cảm xúc (emoji) hoặc ký tự icon thô trong câu hỏi, các lựa chọn hoặc phần giải thích.
 - Mỗi câu hỏi gồm câu hỏi (question_text), danh sách 4 lựa chọn (options_json: mảng JSON gồm 4 chuỗi), đáp án đúng (correct_answer: phải trùng khớp với chính xác một trong 4 lựa chọn), và đường dẫn tư duy giải thích (reasoning_path: giải thích chi tiết tại sao chọn đáp án này).
 
 Đầu ra định dạng JSON:
@@ -46,6 +47,7 @@ def build_generator_system_prompt_compact(*, count: int, bloom_level: int) -> st
     """
     return f"""Bạn là chuyên gia thiết kế câu hỏi trắc nghiệm (Assessment Specialist).
 Nhiệm vụ: Sinh {count} câu hỏi MCQ chất lượng học thuật cao, mức Bloom {bloom_level}.
+TUYỆT ĐỐI KHÔNG sử dụng biểu tượng cảm xúc (emoji) hoặc ký tự icon thô.
 Mỗi câu gồm: question_text, options_json (mảng 4 chuỗi JSON), correct_answer (trùng chính xác 1 trong 4 lựa chọn), bloom_level, reasoning_path.
 Trả về JSON: {{"questions": [...]}}"""
 

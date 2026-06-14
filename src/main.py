@@ -44,6 +44,13 @@ try:
         print("[MIGRATION] Adding column 'recommended_readings' to table 'courses'...")
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE courses ADD COLUMN recommended_readings TEXT"))
+            
+    # Auto-migration for RAGDocument fields
+    rag_doc_columns = [col["name"] for col in inspector.get_columns("rag_documents")]
+    if "error_message" not in rag_doc_columns:
+        print("[MIGRATION] Adding column 'error_message' to table 'rag_documents'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE rag_documents ADD COLUMN error_message TEXT"))
 except Exception as e:
     print(f"[MIGRATION WARNING] Failed to migrate SQLite columns: {e}")
 
@@ -52,6 +59,11 @@ except Exception as e:
 async def lifespan(app: FastAPI):
     settings = get_settings()
     print(f"Starting {settings.app_name} in {settings.app_env} mode")
+    try:
+        from src.database.vector_db import migrate_vector_db_metadata
+        migrate_vector_db_metadata()
+    except Exception as e:
+        print(f"[WARNING] Startup migration failed: {e}")
     yield
     print("Shutting down...")
 

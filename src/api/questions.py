@@ -17,6 +17,7 @@ from src.prompts.questions import (
     build_solver_prompt,
 )
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
+from src.utils.parser import safe_parse_bloom_level
 
 router = APIRouter(prefix="/api/courses", tags=["questions"])
 
@@ -227,7 +228,7 @@ def generate_questions(
 
     # 3. Tìm kiếm RAG ngữ cảnh
     query_str = f"Câu hỏi trắc nghiệm {target_clo.description if target_clo else ''} {target_chapter.title if target_chapter else ''}"
-    rag_hits = search_rag_isolated(query_str, user_id=current_user.id, course_id=course_id, top_k=4)
+    rag_hits = search_rag_isolated(query_str, user_id=current_user.id, course_id=course_id, top_k=4, chapter_id=req.chapter_id)
     rag_context = ""
     if rag_hits:
         for hit in rag_hits:
@@ -392,7 +393,7 @@ def generate_questions(
             question_type="MCQ",
             options_json=opts_str,
             correct_answer=q_data.get("correct_answer", ""),
-            bloom_level=q_data.get("bloom_level", req.bloom_level),
+            bloom_level=safe_parse_bloom_level(q_data.get("bloom_level", req.bloom_level), req.bloom_level),
             clo_id=req.clo_id,
         )
         db.add(new_q)

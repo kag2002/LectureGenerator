@@ -182,3 +182,25 @@ class ChatEvalRun(Base):
     results_json = Column(Text, nullable=True)  # JSON string lưu chi tiết kết quả từng ca kiểm thử
 
     run_at = Column(DateTime, server_default=func.now())
+
+
+class RAGDocument(Base):
+    """Lưu trữ thông tin siêu dữ liệu của tài liệu RAG đã tải lên."""
+
+    __tablename__ = "rag_documents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    category = Column(String(100), default="Textbook")
+    tags = Column(String(255), nullable=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(50), default="processing")  # processing | ready | failed
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    user = relationship("User")
+    course = relationship("Course")
+    chapter = relationship("Chapter")

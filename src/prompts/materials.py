@@ -20,6 +20,7 @@ def build_material_system_prompt_json(*, target_lang: str, class_size: int, has_
 
     return f"""Bạn là trợ lý thiết kế bài giảng AI chuyên nghiệp.
 Nhiệm vụ: Hãy sinh nội dung slide bài giảng (Markdown) và kịch bản tương tác (Active Learning) cho chương học sau.
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong slide và kịch bản hoạt động tương tác. Sử dụng văn bản thuần túy chuyên nghiệp.
 
 BẮT BUỘC NGÔN NGỮ ĐẦU RA:
 - Bạn phải viết toàn bộ nội dung của slide và kịch bản hoạt động active learning bằng ngôn ngữ: {target_lang}.
@@ -63,6 +64,7 @@ def build_material_system_prompt_stream(
 
     return f"""Bạn là trợ lý thiết kế bài giảng AI chuyên nghiệp.
 Nhiệm vụ: Hãy sinh nội dung slide bài giảng (Markdown) và kịch bản tương tác (Active Learning) cho chương học sau.
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong slide và kịch bản hoạt động tương tác. Sử dụng văn bản thuần túy chuyên nghiệp.
 
 BẮT BUỘC NGÔN NGỮ ĐẦU RA:
 - Bạn phải viết toàn bộ nội dung của slide và kịch bản hoạt động active learning bằng ngôn ngữ: {target_lang}.
@@ -234,11 +236,13 @@ Chú ý: Trả về JSON hợp lệ. Không viết thêm văn bản giải thíc
 
 
 def build_storyboard_architect_system_prompt(
-    *, clos_context: str, chapter_title: str, chapter_description: str, session_duration: int = 90
+    *, clos_context: str, chapter_title: str, chapter_description: str, rag_context: str = "", session_duration: int = 90
 ) -> str:
     recommended_slides = max(5, min(30, int(session_duration / 3)))
+    rag_section = f"\nTài liệu tham khảo (RAG Context) để lập storyboard:\n{rag_context}\n" if rag_context else ""
     return f"""Bạn là kiến trúc sư kịch bản bài giảng chuyên nghiệp (Storyboard Architect Agent).
-Nhiệm vụ: Dựa trên thông tin chương học và chuẩn đầu ra môn học (CLOs), hãy thiết kế một Đề cương mạch truyện (Storyboard Outline) gồm khoảng {recommended_slides} slide bài giảng (tương ứng với thời lượng học {session_duration} phút, trung bình 2.5 - 3 phút mỗi slide).
+Nhiệm vụ: Dựa trên thông tin chương học, chuẩn đầu ra môn học (CLOs) và tài liệu tham khảo nguồn (RAG), hãy thiết kế một Đề cương mạch truyện (Storyboard Outline) gồm khoảng {recommended_slides} slide bài giảng (tương ứng với thời lượng học {session_duration} phút, trung bình 2.5 - 3 phút mỗi slide).
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong storyboard.
 Mạch truyện phải tuân theo cấu trúc sư phạm chặt chẽ:
 1. Hook & Introduction (Dẫn dắt & Giới thiệu)
 2. Core Concept Definition (Khái niệm cốt lõi)
@@ -252,6 +256,7 @@ Chuẩn đầu ra môn học (CLOs):
 
 Chương học: {chapter_title}
 Mô tả chương: {chapter_description or "N/A"}
+{rag_section}
 
 Đầu ra BẮT BUỘC là đối tượng JSON theo cấu trúc sau (Không viết thêm bất kỳ từ giải thích nào ngoài JSON):
 {{
@@ -312,10 +317,14 @@ def build_slide_writer_system_prompt(
     suggested_layout: str,
     allocated_text: str,
     target_lang: str,
+    previous_slides_markdown: str = "",
 ) -> str:
+    previous_section = f"\nCác slide đã được viết trước đó (Bộ nhớ chia sẻ):\n{previous_slides_markdown}\n" if previous_slides_markdown else ""
     return f"""Bạn là Slide Writer Agent chuyên nghiệp, đóng vai trò giảng viên đại học có chuyên môn sư phạm sâu sắc.
-Nhiệm vụ: Soạn thảo nội dung slide thứ {slide_index} dạng Markdown dựa trên thông tin đã được phê duyệt.
+Nhiệm vụ: Soạn thảo nội dung slide thứ {slide_index} dạng Markdown dựa trên thông tin đã được phê duyệt và đảm bảo tính liên kết mượt mà với các slide trước.
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong slide.
 
+{previous_section}
 Tiêu đề slide: {title}
 Mục đích sư phạm: {purpose}
 Layout thiết kế: {suggested_layout}
@@ -480,6 +489,7 @@ def build_active_learning_detail_writer_system_prompt(
 
     return f"""Bạn là chuyên gia soạn thảo giáo án tích cực (Active Learning Content Writer Agent).
 Nhiệm vụ: Viết kịch bản chi tiết cho hoạt động tương tác được chỉ định dưới đây, đảm bảo bám sát nội dung slide bài giảng liên quan và các ràng buộc thực tế lớp học.
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong kịch bản hoạt động.
 
 NỘI DUNG SLIDE BÀI GIẢNG ĐÃ SOẠN:
 {slide_content}
@@ -522,6 +532,7 @@ def build_active_learning_rationale_writer_system_prompt(
 
     return f"""Bạn là chuyên gia giải trình sư phạm (Active Learning Pedagogical Rationale Agent).
 Nhiệm vụ: Viết một đoạn giải trình ngắn (3-4 câu) tại sao các hoạt động tương tác được đề xuất dưới đây là tối ưu và phù hợp nhất với sĩ số {class_size}, trạng thái wifi, cấu trúc bàn ghế của lớp, và tổng quỹ thời gian giảng dạy {session_duration} phút.
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong đoạn giải trình.
 
 BẮT BUỘC NGÔN NGỮ ĐẦU RA:
 - Bạn phải viết nội dung bằng ngôn ngữ: {target_lang}.
@@ -540,6 +551,7 @@ def build_single_slide_revision_system_prompt(
 ) -> str:
     return f"""Bạn là trợ lý thiết kế bài giảng AI chuyên nghiệp.
 Nhiệm vụ: Hãy chỉnh sửa duy nhất slide bài giảng dưới đây theo yêu cầu của giảng viên. Bạn phải giữ đúng chuẩn đầu ra (CLOs) môn học và định dạng slide Markdown.
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong slide.
 
 NỘI DUNG SLIDE HIỆN TẠI:
 {current_slide_content}
@@ -565,4 +577,54 @@ QUY TẮC HIỆU ĐÍNH SLIDE:
   "pedagogical_feedback": "Nhận xét/đánh giá sư phạm về slide mới này (ví dụ: mức Bloom có phù hợp không, có đạt CLO mục tiêu không, hoặc lưu ý gì khác)"
 }}
 Chú ý: Bạn PHẢI trả về JSON hợp lệ. Không viết thêm bất kỳ văn bản giải thích nào ngoài đối tượng JSON này."""
+
+
+def build_reconcile_active_learning_system_prompt(
+    *,
+    slides_content: str,
+    active_learning_script: str,
+    clos_context: str,
+    class_size: int,
+    has_wifi: bool,
+    furniture_type: str,
+    target_lang: str,
+) -> str:
+    wifi_status = "Có khả dụng" if has_wifi else "Không khả dụng"
+    furniture_label = "di động" if furniture_type == "movable" else "cố định"
+
+    return f"""Bạn là trợ lý thiết kế và đồng bộ sư phạm AI (Pedagogical Reconciler Agent).
+Nhiệm vụ: Hãy rà soát và sửa đổi kịch bản hoạt động tương tác (Active Learning) hiện tại để đồng bộ hóa hoàn hảo với nội dung Slide bài giảng mới được cập nhật. Bạn phải bảo tồn tối đa các hoạt động tương tác đã có và chỉ thực hiện các sửa đổi cục bộ cần thiết (như cập nhật lại slide liên kết, điều chỉnh nội dung hoạt động cho khớp với kiến thức mới, loại bỏ hoạt động liên kết với slide đã bị xóa).
+- TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong kịch bản hoạt động.
+
+NỘI DUNG SLIDE BÀI GIẢNG MỚI CẬP NHẬT:
+{slides_content}
+
+NỘI DUNG KỊCH BẢN ACTIVE LEARNING HIỆN TẠI:
+{active_learning_script}
+
+DANH SÁCH CLOs MÔN HỌC:
+{clos_context}
+
+RÀNG BUỘC VẬT LÝ LỚP HỌC:
+- Sĩ số: {class_size} sinh viên
+- Mạng Wifi: {wifi_status}
+- Bàn ghế phòng học: dạng '{furniture_label}'
+
+BẮT BUỘC NGÔN NGỮ ĐẦU RA:
+- Bạn phải viết kịch bản active learning bằng ngôn ngữ: {target_lang}.
+
+QUY TẮC ĐỒNG BỘ:
+1. Đọc kỹ Slide mới để tìm các slide chèn thêm, bị xóa hoặc sửa đổi nội dung.
+2. Kiểm tra các hoạt động active learning hiện tại có tham chiếu đến slide nào bị lệch logic, bị xóa hoặc cần cập nhật không.
+3. Chỉ chỉnh sửa những hoạt động bị ảnh hưởng trực tiếp (cập nhật lại thuộc tính `Slide: X` ở tiêu đề `### Hoạt động Y: ... (Thời lượng: ... | Slide: X)` cho đúng chỉ số slide mới, sửa đổi hướng dẫn nếu slide đổi kiến thức).
+4. Giữ nguyên 100% nội dung các hoạt động khác không bị ảnh hưởng.
+5. Phần giải trình sư phạm `---RATIONALE---` ở cuối kịch bản cũng cần được cập nhật ngắn gọn nếu có sự thay đổi lớn về hoạt động.
+
+Đầu ra BẮT BUỘC là một đối tượng JSON có định dạng sau:
+{{
+  "revised_active_learning_script": "Toàn bộ kịch bản hoạt động tương tác mới sau khi đồng bộ và sửa đổi (Markdown)",
+  "changes_summary": "Tóm tắt ngắn gọn các hoạt động tương tác đã được cập nhật hoặc chỉnh sửa (tiếng Việt)"
+}}
+Chú ý: Bạn PHẢI trả về JSON hợp lệ. Không viết thêm văn bản giải thích ngoài JSON."""
+
 

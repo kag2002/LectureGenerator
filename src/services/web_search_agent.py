@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import Course, User
+from src.database.models import Course, User, RAGDocument
 from src.database.session import get_db
 from src.database.vector_db import add_document_vector
 from src.services.web_search_mock_data import MOCK_SEARCH_RESULTS_AVL, MOCK_SEARCH_RESULTS_DEFAULT
@@ -21,6 +21,7 @@ class WebSearchRequest(BaseModel):
     query: str = Field(..., example="Cây nhị phân AVL tự cân bằng")
     max_results: int | None = 10
     threshold: float | None = 0.7
+    chapter_id: int | None = None
 
 
 # --- CORE SERVICES: WEB SEARCH & CREDIBILITY EVALUATION ---
@@ -29,12 +30,20 @@ class WebSearchRequest(BaseModel):
 def web_search_tavily(query: str, max_results: int = 10) -> list[dict]:
     """
     Gọi Tavily Web Search API. Fallback sang Mock Search nếu không có API Key.
+    Tự động tối ưu hóa từ khóa truy vấn học thuật dưới nền.
     """
+    # Tự động tăng cường truy vấn học thuật nếu không chứa từ khóa học thuật đặc trưng
+    query_lower = query.lower()
+    academic_keywords = ["syllabus", "lecture", "slide", "research", "paper", "journal", "complexity", "definition", "algorithm", "theory", "concept", "proof"]
+    augmented_query = query
+    if not any(kw in query_lower for kw in academic_keywords):
+        augmented_query = f"{query} academic lecture notes OR course material"
+
     tavily_key = os.environ.get("TAVILY_API_KEY")
     if tavily_key:
         try:
             url = "https://api.tavily.com/search"
-            payload = {"api_key": tavily_key, "query": query, "search_depth": "basic", "max_results": max_results}
+            payload = {"api_key": tavily_key, "query": augmented_query, "search_depth": "basic", "max_results": max_results}
             response = requests.post(url, json=payload, timeout=10)
             if response.status_code == 200:
                 results = response.json().get("results", [])
@@ -90,6 +99,12 @@ def evaluate_source_credibility(title: str, url: str, content: str) -> dict:
             "oxfordjournals.org",
             "wiley.com",
             "researchgate.net",
+            "acm.org",
+            "scholar.google.com",
+            "wikipedia.org",
+            "geeksforgeeks.org",
+            "github.com",
+            "w3schools.com"
         ]
 
     is_high_domain = False
@@ -101,10 +116,10 @@ def evaluate_source_credibility(title: str, url: str, content: str) -> dict:
             break
 
     if not is_high_domain:
-        if ".edu" in url_lower:
+        if ".edu" in url_lower or ".edu.vn" in url_lower:
             score += 0.4
             reasons.append("Ten mien to chuc giao duc (.edu) (+0.40)")
-        elif ".gov" in url_lower:
+        elif ".gov" in url_lower or ".gov.vn" in url_lower:
             score += 0.35
             reasons.append("Ten mien co quan chinh phu (.gov) (+0.35)")
         elif ".org" in url_lower:
@@ -115,7 +130,6 @@ def evaluate_source_credibility(title: str, url: str, content: str) -> dict:
             reasons.append("Nguon tin tu blog ca nhan hoac mang xa hoi kem uy tin (-0.30)")
 
     # 2. DOI / ISSN Identification (Tối đa 0.2)
-    # DOI pattern: e.g., 10.1016/j.datade...
     if re.search(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", content_lower, re.IGNORECASE) or "doi:" in content_lower:
         score += 0.2
         reasons.append("Phat hien ma chi so nghien cuu DOI hop le (+0.20)")
@@ -144,7 +158,6 @@ def evaluate_source_credibility(title: str, url: str, content: str) -> dict:
         reasons.append("Chua 1 tu khoa hoc thuat dac trung (+0.08)")
 
     # 4. Recency (Tối đa 0.15)
-    # Tìm kiếm các năm xuất bản gần đây (từ 2015 đến 2029)
     years = re.findall(r"\b(201[5-9]|202[0-9])\b", content_lower)
     if years:
         score += 0.15
@@ -199,22 +212,44 @@ def web_search_and_ingest(
 
         # 4. Lọc độ uy tín học thuật >= threshold để nạp vào RAG
         if score >= threshold:
-            # Giả lập nạp tài liệu vào ChromaDB
-            # Nạp text content của nguồn vào trang 1 (coi như tài liệu 1 trang)
             try:
-                # Định nghĩa tên file giả lập dựa vào title/domain
                 domain_match = re.search(r"https?://(?:www\.)?([^/]+)", item["url"])
                 domain_name = domain_match.group(1) if domain_match else "web_source"
                 file_name = f"Web_{domain_name}_{score}.txt"
 
-                # Nạp vector chunks
+                # Nạp vector chunks kèm category và tags
                 add_document_vector(
-                    file_name=file_name, text_by_pages=[item["content"]], user_id=current_user.id, course_id=course_id
+                    file_name=file_name,
+                    text_by_pages=[item["content"]],
+                    user_id=current_user.id,
+                    course_id=course_id,
+                    category="Web Research",
+                    tags=f"web_search, {req.query}",
+                    chapter_id=req.chapter_id
                 )
-                ingested_sources.append(source_data)
+
+                # Cập nhật/Tạo RAGDocument trong SQLite
+                db.query(RAGDocument).filter(
+                    RAGDocument.course_id == course_id,
+                    RAGDocument.user_id == current_user.id,
+                    RAGDocument.file_name == file_name
+                ).delete()
+
+                new_doc = RAGDocument(
+                    user_id=current_user.id,
+                    course_id=course_id,
+                    file_name=file_name,
+                    category="Web Research",
+                    tags=f"web_search, {req.query}",
+                    chapter_id=req.chapter_id,
+                    status="ready"
+                )
+                db.add(new_doc)
+                db.commit()
+
+                ingested_sources.append({**source_data, "file_name": file_name})
             except Exception as e:
                 print(f"[ERROR] Loi khi nap vector tu web source: {e}")
-                # Vẫn ghi nhận nhưng báo lỗi log
                 rejected_sources.append({**source_data, "error": str(e)})
         else:
             rejected_sources.append(source_data)
@@ -233,6 +268,7 @@ class ForceIngestRequest(BaseModel):
     url: str = Field(..., example="https://example.com/article")
     title: str = Field(..., example="Article Title")
     content: str = Field(default="", example="Nội dung đã tải về từ tìm kiếm trước đó.")
+    chapter_id: int | None = None
 
 
 @router.post("/{course_id}/force-ingest-url")
@@ -265,8 +301,34 @@ def force_ingest_url(
 
     try:
         add_document_vector(
-            file_name=file_name, text_by_pages=[content_to_ingest], user_id=current_user.id, course_id=course_id
+            file_name=file_name,
+            text_by_pages=[content_to_ingest],
+            user_id=current_user.id,
+            course_id=course_id,
+            category="Forced Ingest",
+            tags="manual_ingest",
+            chapter_id=req.chapter_id
         )
+
+        # Cập nhật/Tạo RAGDocument trong SQLite
+        db.query(RAGDocument).filter(
+            RAGDocument.course_id == course_id,
+            RAGDocument.user_id == current_user.id,
+            RAGDocument.file_name == file_name
+        ).delete()
+
+        new_doc = RAGDocument(
+            user_id=current_user.id,
+            course_id=course_id,
+            file_name=file_name,
+            category="Forced Ingest",
+            tags="manual_ingest",
+            chapter_id=req.chapter_id,
+            status="ready"
+        )
+        db.add(new_doc)
+        db.commit()
+
         return {"message": f"Đã nạp thủ công nguồn '{req.title}' vào RAG thành công.", "file_name": file_name}
     except Exception as e:
         raise HTTPException(

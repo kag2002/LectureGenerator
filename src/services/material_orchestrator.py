@@ -99,9 +99,10 @@ class MaterialOrchestrator:
             clos_context=self.state["clos_context"],
             chapter_title=self.state["chapter_title"],
             chapter_description=self.state["chapter_description"],
+            rag_context=self.state["rag_context"],
             session_duration=self.state["session_duration"],
         )
-        user_prompt = "Hãy thiết kế Đề cương mạch truyện dạng JSON."
+        user_prompt = "Hãy thiết kế Đề cương slide bài giảng dạng JSON chứa danh sách các slide."
 
         res = call_llm_json(
             user_prompt,
@@ -151,6 +152,8 @@ class MaterialOrchestrator:
             suggested_layout = alloc.get("suggested_layout", "standard_list")
             allocated_text = alloc.get("allocated_text", "")
 
+            previous_slides_md = "\n\n".join(self.state["generated_slides"])
+
             # Khởi tạo sinh slide
             slide_md = self._generate_single_slide_with_retry(
                 slide_index=idx,
@@ -160,6 +163,7 @@ class MaterialOrchestrator:
                 bloom_level=plan["bloom_level"],
                 suggested_layout=suggested_layout,
                 allocated_text=allocated_text,
+                previous_slides_markdown=previous_slides_md,
                 trace_or_span=trace_or_span,
             )
             self.state["generated_slides"].append(slide_md)
@@ -173,6 +177,7 @@ class MaterialOrchestrator:
         bloom_level: int,
         suggested_layout: str,
         allocated_text: str,
+        previous_slides_markdown: str = "",
         trace_or_span=None,
     ) -> str:
         """Hàm sinh slide đơn lẻ kèm Self-Correction Loop kiểm soát Character Budget."""
@@ -187,6 +192,7 @@ class MaterialOrchestrator:
             suggested_layout=suggested_layout,
             allocated_text=allocated_text,
             target_lang=self.state["target_lang"],
+            previous_slides_markdown=previous_slides_markdown,
         )
 
         user_prompt = "Hãy viết mã nguồn Markdown cho slide này dưới dạng JSON."
@@ -351,9 +357,10 @@ Nội dung slide hiện tại để sửa đổi:
             clos_context=self.state["clos_context"],
             chapter_title=self.state["chapter_title"],
             chapter_description=self.state["chapter_description"],
+            rag_context=self.state["rag_context"],
             session_duration=self.state["session_duration"],
         )
-        user_prompt = "Hãy thiết kế Đề cương mạch truyện dạng JSON."
+        user_prompt = "Hãy thiết kế Đề cương slide bài giảng dạng JSON chứa danh sách các slide."
 
         from src.utils.llm_client import async_call_llm_json
 
@@ -391,14 +398,13 @@ Nội dung slide hiện tại để sửa đổi:
         return self.state["allocations"]
 
     async def async_run_slide_writer(self, trace_or_span=None, progress_callback=None):
-        """Bước 3: Slide Writer Agent sinh slide chi tiết và chạy Self-Correction bất đồng bộ."""
+        """Bước 3: Slide Writer Agent sinh slide chi tiết và chạy Self-Correction bất đồng bộ theo tuần tự."""
         if not self.state["allocations"]:
             raise ValueError("Allocations are empty. Please run Content Allocator first.")
 
         outline_map = {s["slide_index"]: s for s in self.state["outline"]}
         self.state["generated_slides"] = []
 
-        tasks = []
         for alloc in self.state["allocations"]:
             idx = alloc["slide_index"]
             plan = outline_map.get(
@@ -408,42 +414,34 @@ Nội dung slide hiện tại để sửa đổi:
             suggested_layout = alloc.get("suggested_layout", "standard_list")
             allocated_text = alloc.get("allocated_text", "")
 
-            async def run_single_task(slide_idx, t, p, tc, b, sl, at):
-                res = await self._async_generate_single_slide_with_retry(
-                    slide_index=slide_idx,
-                    title=t,
-                    purpose=p,
-                    target_clo=tc,
-                    bloom_level=b,
-                    suggested_layout=sl,
-                    allocated_text=at,
-                    trace_or_span=trace_or_span,
-                )
-                if progress_callback:
-                    try:
-                        if asyncio.iscoroutinefunction(progress_callback):
-                            await progress_callback(slide_idx)
-                        else:
-                            progress_callback(slide_idx)
-                    except Exception as callback_err:
-                        print(f"[WARNING] Progress callback error: {callback_err}")
-                return slide_idx, res
+            previous_slides_md = "\n\n".join(self.state["generated_slides"])
 
-            tasks.append(
-                run_single_task(
-                    idx,
-                    plan["title"],
-                    plan["purpose"],
-                    plan["target_clo"],
-                    plan["bloom_level"],
-                    suggested_layout,
-                    allocated_text,
-                )
+            res = await self._async_generate_single_slide_with_retry(
+                slide_index=idx,
+                title=plan["title"],
+                purpose=plan["purpose"],
+                target_clo=plan["target_clo"],
+                bloom_level=plan["bloom_level"],
+                suggested_layout=suggested_layout,
+                allocated_text=allocated_text,
+                previous_slides_markdown=previous_slides_md,
+                trace_or_span=trace_or_span,
             )
 
-        results = await asyncio.gather(*tasks)
-        results_dict = dict(results)
-        self.state["generated_slides"] = [results_dict[alloc["slide_index"]] for alloc in self.state["allocations"]]
+            self.state["generated_slides"].append(res)
+
+            if progress_callback:
+                try:
+                    title = plan.get("title", f"Slide {idx}")
+                    if asyncio.iscoroutinefunction(progress_callback):
+                        await progress_callback(idx, title, suggested_layout)
+                    else:
+                        progress_callback(idx, title, suggested_layout)
+                except Exception as callback_err:
+                    print(f"[WARNING] Progress callback error: {callback_err}")
+
+            # Sleep nhẹ để giãn dòng gọi API thay vì sleep 12s lớn
+            await asyncio.sleep(1.0)
 
     async def _async_generate_single_slide_with_retry(
         self,
@@ -454,6 +452,7 @@ Nội dung slide hiện tại để sửa đổi:
         bloom_level: int,
         suggested_layout: str,
         allocated_text: str,
+        previous_slides_markdown: str = "",
         trace_or_span=None,
     ) -> str:
         """Hàm sinh slide đơn lẻ kèm Self-Correction Loop bất đồng bộ."""
@@ -468,6 +467,7 @@ Nội dung slide hiện tại để sửa đổi:
             suggested_layout=suggested_layout,
             allocated_text=allocated_text,
             target_lang=self.state["target_lang"],
+            previous_slides_markdown=previous_slides_markdown,
         )
 
         user_prompt = "Hãy viết mã nguồn Markdown cho slide này dưới dạng JSON."
@@ -493,6 +493,7 @@ Nội dung slide hiện tại để sửa đổi:
             print(
                 f"[Self-Correction-Async] Slide {slide_index} ({suggested_layout}) bị vượt budget ký tự: {length}/{budget} ở lần thử {attempt}. Đang yêu cầu AI tối ưu lại..."
             )
+            await asyncio.sleep(12.0)
             correction_prompt = f"""Slide của bạn vừa sinh dài {length} ký tự, vượt quá hạn mức tối đa {budget} ký tự của layout '{suggested_layout}'.
 Hãy tóm tắt ngắn gọn lại, giữ nguyên tiêu đề '#' và dòng tag metadata ở cuối slide.
 Nội dung slide hiện tại để sửa đổi:

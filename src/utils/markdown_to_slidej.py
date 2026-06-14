@@ -223,6 +223,8 @@ def parse_markdown_to_slides(md_content: str, default_color: str = "E2E8F0", bol
             if line_stripped.startswith("<svg"):
                 in_svg = True
                 svg_lines.append(line)
+                if line_stripped.endswith("</svg>") or "</svg>" in line_stripped:
+                    in_svg = False
                 continue
             elif in_svg:
                 svg_lines.append(line)

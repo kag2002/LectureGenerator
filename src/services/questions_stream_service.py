@@ -9,6 +9,7 @@ from src.prompts.questions import (
     build_generator_user_prompt_compact,
 )
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
+from src.utils.parser import safe_parse_bloom_level
 
 
 def generate_questions_stream_generator(
@@ -108,7 +109,7 @@ def generate_questions_stream_generator(
                 "stage",
                 {
                     "stage": 3,
-                    "message": f"⚡ Chế độ sinh nhanh: Bỏ qua bước Self-Correction. Đang lưu {len(raw_questions)} câu hỏi vào CSDL...",
+                    "message": f"⚡ Chế độ tạo nhanh: Bỏ qua bước tự sửa lỗi. Đang lưu {len(raw_questions)} câu hỏi vào CSDL...",
                 },
             )
             for idx, q in enumerate(raw_questions):
@@ -121,7 +122,7 @@ def generate_questions_stream_generator(
                     question_type="MCQ",
                     options_json=opts_str,
                     correct_answer=q.get("correct_answer", ""),
-                    bloom_level=q.get("bloom_level", bloom_level),
+                    bloom_level=safe_parse_bloom_level(q.get("bloom_level", bloom_level), bloom_level),
                     clo_id=clo_id,
                 )
                 new_db.add(new_q_obj)
@@ -156,7 +157,7 @@ def generate_questions_stream_generator(
                     "stage",
                     {
                         "stage": 3,
-                        "message": f"⏳ Đang xác minh câu {idx + 1}/{len(raw_questions)} (Self-Correction)...",
+                        "message": f"⏳ Đang tự sửa lỗi và xác minh câu {idx + 1}/{len(raw_questions)}...",
                     },
                 )
 
@@ -235,7 +236,7 @@ def generate_questions_stream_generator(
                     question_type="MCQ",
                     options_json=opts_str,
                     correct_answer=current_q.get("correct_answer", ""),
-                    bloom_level=current_q.get("bloom_level", bloom_level),
+                    bloom_level=safe_parse_bloom_level(current_q.get("bloom_level", bloom_level), bloom_level),
                     clo_id=clo_id,
                 )
                 new_db.add(new_q_obj)

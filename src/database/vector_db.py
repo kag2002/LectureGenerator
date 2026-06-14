@@ -120,7 +120,11 @@ class LazySentenceTransformerEmbeddingFunction(chromadb.EmbeddingFunction):
 
 embedding_func = LazySentenceTransformerEmbeddingFunction()
 
-collection = chroma_client.get_or_create_collection(name="lecture_materials", embedding_function=embedding_func)
+collection = chroma_client.get_or_create_collection(
+    name="lecture_materials",
+    embedding_function=embedding_func,
+    metadata={"hnsw:space": "cosine"}
+)
 
 
 def chunk_text_by_page(text: str, page_number: int, chunk_size: int = 800, overlap: int = 150) -> list[dict]:
@@ -131,8 +135,8 @@ def chunk_text_by_page(text: str, page_number: int, chunk_size: int = 800, overl
     if not text or not text.strip():
         return []
 
-    # Chia trang thành các câu bằng regex đơn giản (nhận biết dấu chấm, hỏi, cảm và dấu xuống dòng)
-    sentences = re.split(r"(?<=[.?!])\s+|\n+", text)
+    # Chia trang thành các câu bằng regex cải tiến (tránh băm nhỏ mã nguồn như node.left hoặc từ viết tắt)
+    sentences = re.split(r"(?<=[.?!])\s+(?=[A-ZĐĂÂÊÔƠƯ])|\n+", text)
     chunks = []
 
     current_chunk = []
@@ -190,63 +194,372 @@ def chunk_text_by_page(text: str, page_number: int, chunk_size: int = 800, overl
     return chunks
 
 
-def add_document_vector(file_name: str, text_by_pages: list[str], user_id: int, course_id: int):
+def clean_and_truncate_references(text_by_pages: list[str]) -> list[str]:
+    """
+    Truncate references/bibliography from academic documents.
+    Scans pages from back to front to find bibliography indicators.
+    """
+    total_pages = len(text_by_pages)
+    if total_pages == 0:
+        return text_by_pages
+
+    # Define bibliography patterns
+    ref_patterns = [
+        r'^\s*#*\s*References\s*$',
+        r'^\s*#*\s*REFERENCES\s*$',
+        r'^\s*#*\s*Bibliography\s*$',
+        r'^\s*#*\s*BIBLIOGRAPHY\s*$',
+        r'^\s*#*\s*Tài liệu tham khảo\s*$',
+        r'^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$'
+    ]
+    
+    # We only look for references in the last 20% of pages or at least the last 5 pages
+    min_page_to_check = max(0, int(total_pages * 0.8))
+    if total_pages <= 3:
+        min_page_to_check = total_pages  # disable check for very short documents
+        
+    found_ref_page_idx = -1
+    found_line_idx = -1
+    
+    for page_idx in range(total_pages - 1, min_page_to_check - 1, -1):
+        page_text = text_by_pages[page_idx]
+        lines = page_text.split('\n')
+        for line_idx, line in enumerate(lines):
+            for pattern in ref_patterns:
+                if re.match(pattern, line.strip(), re.IGNORECASE):
+                    found_ref_page_idx = page_idx
+                    found_line_idx = line_idx
+                    break
+            if found_ref_page_idx != -1:
+                break
+        if found_ref_page_idx != -1:
+            break
+            
+    if found_ref_page_idx != -1:
+        print(f"[INFO] Phat hien References o trang {found_ref_page_idx + 1}. Dang tien hanh cat bo.")
+        ref_page_lines = text_by_pages[found_ref_page_idx].split('\n')
+        text_by_pages[found_ref_page_idx] = '\n'.join(ref_page_lines[:found_line_idx])
+        return text_by_pages[:found_ref_page_idx + 1]
+        
+    return text_by_pages
+
+
+def clean_single_text_references(text: str) -> str:
+    """
+    Truncates bibliography from a single large string if it's near the end.
+    """
+    if not text:
+        return text
+    
+    min_char_idx = int(len(text) * 0.8)
+    lines = text.split('\n')
+    char_count = 0
+    ref_line_idx = -1
+    
+    ref_patterns = [
+        r'^\s*#*\s*References\s*$',
+        r'^\s*#*\s*REFERENCES\s*$',
+        r'^\s*#*\s*Bibliography\s*$',
+        r'^\s*#*\s*BIBLIOGRAPHY\s*$',
+        r'^\s*#*\s*Tài liệu tham khảo\s*$',
+        r'^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$'
+    ]
+    
+    for idx, line in enumerate(lines):
+        char_count += len(line) + 1
+        if char_count > min_char_idx:
+            for pattern in ref_patterns:
+                if re.match(pattern, line.strip(), re.IGNORECASE):
+                    ref_line_idx = idx
+                    break
+            if ref_line_idx != -1:
+                break
+                
+    if ref_line_idx != -1:
+        print(f"[INFO] Phat hien References o dong {ref_line_idx}. Dang tien hanh cat bo.")
+        return '\n'.join(lines[:ref_line_idx])
+        
+    return text
+
+
+def clean_noise(text: str) -> str:
+    """
+    Clean page headers, footers, consecutive page numbers, double spaces, and broken lines.
+    """
+    if not text:
+        return ""
+    
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        trimmed = line.strip()
+        # Remove lines containing only page numbers
+        if re.match(r'^\d+$', trimmed):
+            continue
+        if re.match(r'^(page|trang)\s*\d+$', trimmed, re.IGNORECASE):
+            continue
+        if re.match(r'^(page|trang)\s*\d+\s*(of|trên|/)\s*\d+$', trimmed, re.IGNORECASE):
+            continue
+        cleaned_lines.append(line)
+    text = '\n'.join(cleaned_lines)
+
+    text = re.sub(r' {2,}', ' ', text)
+    text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def add_document_vector(
+    file_name: str,
+    text_by_pages: list[str],
+    user_id: int,
+    course_id: int,
+    category: str | None = None,
+    tags: str | None = None,
+    chapter_id: int | None = None
+):
     """
     Nạp toàn bộ tài liệu đã trích xuất theo trang vào ChromaDB.
-    Đính kèm metadata cô lập người dùng.
+    Đính kèm metadata cô lập người dùng và các nhãn phân cấp.
     """
+    # 0. Giải quyết va chạm ID: Xóa các vector cũ của file này trước khi ghi đè
+    try:
+        collection.delete(
+            where={
+                "$and": [
+                    {"user_id": {"$eq": user_id}},
+                    {"course_id": {"$eq": course_id}},
+                    {"file_name": {"$eq": file_name}},
+                ]
+            }
+        )
+    except Exception as e:
+        print(f"[WARNING] Loi khi xoa vector cu de chong va cham ID: {e}")
+
+    # 1. Trích xuất và loại bỏ phần References/Bibliography thừa ở cuối
+    if len(text_by_pages) > 1:
+        text_by_pages = clean_and_truncate_references(text_by_pages)
+    else:
+        text_by_pages = [clean_single_text_references(text_by_pages[0])]
+
     all_chunks = []
 
-    # 1. Thực hiện chunking từng trang
+    # 2. Làm sạch nhiễu và chia nhỏ văn bản theo trang
     for idx, page_text in enumerate(text_by_pages):
         page_num = idx + 1  # Số trang bắt đầu từ 1
-        page_chunks = chunk_text_by_page(page_text, page_num)
+        cleaned_text = clean_noise(page_text)
+        page_chunks = chunk_text_by_page(cleaned_text, page_num)
         all_chunks.extend(page_chunks)
 
-    if not all_chunks:
-        return
+    if not all_chunks or all(not c["text"].strip() for c in all_chunks):
+        raise ValueError("Tài liệu không chứa nội dung văn bản hợp lệ (Có thể là ảnh quét hoặc tài liệu rỗng). Vui lòng chuyển đổi OCR trước.")
 
-    # 2. Chuẩn bị dữ liệu nạp
+    # 3. Chuẩn bị dữ liệu nạp và xây dựng Sentence Window Context
+    for i, c in enumerate(all_chunks):
+        # Trích xuất ngữ cảnh xung quanh (sliding window của 3 chunks kế cận: trước, hiện tại, sau)
+        start_w = max(0, i - 1)
+        end_w = min(len(all_chunks), i + 2)
+        c["window_text"] = "\n\n".join([all_chunks[j]["text"] for j in range(start_w, end_w)])
+
     ids = [f"usr_{user_id}_crs_{course_id}_file_{file_name}_c{i}" for i in range(len(all_chunks))]
     documents = [c["text"] for c in all_chunks]
-    metadatas = [
-        {"user_id": user_id, "course_id": course_id, "file_name": file_name, "page_number": c["page_number"]}
-        for c in all_chunks
-    ]
+    
+    metadatas = []
+    for c in all_chunks:
+        meta = {
+            "user_id": user_id,
+            "course_id": course_id,
+            "file_name": file_name,
+            "page_number": c["page_number"],
+            "window_text": c["window_text"]
+        }
+        if category:
+            meta["category"] = category
+        if tags:
+            meta["tags"] = tags
+        meta["chapter_id"] = chapter_id if chapter_id is not None else 0
+        metadatas.append(meta)
 
-    # 3. Nạp vào ChromaDB
+    # 4. Nạp vào ChromaDB
     collection.add(documents=documents, metadatas=metadatas, ids=ids)
-    print(f"[INFO] Da nap thanh cong {len(all_chunks)} vector chunks tu file '{file_name}' (Course: {course_id}).")
+    print(f"[INFO] Da nap thanh cong {len(all_chunks)} vector chunks tu file '{file_name}' (Course: {course_id}) kem metadata category={category}, tags={tags}, chapter_id={chapter_id}.")
 
 
-def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4) -> list[dict]:
+def migrate_vector_db_metadata():
+    """Bổ sung chapter_id: 0 cho các vector cũ chưa có chapter_id."""
+    try:
+        # Lấy tất cả tài liệu trong collection
+        all_docs = collection.get(include=["metadatas"])
+        if not all_docs or not all_docs["ids"]:
+            return
+        
+        update_ids = []
+        update_metas = []
+        for i, meta in enumerate(all_docs["metadatas"]):
+            if meta and "chapter_id" not in meta:
+                meta["chapter_id"] = 0
+                update_ids.append(all_docs["ids"][i])
+                update_metas.append(meta)
+        
+        if update_ids:
+            collection.update(ids=update_ids, metadatas=update_metas)
+            print(f"[INFO] Da cap nhat chapter_id=0 cho {len(update_ids)} vector cu.")
+    except Exception as e:
+        print(f"[WARNING] Loi khi migrate ChromaDB metadata: {e}")
+
+
+def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4, chapter_id: int | None = None) -> list[dict]:
     """
     Truy vấn RAG cô lập tuyệt đối dựa trên Metadata filtering.
+    Nếu chapter_id được cung cấp, lọc các tài liệu thuộc chương này HOẶC dùng chung (chapter_id = 0).
+    Áp dụng mở rộng truy vấn (Multi-Query Expansion), truy vấn lô (batch), khử trùng lặp và Re-ranking lai.
+    Hỗ trợ Sentence Window Retrieval (lấy window_text từ metadata).
     """
     try:
-        results = collection.query(
-            query_texts=[query],
-            n_results=top_k,
-            where={"$and": [{"user_id": {"$eq": user_id}}, {"course_id": {"$eq": course_id}}]},
-        )
+        where_cond = {
+            "$and": [
+                {"user_id": {"$eq": user_id}},
+                {"course_id": {"$eq": course_id}}
+            ]
+        }
+        if chapter_id is not None:
+            where_cond["$and"].append({"chapter_id": {"$in": [0, int(chapter_id)]}})
 
-        # Format lại kết quả trả về dạng danh sách dict dễ xử lý
-        formatted_results = []
-        if results and results["documents"] and len(results["documents"]) > 0:
-            docs = results["documents"][0]
-            metas = results["metadatas"][0]
-            distances = results["distances"][0] if "distances" in results else [0.0] * len(docs)
+        # 1. Mở rộng câu truy vấn (Query Expansion)
+        queries = [query]
+        
+        # A. Mở rộng từ viết tắt chuyên ngành cục bộ (Rule-based Acronym Expansion)
+        acronym_map = {
+            "avl": ["cây avl", "cây tự cân bằng avl"],
+            "bst": ["cây tìm kiếm nhị phân", "binary search tree"],
+            "dsa": ["cấu trúc dữ liệu và giải thuật", "dsa"],
+            "clo": ["chuẩn đầu ra môn học", "clo"],
+        }
+        query_lower = query.lower()
+        for ac, expansions in acronym_map.items():
+            if re.search(r'\b' + re.escape(ac) + r'\b', query_lower):
+                for exp in expansions:
+                    if exp not in queries:
+                        queries.append(exp)
 
-            for i in range(len(docs)):
-                formatted_results.append(
-                    {
-                        "text": docs[i],
-                        "file_name": metas[i].get("file_name", "N/A"),
-                        "page_number": metas[i].get("page_number", 0),
-                        "score": 1.0 - distances[i],  # Similarity Score
-                    }
+        # B. Mở rộng bằng LLM (chỉ chạy khi không ở chế độ test và có key)
+        if os.environ.get("TESTING") != "1":
+            try:
+                from src.utils.llm_client import call_llm_json
+                expansion_prompt = (
+                    "Bạn là trợ lý AI chuyên về RAG. Hãy phân tích câu hỏi/truy vấn của người dùng "
+                    "và tạo ra đúng 2 biến thể truy vấn tìm kiếm khác bằng tiếng Việt nhằm tối ưu hóa việc tìm kiếm tài liệu học tập. "
+                    "Hãy bao gồm từ đồng nghĩa, từ chuyên ngành tiếng Anh tương ứng hoặc làm rõ các từ viết tắt chuyên ngành. "
+                    "Định dạng trả về là JSON hợp lệ có dạng:\n"
+                    "{\n"
+                    "  \"expanded_queries\": [\"biến thể 1\", \"biến thể 2\"]\n"
+                    "}"
                 )
-        return formatted_results
+                res = call_llm_json(
+                    prompt=f"Truy vấn gốc: '{query}'",
+                    system_instruction=expansion_prompt,
+                    temperature=0.3
+                )
+                if res and "expanded_queries" in res:
+                    for eq in res["expanded_queries"]:
+                        if eq and eq.strip() and eq.strip() not in queries:
+                            queries.append(eq.strip())
+            except Exception as e:
+                print(f"[WARNING] Loi khi mo rong truy van bang LLM: {e}")
+
+        # 2. Tăng số lượng kết quả lấy ra từ Vector DB để Rerank (lấy top_k * 2 mỗi query)
+        fetch_k = max(top_k * 2, 8)
+        
+        # Gọi ChromaDB query cho danh sách các truy vấn (batch query)
+        print(f"[DEBUG] queries: {queries}, where_cond: {where_cond}")
+        results = collection.query(
+            query_texts=queries,
+            n_results=fetch_k,
+            where=where_cond,
+        )
+        print(f"[DEBUG] collection query results: {results}")
+
+        # 3. Gom nhóm và khử trùng lặp kết quả (Deduplication)
+        unique_chunks = {}
+        if results and results["documents"]:
+            # results["documents"] là danh sách các danh sách kết quả (một danh sách cho mỗi query)
+            for q_idx in range(len(results["documents"])):
+                q_docs = results["documents"][q_idx]
+                q_metas = results["metadatas"][q_idx] if results.get("metadatas") else [None] * len(q_docs)
+                q_distances = results["distances"][q_idx] if results.get("distances") else [0.0] * len(q_docs)
+                q_ids = results["ids"][q_idx] if results.get("ids") else []
+                
+                for i in range(len(q_docs)):
+                    # Lấy ID của chunk
+                    chunk_id = q_ids[i] if i < len(q_ids) else f"chunk_{q_idx}_{i}"
+                    text = q_docs[i]
+                    meta = q_metas[i] or {}
+                    dist = q_distances[i]
+                    
+                    # Tính điểm semantic gốc (0.0 -> 1.0) sử dụng chuẩn hóa tuyến tính khoảng cách Cosine [0, 2]
+                    semantic_score = max(0.0, 1.0 - (dist / 2.0))
+                    
+                    # Nếu chunk đã xuất hiện, giữ lại điểm tương đồng semantic lớn nhất
+                    if chunk_id in unique_chunks:
+                        if semantic_score > unique_chunks[chunk_id]["semantic_score"]:
+                            unique_chunks[chunk_id]["semantic_score"] = semantic_score
+                    else:
+                        unique_chunks[chunk_id] = {
+                            "text": text,
+                            "meta": meta,
+                            "semantic_score": semantic_score
+                        }
+
+        # 4. Tính toán điểm Rerank lai dựa trên truy vấn gốc của người dùng
+        query_clean = query.lower().strip()
+        query_tokens = [w for w in re.findall(r"\w+", query_clean) if len(w) > 1]
+        uppercase_tokens = [w for w in re.findall(r"\b[A-Z0-9_]{3,}\b", query)]
+
+        formatted_results = []
+        for chunk_id, chunk_data in unique_chunks.items():
+            text = chunk_data["text"]
+            text_lower = text.lower()
+            semantic_score = chunk_data["semantic_score"]
+            meta = chunk_data["meta"]
+            
+            # Tính toán điểm bổ trợ Lexical Boost
+            lexical_boost = 0.0
+            
+            # Khớp cụm từ chính xác
+            if query_clean in text_lower:
+                lexical_boost += 0.25
+            else:
+                # Khớp tỷ lệ từ khóa đơn lẻ
+                if query_tokens:
+                    match_count = sum(1 for token in query_tokens if token in text_lower)
+                    lexical_boost += (match_count / len(query_tokens)) * 0.15
+            
+            # Khớp từ khóa chuyên ngành viết hoa (ví dụ: CLO1, AVL)
+            if uppercase_tokens:
+                uc_matches = sum(1 for token in uppercase_tokens if token in text)
+                lexical_boost += (uc_matches / len(uppercase_tokens)) * 0.10
+            
+            final_score = min(1.0, semantic_score + lexical_boost)
+            
+            # 5. Sentence Window Retrieval: Lấy window_text nếu có trong metadata để làm ngữ cảnh mở rộng
+            window_text = meta.get("window_text")
+            text_to_return = window_text if window_text else text
+            
+            formatted_results.append(
+                {
+                    "text": text_to_return,
+                    "file_name": meta.get("file_name", "N/A"),
+                    "page_number": meta.get("page_number", 0),
+                    "score": round(final_score, 4),
+                    "semantic_score": round(semantic_score, 4)
+                }
+            )
+        
+        # Sắp xếp lại kết quả theo điểm số cuối cùng sau khi Rerank
+        formatted_results.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Trả về đúng top_k kết quả có điểm cao nhất
+        return formatted_results[:top_k]
     except Exception as e:
         print(f"[ERROR] Loi truy van RAG ChromaDB: {e}")
         return []
