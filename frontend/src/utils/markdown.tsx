@@ -7,6 +7,10 @@ import React from 'react';
 export function renderMarkdown(md: string): string {
   if (!md) return '';
   
+  // Strip default emojis to prevent system icons from appearing
+  md = md.replace(/[\u{1F300}-\u{1F9FF}\u{1FA00}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}☁️⏱️⚡⚠️✅🛡️🧩💾📄✨🎨🔍✍️🖨️]/gu, '');
+
+  
   // Clean HTML tags to prevent XSS
   let html = md
     .replace(/&/g, '&amp;')
@@ -172,6 +176,10 @@ export function renderBoldRuns(text: string, boldColor = 'var(--markdown-bold)')
  */
 export function renderMarkdownInline(text: string, boldColor = 'var(--markdown-bold)'): React.ReactNode {
   if (!text) return '';
+  
+  // Strip default emojis to prevent system icons from appearing
+  text = text.replace(/[\u{1F300}-\u{1F9FF}\u{1FA00}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}☁️⏱️⚡⚠️✅🛡️🧩💾📄✨🎨🔍✍️🖨️]/gu, '');
+
   const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
   if (!text.match(imgRegex)) {
     return renderBoldRuns(text, boldColor);

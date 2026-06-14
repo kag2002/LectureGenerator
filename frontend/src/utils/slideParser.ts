@@ -208,6 +208,10 @@ interface RawSlide {
  */
 export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
   if (!mdContent) return [];
+  
+  // Strip default emojis to prevent system icons from appearing in slides
+  mdContent = mdContent.replace(/[\u{1F300}-\u{1F9FF}\u{1FA00}-\u{1FAFF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}☁️⏱️⚡⚠️✅🛡️🧩💾📄✨🎨🔍✍️🖨️]/gu, '');
+
   const lines = mdContent.replace(/\r\n/g, '\n').split('\n').map(l => l.trim());
   const hashHeaders = lines.filter(line => line.startsWith('#'));
   
@@ -286,6 +290,11 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
       if (!line) continue;
       
       const lineStripped = line.trim();
+      // Skip markdown code block markers
+      if (lineStripped === '```' || lineStripped.startsWith('```') || /^[-*+•]\s*```/.test(lineStripped)) {
+        continue;
+      }
+
       if (!inSvg && (lineStripped.startsWith('<svg') || lineStripped.includes('<svg') || lineStripped.includes('svg xmlns="http://www.w3.org/2000/svg"'))) {
         inSvg = true;
         const svgStartIdx = line.indexOf('<svg');
@@ -302,16 +311,14 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
             cb = cb.replace(/\[Bloom\s*:?\s*[^\]]+\]/gi, '').trim();
             if (cb && !/^[-*+•\s_=]+$/.test(cb)) {
               let isBullet = false;
-              if (textBefore.trim().startsWith('*') || textBefore.trim().startsWith('-') || textBefore.trim().startsWith('+') || textBefore.trim().startsWith('•')) {
-                isBullet = true;
-              }
               let lineContent = cb;
-              if (lineContent.startsWith('*') || lineContent.startsWith('-') || lineContent.startsWith('+') || lineContent.startsWith('•')) {
-                lineContent = lineContent.slice(1).trim();
-              }
-              if (lineContent.startsWith('*') || lineContent.startsWith('-') || lineContent.startsWith('+') || lineContent.startsWith('•')) {
-                lineContent = lineContent.slice(1).trim();
+              const bulletMatch = lineContent.match(/^([-*+•])\s+(.*)$/) || (lineContent.startsWith('•') ? [null, '•', lineContent.slice(1).trim()] : null);
+              if (bulletMatch) {
                 isBullet = true;
+                lineContent = bulletMatch[2];
+              }
+              if (lineContent.startsWith('>')) {
+                lineContent = lineContent.slice(1).trim();
               }
               if (lineContent.startsWith('*') && lineContent.endsWith('*') && !lineContent.startsWith('**')) {
                 lineContent = lineContent.slice(1, -1).trim();
@@ -320,6 +327,7 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
                 lineContent = lineContent.slice(1, -1).trim();
               }
               if (lineContent) {
+                lineContent = capitalizeFirstLetter(lineContent);
                 bodyItems.push({
                   type: 'text',
                   rawText: lineContent,
@@ -401,17 +409,14 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
       }
       
       let isBullet = false;
-      if (line.trim().startsWith('*') || line.trim().startsWith('-') || line.trim().startsWith('+') || line.trim().startsWith('•')) {
-        isBullet = true;
-      }
-      
       let lineContent = cleanedText;
-      if (lineContent.startsWith('*') || lineContent.startsWith('-') || lineContent.startsWith('+') || lineContent.startsWith('•')) {
-        lineContent = lineContent.slice(1).trim();
-      }
-      if (lineContent.startsWith('*') || lineContent.startsWith('-') || lineContent.startsWith('+') || lineContent.startsWith('•')) {
-        lineContent = lineContent.slice(1).trim();
+      const bulletMatch = lineContent.match(/^([-*+•])\s+(.*)$/) || (lineContent.startsWith('•') ? [null, '•', lineContent.slice(1).trim()] : null);
+      if (bulletMatch) {
         isBullet = true;
+        lineContent = bulletMatch[2];
+      }
+      if (lineContent.startsWith('>')) {
+        lineContent = lineContent.slice(1).trim();
       }
       
       if (lineContent.startsWith('*') && lineContent.endsWith('*') && !lineContent.startsWith('**')) {
@@ -422,6 +427,7 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
       }
       
       if (lineContent) {
+        lineContent = capitalizeFirstLetter(lineContent);
         bodyItems.push({
           type: 'text',
           rawText: lineContent,
@@ -459,4 +465,21 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
   }
   
   return processedSlides;
+}
+
+export function capitalizeFirstLetter(str: string): string {
+  if (!str) return str;
+  if (str.startsWith('**')) {
+    return '**' + capitalizeFirstLetter(str.slice(2));
+  }
+  if (str.startsWith('__')) {
+    return '__' + capitalizeFirstLetter(str.slice(2));
+  }
+  if (str.startsWith('*')) {
+    return '*' + capitalizeFirstLetter(str.slice(1));
+  }
+  if (str.startsWith('_')) {
+    return '_' + capitalizeFirstLetter(str.slice(1));
+  }
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }

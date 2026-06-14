@@ -1,5 +1,46 @@
 import React from 'react';
-import { Zap } from 'lucide-react';
+import { 
+  Zap, Search, Layers, Presentation, Activity, Shield, Save, Check, Loader2, Sparkles, AlertTriangle 
+} from 'lucide-react';
+
+const cleanLogText = (text: string) => {
+  if (!text) return '';
+  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}️\s✅⚡⏳🛡️🎨🔍✍️🧩💾☁️⏱️]+/u, '').trim();
+};
+
+const getLogIcon = (stage: number, text: string) => {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('hoàn tất') || lowerText.includes('thành công') || lowerText.includes('xong')) {
+    return <Check className="text-emerald-400" size={16} style={{ flexShrink: 0 }} />;
+  }
+  if (lowerText.includes('lỗi') || lowerText.includes('thất bại')) {
+    return <AlertTriangle className="text-rose-400" size={16} style={{ flexShrink: 0 }} />;
+  }
+  
+  switch (stage) {
+    case 1:
+      return <Search className="text-sky-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 2:
+      return <Layers className="text-indigo-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 3:
+      return <Presentation className="text-teal-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 4:
+      return <Activity className="text-amber-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 5:
+      return <Shield className="text-rose-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 6:
+      return <Save className="text-emerald-400" size={16} style={{ flexShrink: 0 }} />;
+    default:
+      if (lowerText.includes('truy xuất') || lowerText.includes('rag') || lowerText.includes('tìm kiếm')) {
+        return <Search className="text-sky-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+      }
+      if (lowerText.includes('gọi mô hình') || lowerText.includes('khởi động')) {
+        return <Loader2 className="text-indigo-400 animate-spin" size={16} style={{ flexShrink: 0 }} />;
+      }
+      return <Sparkles className="text-violet-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+  }
+};
 import { CLO, Chapter } from '@/types';
 
 export interface QuestionConfigFormProps {
@@ -115,7 +156,7 @@ export default function QuestionConfigForm({
               className="qb-checkbox-input"
             />
             <label htmlFor="config-fast-mode-checkbox" className="qb-checkbox-label" title="Bỏ qua bước giải đề thử của Solver giúp rút ngắn thời gian sinh">
-              <Zap size={14} aria-hidden="true" /> Chế độ sinh nhanh (Fast Mode)
+              <Zap size={14} aria-hidden="true" /> Chế độ tạo nhanh (Fast Mode)
             </label>
           </div>
 
@@ -124,9 +165,9 @@ export default function QuestionConfigForm({
           </button>
 
           {generating && (
-            <div className="qb-gen-log-box">
-              <div className="qb-pulse-dot"></div>
-              <span className="qb-log-text">{genLog}</span>
+            <div className="qb-gen-log-box" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {getLogIcon(3, genLog)}
+              <span className="qb-log-text">{cleanLogText(genLog)}</span>
             </div>
           )}
         </form>
