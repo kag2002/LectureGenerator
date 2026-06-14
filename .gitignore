@@ -70,3 +70,7 @@ out/
 temp/
 .agents/
 
+# Local scratch scripts and sample powerpoints
+scratch/
+sample_ppnt/
+
