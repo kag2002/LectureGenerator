@@ -1016,3 +1016,255 @@ def export_chapter_pptx_canvas(
         filename=f"Bai_Giang_Chuong_{chapter_id}.pptx",
     )
 
+
+# --- API EXPORT ZIP COURSE PACKAGE ---
+from fastapi import BackgroundTasks
+import zipfile
+import tempfile
+import shutil
+import unicodedata
+
+
+def format_to_gift(question_text: str, options: list, correct_answer: str) -> str:
+    """Formats a question into Moodle/Canvas GIFT format."""
+    def escape_gift(text):
+        for char in ['{', '}', '~', '=', '#', ':', '/']:
+            text = text.replace(char, '\\' + char)
+        return text
+
+    q_text = escape_gift(question_text)
+    gift_options = []
+    
+    # Normal case: correct answer matches one of options
+    for opt in options:
+        opt_escaped = escape_gift(opt)
+        if opt.strip().lower() == correct_answer.strip().lower():
+            gift_options.append(f"={opt_escaped}")
+        else:
+            gift_options.append(f"~{opt_escaped}")
+            
+    # Fallback if correct_answer was letter matching index (e.g., 'A', 'B', 'C', 'D')
+    has_correct = any(o.startswith('=') for o in gift_options)
+    if not has_correct and correct_answer in ["A", "B", "C", "D", "a", "b", "c", "d"]:
+        idx = ord(correct_answer.upper()) - ord('A')
+        if idx < len(gift_options):
+            gift_options[idx] = "=" + gift_options[idx].lstrip('~')
+            has_correct = True
+            
+    # Ultimate fallback: first item
+    if not has_correct and gift_options:
+        gift_options[0] = "=" + gift_options[0].lstrip('~')
+        
+    options_str = " ".join(gift_options)
+    return f"{q_text} {{{options_str}}}"
+
+
+def sanitize_filename(name: str) -> str:
+    """Converts name to standard ASCII alphanumeric string for folder/file names."""
+    # Normalize unicode to separate diacritics
+    normalized = unicodedata.normalize('NFKD', name)
+    ascii_encoded = normalized.encode('ascii', 'ignore').decode('ascii')
+    # Filter non-alphanumeric/spaces/hyphens
+    filtered = re.sub(r'[^a-zA-Z0-9_\-\s]', '', ascii_encoded)
+    # Strip and replace spaces/underscores with a single underscore
+    sanitized = re.sub(r'[\s_]+', '_', filtered.strip())
+    return sanitized or "Chapter"
+
+
+@router.get("/{course_id}/export-zip")
+def export_course_zip(
+    course_id: int,
+    background_tasks: BackgroundTasks,
+    organization_style: str = "by_chapter",
+    theme: str = "warm_academic",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # 1. Xác thực môn học
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    # 2. Lấy dữ liệu chương học, câu hỏi, CLO
+    chapters = (
+        db.query(Chapter)
+        .filter(Chapter.course_id == course_id, Chapter.is_active)
+        .order_by(Chapter.sort_order)
+        .all()
+    )
+    questions = db.query(Question).filter(Question.course_id == course_id, Question.is_active).all()
+    clos = db.query(CLO).filter(CLO.course_id == course_id).all()
+
+    # 3. Tạo thư mục tạm để đóng gói
+    temp_dir = tempfile.mkdtemp(prefix=f"course_export_{course_id}_")
+    
+    try:
+        # A. Đề cương Syllabus.md
+        syllabus_path = os.path.join(temp_dir, "Syllabus.md")
+        with open(syllabus_path, "w", encoding="utf-8") as f:
+            f.write(f"# ĐỀ CƯƠNG CHI TIẾT MÔN HỌC: {course.course_name.upper()}\n")
+            f.write(f"Mã môn học: {course.course_code}\n")
+            f.write(f"Giảng viên biên soạn: {current_user.full_name or current_user.email}\n\n")
+            f.write("## 🎯 Chuẩn đầu ra môn học (CLOs)\n")
+            if not clos:
+                f.write("* Chưa có chuẩn đầu ra nào được cấu hình.\n")
+            else:
+                for c in clos:
+                    f.write(f"- **{c.clo_code}** (Mức Bloom {c.bloom_level}): {c.description}\n")
+            f.write("\n## 📚 Giáo trình & Tài liệu tham khảo\n")
+            f.write(f"- Giáo trình bắt buộc: {course.required_textbooks or 'N/A'}\n")
+            f.write(f"- Tài liệu tham khảo: {course.recommended_readings or 'N/A'}\n")
+
+        # B. Báo cáo Ma trận Coverage Bloom x CLO
+        matrix_path = os.path.join(temp_dir, "Matrix_Coverage.md")
+        with open(matrix_path, "w", encoding="utf-8") as f:
+            f.write(f"# MA TRẬN ĐỘ PHỦ CHẤT LƯỢNG (CLO x BLOOM LEVEL)\n")
+            f.write(f"Môn học: {course.course_name} ({course.course_code})\n\n")
+            f.write("| Chuẩn đầu ra (CLO) | Mức Bloom | Số lượng Câu hỏi | Slide bài giảng | Mô tả CLO |\n")
+            f.write("| :--- | :---: | :---: | :---: | :--- |\n")
+            
+            for c in clos:
+                q_count = len([q for q in questions if q.clo_id == c.id])
+                # Check how many chapter materials mention this CLO
+                slide_count = 0
+                for ch in chapters:
+                    mat = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
+                    if mat and mat.slide_content and c.clo_code in mat.slide_content:
+                        slide_count += 1
+                f.write(f"| {c.clo_code} | Mức {c.bloom_level} | {q_count} câu | {slide_count} chương | {c.description} |\n")
+
+        # C. Đóng gói các chương theo cấu trúc thư mục mong muốn
+        if organization_style == "by_type":
+            # Tạo thư mục phân loại theo loại học liệu
+            storyboard_dir = os.path.join(temp_dir, "Storyboards")
+            slides_dir = os.path.join(temp_dir, "Slides")
+            quizzes_dir = os.path.join(temp_dir, "Quizzes")
+            os.makedirs(storyboard_dir, exist_ok=True)
+            os.makedirs(slides_dir, exist_ok=True)
+            os.makedirs(quizzes_dir, exist_ok=True)
+        
+        for idx, ch in enumerate(chapters):
+            ch_num = idx + 1
+            sanitized_title = sanitize_filename(ch.title)
+            ch_folder_name = f"Chapter_{ch_num:02d}_{sanitized_title}"
+            
+            # Khởi tạo đường dẫn lưu file của chương này
+            if organization_style == "by_type":
+                storyboard_dest_dir = storyboard_dir
+                slides_dest_dir = slides_dir
+                quizzes_dest_dir = quizzes_dir
+                file_prefix = f"Chapter_{ch_num:02d}_"
+            else: # default: by_chapter
+                ch_path = os.path.join(temp_dir, "Chapters", ch_folder_name)
+                os.makedirs(ch_path, exist_ok=True)
+                storyboard_dest_dir = ch_path
+                slides_dest_dir = ch_path
+                quizzes_dest_dir = ch_path
+                file_prefix = ""
+
+            material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
+            
+            # i. Kịch bản Active Learning (Storyboard)
+            if material and material.active_learning_script:
+                sb_path = os.path.join(storyboard_dest_dir, f"{file_prefix}Storyboard.md")
+                with open(sb_path, "w", encoding="utf-8") as f:
+                    f.write(f"# GIÁO ÁN ACTIVE LEARNING: {ch.title.upper()}\n\n")
+                    f.write(material.active_learning_script)
+
+            # ii. Slide PPTX (Fault-tolerant)
+            if material and material.slide_content:
+                # Lưu file slide nguồn Markdown trước làm dự phòng
+                src_slide_path = os.path.join(slides_dest_dir, f"{file_prefix}Slides_Source.md")
+                with open(src_slide_path, "w", encoding="utf-8") as f:
+                    f.write(material.slide_content)
+                
+                # Cố gắng xuất slide PPTX
+                try:
+                    # Gọi trực tiếp helper logic của export_chapter_pptx nhưng không trả Response
+                    output_pptx = export_chapter_pptx(chapter_id=ch.id, theme=theme, current_user=current_user, db=db)
+                    # export_chapter_pptx trả về FileResponse, ta có thể lấy path từ nó
+                    if hasattr(output_pptx, "path") and os.path.exists(output_pptx.path):
+                        dest_pptx = os.path.join(slides_dest_dir, f"{file_prefix}Slide_Presentation.pptx")
+                        shutil.copy(output_pptx.path, dest_pptx)
+                except Exception as e:
+                    # Ghi nhận lỗi và tiếp tục đóng gói
+                    err_path = os.path.join(slides_dest_dir, f"{file_prefix}ERROR_Slides_Generation.txt")
+                    with open(err_path, "w", encoding="utf-8") as f:
+                        f.write(f"Lỗi sinh PowerPoint cho chương này:\n{str(e)}")
+
+            # iii. Câu hỏi thi (Quiz - Markdown & GIFT format)
+            ch_questions = [q for q in questions if q.chapter_id == ch.id]
+            if ch_questions:
+                # Markdown format quiz
+                quiz_md_path = os.path.join(quizzes_dest_dir, f"{file_prefix}Quiz_Questions.md")
+                with open(quiz_md_path, "w", encoding="utf-8") as f:
+                    f.write(f"# NGÂN HÀNG CÂU HỎI CHƯƠNG {ch_num}: {ch.title}\n\n")
+                    for q_idx, q in enumerate(ch_questions):
+                        f.write(f"Câu {q_idx + 1}: {q.question_text}\n")
+                        opts = []
+                        try:
+                            opts = json.loads(q.options_json) if q.options_json else []
+                        except:
+                            pass
+                        labels = ["A", "B", "C", "D"]
+                        for opt_i, opt in enumerate(opts):
+                            if opt_i < len(labels):
+                                f.write(f"  {labels[opt_i]}. {opt}\n")
+                        f.write(f"\n  * Đáp án đúng: {q.correct_answer}\n")
+                        f.write(f"  * Cấp độ Bloom: Mức {q.bloom_level}\n\n")
+
+                # GIFT format quiz (for Canvas/Moodle import)
+                quiz_gift_path = os.path.join(quizzes_dest_dir, f"{file_prefix}Quiz_Questions.gift")
+                with open(quiz_gift_path, "w", encoding="utf-8") as f:
+                    f.write(f"// Ngân hàng câu hỏi trắc nghiệm Chương {ch_num}\n\n")
+                    for q in ch_questions:
+                        opts = []
+                        try:
+                            opts = json.loads(q.options_json) if q.options_json else []
+                        except:
+                            pass
+                        gift_str = format_to_gift(q.question_text, opts, q.correct_answer)
+                        f.write(gift_str + "\n\n")
+
+        # 4. Nén thư mục tạm thành file ZIP
+        zip_temp_dir = tempfile.mkdtemp(prefix="course_zip_")
+        zip_file_path = os.path.join(zip_temp_dir, f"Course_Package_{course.course_code}.zip")
+        
+        with zipfile.ZipFile(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(file_path, temp_dir)
+                    zip_file.write(file_path, rel_path)
+
+        # 5. Đăng ký background task dọn dẹp các thư mục tạm sau khi truyền file xong
+        def cleanup_temp_directories():
+            try:
+                shutil.rmtree(temp_dir)
+                shutil.rmtree(zip_temp_dir)
+            except Exception as e:
+                print(f"Lỗi khi dọn dẹp thư mục tạm ZIP export: {e}")
+                
+        background_tasks.add_task(cleanup_temp_directories)
+
+        # 6. Trả về file ZIP
+        return FileResponse(
+            zip_file_path,
+            media_type="application/zip",
+            filename=f"Course_Package_{course.course_code}.zip"
+        )
+        
+    except Exception as outer_err:
+        # Nếu lỗi trong quá trình xử lý, cố gắng dọn dẹp thư mục tạm
+        try:
+            shutil.rmtree(temp_dir)
+        except:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi đóng gói file ZIP: {str(outer_err)}"
+        )
+
+
