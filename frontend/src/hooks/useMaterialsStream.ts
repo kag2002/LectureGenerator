@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import client from '../api/client';
 import { Chapter } from '@/types';
 
@@ -48,22 +48,79 @@ export function useMaterialsStream({
   loadRevisions,
   loadChapterMcqs
 }: UseMaterialsStreamOptions) {
+  const selectedChapterRef = useRef(selectedChapter);
+  useEffect(() => {
+    selectedChapterRef.current = selectedChapter;
+  }, [selectedChapter]);
+
+  useEffect(() => {
+    if (selectedChapter && generatingChapterId === selectedChapter.id) {
+      setAiViewMode('slides');
+    }
+  }, [selectedChapter, generatingChapterId]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [storyboardDraft, setStoryboardDraft] = useState<any[] | null>(null);
+  const [storyboardDrafts, setStoryboardDrafts] = useState<Record<number, any[]>>({});
+  const [aiSlideProposals, setAiSlideProposals] = useState<Record<number, string>>({});
+  const [aiActiveLearningProposals, setAiActiveLearningProposals] = useState<Record<number, string>>({});
+
+  const storyboardDraft = selectedChapter ? storyboardDrafts[selectedChapter.id] || null : null;
+  const aiSlideProposal = selectedChapter ? aiSlideProposals[selectedChapter.id] || '' : '';
+  const aiActiveLearningProposal = selectedChapter ? aiActiveLearningProposals[selectedChapter.id] || '' : '';
+
+  const setStoryboardDraft = (draft: any[] | null) => {
+    if (!selectedChapter) return;
+    setStoryboardDrafts(prev => {
+      const copy = { ...prev };
+      if (draft === null) {
+        delete copy[selectedChapter.id];
+      } else {
+        copy[selectedChapter.id] = draft;
+      }
+      return copy;
+    });
+  };
+
+  const setAiSlideProposal = (proposal: string | ((prev: string) => string)) => {
+    if (!selectedChapter) return;
+    setAiSlideProposals(prev => {
+      const currentVal = prev[selectedChapter.id] || '';
+      const newVal = typeof proposal === 'function' ? proposal(currentVal) : proposal;
+      return { ...prev, [selectedChapter.id]: newVal };
+    });
+  };
+
+  const setAiActiveLearningProposal = (proposal: string | ((prev: string) => string)) => {
+    if (!selectedChapter) return;
+    setAiActiveLearningProposals(prev => {
+      const currentVal = prev[selectedChapter.id] || '';
+      const newVal = typeof proposal === 'function' ? proposal(currentVal) : proposal;
+      return { ...prev, [selectedChapter.id]: newVal };
+    });
+  };
+
   const [isGeneratingStoryboard, setIsGeneratingStoryboard] = useState(false);
   const [currentStage, setCurrentStage] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [totalSlides, setTotalSlides] = useState(0);
-  const [aiSlideProposal, setAiSlideProposal] = useState('');
-  const [aiActiveLearningProposal, setAiActiveLearningProposal] = useState('');
   const [apiStatus, setApiStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle');
   const [genLog, setGenLog] = useState('');
+  const [aiViewMode, setAiViewMode] = useState<'storyboard' | 'slides'>('storyboard');
+  const [generatingChapterId, setGeneratingChapterId] = useState<number | null>(null);
 
   // Giai đoạn 1: Sinh đề cương Slide (Storyboard)
   const handleGenerateStoryboard = async () => {
     if (!selectedChapter) {
       setError('Vui lòng chọn hoặc sinh một chương học trước.');
       return;
+    }
+
+    if (generatingChapterId !== null && generatingChapterId !== selectedChapter.id) {
+      const confirmCancel = window.confirm(
+        `Trợ lý AI đang sinh slide cho chương khác. Bắt đầu thiết kế dàn ý mới cho chương này sẽ hủy tiến trình đang chạy. Bạn có muốn tiếp tục không?`
+      );
+      if (!confirmCancel) return;
+      await handleCancelMaterialsGeneration();
     }
     
     setError('');
@@ -156,9 +213,22 @@ export function useMaterialsStream({
       setError('Storyboard rỗng. Không thể sinh chi tiết.');
       return;
     }
+
+    if (generatingChapterId !== null && generatingChapterId !== selectedChapter.id) {
+      const confirmCancel = window.confirm(
+        `Trợ lý AI đang sinh slide cho chương khác. Bắt đầu sinh học liệu cho chương này sẽ hủy tiến trình đang chạy. Bạn có muốn tiếp tục không?`
+      );
+      if (!confirmCancel) return;
+      await handleCancelMaterialsGeneration();
+    }
     
     setError('');
     setMessage('');
+    
+    const targetChapterId = selectedChapter.id; // Chụp lại ID chương mục tiêu tại thời điểm bắt đầu
+    setAiViewMode('slides'); // Tự động chuyển sang chế độ hiển thị Slide đang sinh
+    setGeneratingChapterId(targetChapterId); // Đánh dấu chương này đang chạy AI ngầm
+    
     setApiStatus('generating');
     setGenLog('Giai đoạn 2: AI đang viết slide chi tiết & giáo án tương tác…');
     setCurrentStage(1);
@@ -178,7 +248,7 @@ export function useMaterialsStream({
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/courses/chapters/${selectedChapter.id}/generate-materials-from-storyboard-stream`,
+        `http://localhost:8000/api/courses/chapters/${targetChapterId}/generate-materials-from-storyboard-stream`,
         {
           method: 'POST',
           headers: {
@@ -223,17 +293,19 @@ export function useMaterialsStream({
               const data = JSON.parse(line.slice(6));
               
               if (currentEvent === 'stage') {
-                setGenLog(data.message);
-                if (data.stage) {
-                  setCurrentStage(data.stage);
+                if (selectedChapterRef.current?.id === targetChapterId) {
+                  setGenLog(data.message);
+                  if (data.stage) {
+                    setCurrentStage(data.stage);
+                  }
+                  if (data.current_slide !== undefined) {
+                    setCurrentSlide(data.current_slide);
+                  }
+                  if (data.total_slides !== undefined) {
+                    setTotalSlides(data.total_slides);
+                  }
+                  setAIProcessingStatus(true, `Học liệu: ${data.message}`);
                 }
-                if (data.current_slide !== undefined) {
-                  setCurrentSlide(data.current_slide);
-                }
-                if (data.total_slides !== undefined) {
-                  setTotalSlides(data.total_slides);
-                }
-                setAIProcessingStatus(true, `Học liệu: ${data.message}`);
               } else if (currentEvent === 'token') {
                 accumulatedText += data.token;
                 
@@ -259,30 +331,35 @@ export function useMaterialsStream({
                   }
                 }
 
-                if (activeText.trim() && currentStage < 3) {
+                if (activeText.trim() && currentStage < 3 && selectedChapterRef.current?.id === targetChapterId) {
                   setCurrentStage(3);
                 }
 
-                setAiSlideProposal(slideText.trim());
-                setAiActiveLearningProposal(activeText.trim());
+                setAiSlideProposals(prev => ({ ...prev, [targetChapterId]: slideText.trim() }));
+                setAiActiveLearningProposals(prev => ({ ...prev, [targetChapterId]: activeText.trim() }));
               } else if (currentEvent === 'done') {
-                setAiSlideProposal(data.slide_content);
-                setAiActiveLearningProposal(data.active_learning_script);
+                setAiSlideProposals(prev => ({ ...prev, [targetChapterId]: data.slide_content }));
+                setAiActiveLearningProposals(prev => ({ ...prev, [targetChapterId]: data.active_learning_script }));
                 
-                setSlideContent(data.slide_content);
-                setActiveLearningScript(data.active_learning_script);
-                setSavedSlideContent(data.slide_content);
-                setSavedScript(data.active_learning_script);
+                if (selectedChapterRef.current?.id === targetChapterId) {
+                  setSlideContent(data.slide_content);
+                  setActiveLearningScript(data.active_learning_script);
+                  setSavedSlideContent(data.slide_content);
+                  setSavedScript(data.active_learning_script);
+                }
 
                 setApiStatus('success');
-                setCurrentStage(6);
-                setMessage(data.message);
-                setGenLog('');
-                setAIProcessingStatus(false);
+                if (selectedChapterRef.current?.id === targetChapterId) {
+                  setCurrentStage(6);
+                  setMessage(data.message);
+                  setGenLog('');
+                  setAIProcessingStatus(false);
+                }
+                setGeneratingChapterId(null); // Hoàn tất tiến trình chạy ngầm
                 
                 const opLatency = (Date.now() - startTime) / 1000;
                 onRecordAIUsage({
-                  operation: `Tạo bài giảng & giáo án - ${selectedChapter.title}`,
+                  operation: `Tạo bài giảng & giáo án - Chương ${targetChapterId}`,
                   latency: Number(opLatency.toFixed(1)),
                   cost: data.usage?.total_cost !== undefined ? Number(data.usage.total_cost) : 0.04,
                   tokens: data.usage ? {
@@ -293,23 +370,29 @@ export function useMaterialsStream({
                   status: 'success'
                 });
                 
-                try {
-                  const ragRes = await client.get(`/api/courses/chapters/${selectedChapter.id}/rag-references`);
-                  setRagReferences(ragRes.data.references || []);
-                } catch (ragErr) {
-                  console.error("Error refreshing RAG references:", ragErr);
-                }
+                if (selectedChapterRef.current?.id === targetChapterId) {
+                  try {
+                    const ragRes = await client.get(`/api/courses/chapters/${targetChapterId}/rag-references`);
+                    setRagReferences(ragRes.data.references || []);
+                  } catch (ragErr) {
+                    console.error("Error refreshing RAG references:", ragErr);
+                  }
 
-                loadRevisions(selectedChapter.id);
-                loadChapterMcqs(selectedChapter.id);
+                  loadRevisions(targetChapterId);
+                  loadChapterMcqs(targetChapterId);
+                }
               } else if (currentEvent === 'error') {
-                setError(data.message);
-                setApiStatus('error');
-                setGenLog('');
-                setAIProcessingStatus(false);
+                if (selectedChapterRef.current?.id === targetChapterId) {
+                  setError(data.message);
+                  setApiStatus('error');
+                  setGenLog('');
+                  setAIProcessingStatus(false);
+                }
+                setGeneratingChapterId(null); // Giải phóng tiến trình chạy ngầm
+                
                 const opLatency = (Date.now() - startTime) / 1000;
                 onRecordAIUsage({
-                  operation: `Tạo bài giảng & giáo án - ${selectedChapter.title}`,
+                  operation: `Tạo bài giảng & giáo án - Chương ${targetChapterId}`,
                   latency: Number(opLatency.toFixed(1)),
                   cost: 0,
                   status: 'error'
@@ -326,13 +409,16 @@ export function useMaterialsStream({
         return;
       }
       console.error(err);
-      setApiStatus('error');
-      setError(`Lỗi kết nối stream: ${err.message}`);
-      setGenLog('');
-      setAIProcessingStatus(false);
+      if (selectedChapterRef.current?.id === targetChapterId) {
+        setApiStatus('error');
+        setError(`Lỗi kết nối stream: ${err.message}`);
+        setGenLog('');
+        setAIProcessingStatus(false);
+      }
+      setGeneratingChapterId(null); // Giải phóng tiến trình chạy ngầm
       const opLatency = (Date.now() - startTime) / 1000;
       onRecordAIUsage({
-        operation: `Tạo bài giảng & giáo án - ${selectedChapter.title}`,
+        operation: `Tạo bài giảng & giáo án - Chương ${targetChapterId}`,
         latency: Number(opLatency.toFixed(1)),
         cost: 0,
         status: 'error'
@@ -341,19 +427,21 @@ export function useMaterialsStream({
   };
 
   const handleCancelMaterialsGeneration = async () => {
-    if (!selectedChapter) return;
+    const cancelId = generatingChapterId || selectedChapter?.id;
+    if (!cancelId) return;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
     try {
-      await client.post(`/api/courses/chapters/${selectedChapter.id}/cancel-materials-generation`);
+      await client.post(`/api/courses/chapters/${cancelId}/cancel-materials-generation`);
     } catch (err) {
       console.error('Error cancelling materials generation on backend:', err);
     } finally {
       setApiStatus('idle');
       setGenLog('');
       setAIProcessingStatus(false);
+      setGeneratingChapterId(null);
     }
   };
 
@@ -386,6 +474,10 @@ export function useMaterialsStream({
     handleGenerateStoryboard,
     handleGenerateMaterialsFromStoryboard,
     handleCancelMaterialsGeneration,
-    handleCancelStoryboardGeneration
+    handleCancelStoryboardGeneration,
+    aiViewMode,
+    setAiViewMode,
+    generatingChapterId,
+    setGeneratingChapterId
   };
 }

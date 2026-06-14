@@ -41,7 +41,7 @@ export function useLessonPlannerState({
   // Navigation & States
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
-  const [activeLeftTab, setActiveLeftTab] = useState<'outline' | 'documents' | 'compliance' | 'mcqs'>('outline');
+  const [activeLeftTab, setActiveLeftTab] = useState<'outline' | 'documents' | 'compliance' | 'mcqs' | 'citations'>('outline');
   const [clos, setClos] = useState<CLO[]>([]);
   const [ragReferences, setRagReferences] = useState<any[]>([]);
   const [selectedCitation, setSelectedCitation] = useState<any | null>(null);
@@ -202,7 +202,7 @@ export function useLessonPlannerState({
     };
   }, [isFullscreen]);
 
-  // Lấy danh sách lịch sử hiệu đính
+  // Lấy danh sách lịch sử chỉnh sửa
   const loadRevisions = async (chapterId: number) => {
     try {
       const response = await client.get(`/api/courses/chapters/${chapterId}/revisions`);
@@ -333,11 +333,6 @@ export function useLessonPlannerState({
         console.error("Error loading RAG references:", ragErr);
         setRagReferences([]);
       }
-
-      // Clear AI proposals and storyboard draft on select
-      stream.setAiSlideProposal('');
-      stream.setAiActiveLearningProposal('');
-      stream.setStoryboardDraft(null);
 
       // Clear academic search result & suggest queries
       search.setSearchResult(null);

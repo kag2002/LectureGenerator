@@ -29,6 +29,7 @@ export function useAcademicSearch({
   const [summaries, setSummaries] = useState<Record<string, string>>({});
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [selectedRejected, setSelectedRejected] = useState<Record<string, boolean>>({});
+  const [collapsedSummaries, setCollapsedSummaries] = useState<Record<string, boolean>>({});
 
   // Chạy Web Search Ingestion
   const handleWebSearch = async (e: React.FormEvent) => {
@@ -40,6 +41,7 @@ export function useAcademicSearch({
     setSearchResult(null);
     setExpandedSearch({});
     setSummaries({});
+    setCollapsedSummaries({});
 
     // Khởi tạo trạng thái động tìm kiếm học thuật
     setAIProcessingStatus(true, 'AI đang khởi động công cụ tìm kiếm học thuật trực tuyến…');
@@ -84,6 +86,13 @@ export function useAcademicSearch({
     }));
   };
 
+  const toggleSummaryCollapse = (key: string) => {
+    setCollapsedSummaries(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
   // Gọi API tóm tắt nội dung
   const handleSummarizeContent = async (key: string, title: string, content: string) => {
     if (summaries[key]) return;
@@ -96,6 +105,10 @@ export function useAcademicSearch({
       setSummaries(prev => ({
         ...prev,
         [key]: response.data.summary
+      }));
+      setCollapsedSummaries(prev => ({
+        ...prev,
+        [key]: false
       }));
     } catch (err) {
       console.error(err);
@@ -173,6 +186,9 @@ export function useAcademicSearch({
     setSummarizing,
     selectedRejected,
     setSelectedRejected,
+    collapsedSummaries,
+    setCollapsedSummaries,
+    toggleSummaryCollapse,
     handleWebSearch,
     toggleSearchDetail,
     handleSummarizeContent,
