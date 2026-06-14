@@ -236,13 +236,33 @@ Chú ý: Trả về JSON hợp lệ. Không viết thêm văn bản giải thíc
 
 
 def build_storyboard_architect_system_prompt(
-    *, clos_context: str, chapter_title: str, chapter_description: str, rag_context: str = "", session_duration: int = 90
+    *, clos_context: str, chapter_title: str, chapter_description: str, rag_context: str = "", session_duration: int = 90, pedagogical_style: str = "interactive", selected_clos: list[str] = None
 ) -> str:
     recommended_slides = max(5, min(30, int(session_duration / 3)))
     rag_section = f"\nTài liệu tham khảo (RAG Context) để lập storyboard:\n{rag_context}\n" if rag_context else ""
+    
+    selected_clos_str = f"Hãy tập trung thiết kế các slide bao phủ các chuẩn đầu ra được lựa chọn: {', '.join(selected_clos)}. " if selected_clos else ""
+    
+    style_guidelines = ""
+    if pedagogical_style == "interactive":
+        style_guidelines = "Phong cách giảng dạy: Tương tác chủ động (Interactive Lecture). Thiết kế mạch slide cân bằng giữa truyền đạt khái niệm cốt lõi xen kẽ câu hỏi nhanh, thảo luận ngắn tại chỗ."
+    elif pedagogical_style == "lab":
+        style_guidelines = "Phong cách giảng dạy: Thực hành & Hướng dẫn (Hands-on Lab). Thiết kế mạch slide chú trọng các bước cài đặt, quy trình thực hành (sử dụng layout 'timeline_flow'), hướng dẫn giải quyết lỗi phổ biến và thực hành lập trình/tính toán cụ thể."
+    elif pedagogical_style == "case":
+        style_guidelines = "Phong cách giảng dạy: Học qua Tình huống (Case-based Learning). Thiết kế mạch slide xoay quanh việc dẫn dắt tình huống (Hook), phân tích dữ kiện thực tế, thảo luận giải pháp và đúc kết bài học cốt lõi."
+    elif pedagogical_style == "flipped":
+        style_guidelines = "Phong cách giảng dạy: Lớp học đảo ngược (Flipped Classroom). Lược bỏ lý thuyết cơ bản (vì sinh viên đã tự đọc trước), cấu trúc slide đi thẳng vào các phần đào sâu, trả lời các câu hỏi khó, thảo luận phản biện nâng cao."
+    elif pedagogical_style == "presentation":
+        style_guidelines = "Phong cách giảng dạy: Báo cáo & Đánh giá chéo (Student Presentation). Thiết kế mạch slide hướng dẫn các nhóm trình bày, slide tiêu chí chấm điểm, slide nhận xét chéo giữa sinh viên và tổng hợp của giảng viên."
+
     return f"""Bạn là kiến trúc sư kịch bản bài giảng chuyên nghiệp (Storyboard Architect Agent).
 Nhiệm vụ: Dựa trên thông tin chương học, chuẩn đầu ra môn học (CLOs) và tài liệu tham khảo nguồn (RAG), hãy thiết kế một Đề cương mạch truyện (Storyboard Outline) gồm khoảng {recommended_slides} slide bài giảng (tương ứng với thời lượng học {session_duration} phút, trung bình 2.5 - 3 phút mỗi slide).
 - TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong storyboard.
+
+ĐỊNH HƯỚNG SƯ PHẠM VÀ PHONG CÁCH:
+{selected_clos_str}
+{style_guidelines}
+
 Mạch truyện phải tuân theo cấu trúc sư phạm chặt chẽ:
 1. Hook & Introduction (Dẫn dắt & Giới thiệu)
 2. Core Concept Definition (Khái niệm cốt lõi)
@@ -318,11 +338,24 @@ def build_slide_writer_system_prompt(
     allocated_text: str,
     target_lang: str,
     previous_slides_markdown: str = "",
+    slide_rag_context: str = "",
+    learner_level: str = "intermediate",
 ) -> str:
     previous_section = f"\nCác slide đã được viết trước đó (Bộ nhớ chia sẻ):\n{previous_slides_markdown}\n" if previous_slides_markdown else ""
+    rag_context_section = f"\n{slide_rag_context}\n" if slide_rag_context else ""
+    
+    level_guidelines = ""
+    if learner_level == "beginner":
+        level_guidelines = "Đặc điểm người học: Mới bắt đầu (Beginner). Sử dụng câu từ đơn giản, giải nghĩa rõ ràng các thuật ngữ mới, đưa ví dụ thực tế trực quan sinh động."
+    elif learner_level == "intermediate":
+        level_guidelines = "Đặc điểm người học: Đã có nền tảng (Intermediate). Sử dụng ngôn ngữ kỹ thuật tiêu chuẩn, diễn đạt súc tích, tránh giải thích các khái niệm quá cơ bản."
+    elif learner_level == "advanced":
+        level_guidelines = "Đặc điểm người học: Nâng cao (Advanced). Tránh giải thích các định nghĩa thông thường, đi thẳng vào phân tích kiến trúc, tối ưu hóa hệ thống, các bài toán thiết kế thực tế và phân tích tradeoff."
     return f"""Bạn là Slide Writer Agent chuyên nghiệp, đóng vai trò giảng viên đại học có chuyên môn sư phạm sâu sắc.
 Nhiệm vụ: Soạn thảo nội dung slide thứ {slide_index} dạng Markdown dựa trên thông tin đã được phê duyệt và đảm bảo tính liên kết mượt mà với các slide trước.
 - TUYỆT ĐỐI KHÔNG sử dụng bất kỳ biểu tượng cảm xúc (emoji) hoặc ký tự icon thô nào (ví dụ: ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong slide.
+
+{level_guidelines}
 
 {previous_section}
 Tiêu đề slide: {title}
@@ -331,7 +364,7 @@ Layout thiết kế: {suggested_layout}
 Nội dung kiến thức phân bổ: {allocated_text}
 Chuẩn đầu ra: {target_clo} | Bloom: {bloom_level}
 Ngôn ngữ đầu ra: {target_lang}
-
+{rag_context_section}
 YÊU CẦU HÀM LƯỢNG TRI THỨC VÀ SƯ PHẠM (CRITICAL):
 - Slide phải giàu thông tin học thuật, giải thích rõ ràng khái niệm cốt lõi, không viết quá sơ sài hoặc chỉ liệt kê từ khóa chung chung.
 - Triển khai cụ thể các ý chính thành các luận điểm có cấu trúc, diễn giải sư phạm chặt chẽ.
@@ -377,11 +410,13 @@ QUY TẮC BẮT BUỘC:
 1. Slide phải bắt đầu bằng tiêu đề '#' dạng: `# {title}`.
 2. Dòng CUỐI CÙNG của slide bắt buộc phải gắn thẻ metadata theo cú pháp sau (không thêm bớt ký tự):
    `[CLO: {target_clo}] [Bloom: {bloom_level}] [Layout: {suggested_layout}]`
-3. Nếu có nguồn trích dẫn từ nội dung phân bổ, hãy đánh số footnote dạng `[1]`, `[2]` ở cuối câu tương ứng.
+3. QUY TẮC TRÍCH DẪN RAG (CỰC KỲ QUAN TRỌNG):
+   - Nếu bạn sử dụng thông tin từ "Tài liệu tham khảo cho slide này (RAG context)", bạn BẮT BUỘC phải đính kèm nhãn `[RAG-Ref: X]` ở cuối câu/dòng tương ứng, trong đó X là số thứ tự tham chiếu (ví dụ: `[RAG-Ref: 1]`).
+   - TUYỆT ĐỐI KHÔNG tự bịa ra số trang, tên file hay ghi nguồn bằng bất kỳ định dạng nào khác ngoài `[RAG-Ref: X]`.
 
 Đầu ra BẮT BUỘC là đối tượng JSON theo cấu trúc sau:
 {{
-  "slide_markdown": "# Tiêu đề Slide\\n* **Khái niệm**: Mô tả chi tiết...\\n[CLO: {target_clo}] [Bloom: {bloom_level}] [Layout: {suggested_layout}]"
+  "slide_markdown": "# Tiêu đề Slide\\n* **Khái niệm**: Mô tả chi tiết... [RAG-Ref: 1]\\n[CLO: {target_clo}] [Bloom: {bloom_level}] [Layout: {suggested_layout}]"
 }}"""
 
 

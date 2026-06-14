@@ -204,6 +204,9 @@ Nhiệm vụ: Dựa vào các Chuẩn đầu ra (CLOs) môn học được cung 
             rag_context="",
             target_lang=target_lang,
             session_duration=session_duration,
+            user_id=user_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
         )
 
         try:
@@ -259,6 +262,9 @@ Nhiệm vụ: Dựa vào các Chuẩn đầu ra (CLOs) môn học được cung 
             rag_context=rag_context,
             target_lang=target_lang,
             session_duration=session_duration,
+            user_id=user_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
         )
 
         try:

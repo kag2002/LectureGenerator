@@ -27,6 +27,9 @@ async def generate_chapter_materials_stream_generator(
     chapter_description: str,
     course_id: int,
     user_id: int,
+    req_pedagogical_style: str = "interactive",
+    req_learner_level: str = "intermediate",
+    req_selected_clos: list[str] = None,
 ):
     init_token_tracker()
 
@@ -83,6 +86,12 @@ async def generate_chapter_materials_stream_generator(
             rag_context=rag_context,
             target_lang=target_lang,
             session_duration=req_session_duration,
+            user_id=user_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
+            pedagogical_style=req_pedagogical_style,
+            learner_level=req_learner_level,
+            selected_clos=req_selected_clos,
         )
 
         mat_stream_trace = None
@@ -94,7 +103,12 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 1: STORYBOARD ARCHITECT ---
         yield send(
-            "stage", {"stage": 1, "message": "Bước 1: Đang thiết kế cấu trúc đề cương bài giảng (Storyboard)..."}
+            "stage", {
+                "stage": 1,
+                "message": "Bước 1: Đang thiết kế cấu trúc đề cương bài giảng (Storyboard)...",
+                "active_agent": "storyboard_architect",
+                "agent_status": "running"
+            }
         )
         try:
             await orchestrator.async_run_storyboard_architect(trace_or_span=mat_stream_trace)
@@ -105,7 +119,12 @@ async def generate_chapter_materials_stream_generator(
         # --- BƯỚC 2: CONTENT ALLOCATOR ---
         yield send(
             "stage",
-            {"stage": 2, "message": "Bước 2: Đang phân bổ nội dung cho từng slide..."},
+            {
+                "stage": 2,
+                "message": "Bước 2: Đang phân bổ nội dung cho từng slide...",
+                "active_agent": "content_allocator",
+                "agent_status": "running"
+            },
         )
         try:
             await orchestrator.async_run_content_allocator(trace_or_span=mat_stream_trace)
@@ -114,7 +133,15 @@ async def generate_chapter_materials_stream_generator(
             return
 
         # --- BƯỚC 3: SLIDE WRITER & STREAM TOKENS ---
-        yield send("stage", {"stage": 3, "message": "Bước 3: Đang soạn nội dung slide chi tiết..."})
+        yield send(
+            "stage",
+            {
+                "stage": 3,
+                "message": "Bước 3: Đang soạn nội dung slide chi tiết...",
+                "active_agent": "slide_writer",
+                "agent_status": "running"
+            }
+        )
         yield send("token", {"token": "---SLIDES---\n"})
 
         slide_content = ""
@@ -122,11 +149,14 @@ async def generate_chapter_materials_stream_generator(
         try:
             progress_queue = asyncio.Queue()
 
-            async def on_slide_complete(slide_idx, title, suggested_layout):
-                await progress_queue.put((slide_idx, title, suggested_layout))
+            async def on_slide_status(slide_idx, status, details):
+                await progress_queue.put((slide_idx, status, details))
 
             writer_task = asyncio.create_task(
-                orchestrator.async_run_slide_writer(trace_or_span=mat_stream_trace, progress_callback=on_slide_complete)
+                orchestrator.async_run_slide_writer(
+                    trace_or_span=mat_stream_trace,
+                    slide_status_callback=on_slide_status
+                )
             )
 
             completed_slides = 0
@@ -134,17 +164,45 @@ async def generate_chapter_materials_stream_generator(
 
             while not writer_task.done() or not progress_queue.empty():
                 try:
-                    slide_idx, title, layout = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
-                    completed_slides += 1
-                    yield send(
-                        "stage",
-                        {
-                            "stage": 3,
-                            "message": f"Bước 3: Đang viết Slide {completed_slides}/{total_slides}: '{title}' (Bố cục: {layout})...",
-                            "current_slide": completed_slides,
-                            "total_slides": total_slides,
-                        },
-                    )
+                    slide_idx, status, details = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                    if status == "start":
+                        yield send(
+                            "stage",
+                            {
+                                "stage": 3,
+                                "message": f"Bước 3: Đang soạn thảo Slide {slide_idx}/{total_slides}: '{details.get('title')}'...",
+                                "active_agent": "slide_writer",
+                                "agent_status": "running",
+                                "current_slide": slide_idx,
+                                "total_slides": total_slides,
+                            },
+                        )
+                    elif status == "correcting":
+                        yield send(
+                            "stage",
+                            {
+                                "stage": 3,
+                                "message": f"Bước 3: Slide {slide_idx} vượt quá hạn mức ký tự ({details.get('length')}/{details.get('budget')}). Đang chạy Self-Correction lần {details.get('attempt')}...",
+                                "active_agent": "slide_writer",
+                                "agent_status": "correcting",
+                                "self_correction_attempt": details.get("attempt"),
+                                "current_slide": slide_idx,
+                                "total_slides": total_slides,
+                            },
+                        )
+                    elif status == "done":
+                        completed_slides += 1
+                        yield send(
+                            "stage",
+                            {
+                                "stage": 3,
+                                "message": f"Bước 3: Đã hoàn tất Slide {slide_idx}/{total_slides} (Bố cục: {details.get('layout')}).",
+                                "active_agent": "slide_writer",
+                                "agent_status": "completed",
+                                "current_slide": completed_slides,
+                                "total_slides": total_slides,
+                            },
+                        )
                     progress_queue.task_done()
                 except TimeoutError:
                     continue
@@ -181,7 +239,12 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 4: ACTIVE LEARNING PLANNER ---
         yield send(
-            "stage", {"stage": 4, "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp..."}
+            "stage", {
+                "stage": 4,
+                "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp...",
+                "active_agent": "active_learning_scheduler",
+                "agent_status": "running"
+            }
         )
         yield send("token", {"token": "\n---ACTIVE_LEARNING---\n"})
 
@@ -198,7 +261,14 @@ async def generate_chapter_materials_stream_generator(
             return
 
         # --- BƯỚC 5: LOGIC AUDITOR (KIỂM TOÁN CHÉO) ---
-        yield send("stage", {"stage": 5, "message": "Bước 5: Rà soát tính nhất quán sư phạm..."})
+        yield send(
+            "stage", {
+                "stage": 5,
+                "message": "Bước 5: Rà soát tính nhất quán sư phạm...",
+                "active_agent": "logic_auditor",
+                "agent_status": "running"
+            }
+        )
         try:
             is_valid = await orchestrator.async_run_logic_auditor(trace_or_span=mat_stream_trace)
             if not is_valid:
@@ -207,7 +277,14 @@ async def generate_chapter_materials_stream_generator(
             print(f"[WARNING] Lỗi chạy Logic Auditor: {e}")
 
         # 6. Lưu kết quả cuối cùng vào DB
-        yield send("stage", {"stage": 6, "message": "Bước 6: Đang lưu bài giảng và giáo án đã hoàn thiện..."})
+        yield send(
+            "stage", {
+                "stage": 6,
+                "message": "Bước 6: Đang lưu bài giảng và giáo án đã hoàn thiện...",
+                "active_agent": "saver",
+                "agent_status": "running"
+            }
+        )
 
         new_db = SessionLocal()
         try:
@@ -265,6 +342,9 @@ async def generate_materials_from_storyboard_stream_generator(
     chapter_description: str,
     course_id: int,
     user_id: int,
+    req_pedagogical_style: str = "interactive",
+    req_learner_level: str = "intermediate",
+    req_selected_clos: list[str] = None,
 ):
     init_token_tracker()
 
@@ -318,6 +398,12 @@ async def generate_materials_from_storyboard_stream_generator(
             rag_context=rag_context,
             target_lang=target_lang,
             session_duration=req_session_duration,
+            user_id=user_id,
+            course_id=course_id,
+            chapter_id=chapter_id,
+            pedagogical_style=req_pedagogical_style,
+            learner_level=req_learner_level,
+            selected_clos=req_selected_clos,
         )
         # Gán Storyboard đã duyệt/sửa
         orchestrator.state["outline"] = req_storyboard
@@ -332,7 +418,12 @@ async def generate_materials_from_storyboard_stream_generator(
         # --- BƯỚC 2: CONTENT ALLOCATOR ---
         yield send(
             "stage",
-            {"stage": 2, "message": "Bước 2: Đang phân bổ nội dung dựa trên đề cương đã duyệt..."},
+            {
+                "stage": 2,
+                "message": "Bước 2: Đang phân bổ nội dung dựa trên đề cương đã duyệt...",
+                "active_agent": "content_allocator",
+                "agent_status": "running"
+            },
         )
         try:
             await orchestrator.async_run_content_allocator(trace_or_span=mat_stream_trace)
@@ -341,7 +432,15 @@ async def generate_materials_from_storyboard_stream_generator(
             return
 
         # --- BƯỚC 3: SLIDE WRITER & STREAM TOKENS ---
-        yield send("stage", {"stage": 3, "message": "Bước 3: Đang soạn nội dung slide chi tiết..."})
+        yield send(
+            "stage",
+            {
+                "stage": 3,
+                "message": "Bước 3: Đang soạn nội dung slide chi tiết...",
+                "active_agent": "slide_writer",
+                "agent_status": "running"
+            }
+        )
         yield send("token", {"token": "---SLIDES---\n"})
 
         slide_content = ""
@@ -349,11 +448,14 @@ async def generate_materials_from_storyboard_stream_generator(
         try:
             progress_queue = asyncio.Queue()
 
-            async def on_slide_complete(slide_idx, title, suggested_layout):
-                await progress_queue.put((slide_idx, title, suggested_layout))
+            async def on_slide_status(slide_idx, status, details):
+                await progress_queue.put((slide_idx, status, details))
 
             writer_task = asyncio.create_task(
-                orchestrator.async_run_slide_writer(trace_or_span=mat_stream_trace, progress_callback=on_slide_complete)
+                orchestrator.async_run_slide_writer(
+                    trace_or_span=mat_stream_trace,
+                    slide_status_callback=on_slide_status
+                )
             )
 
             completed_slides = 0
@@ -361,17 +463,45 @@ async def generate_materials_from_storyboard_stream_generator(
 
             while not writer_task.done() or not progress_queue.empty():
                 try:
-                    slide_idx, title, layout = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
-                    completed_slides += 1
-                    yield send(
-                        "stage",
-                        {
-                            "stage": 3,
-                            "message": f"Bước 3: Đang viết Slide {completed_slides}/{total_slides}: '{title}' (Bố cục: {layout})...",
-                            "current_slide": completed_slides,
-                            "total_slides": total_slides,
-                        },
-                    )
+                    slide_idx, status, details = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                    if status == "start":
+                        yield send(
+                            "stage",
+                            {
+                                "stage": 3,
+                                "message": f"Bước 3: Đang soạn thảo Slide {slide_idx}/{total_slides}: '{details.get('title')}'...",
+                                "active_agent": "slide_writer",
+                                "agent_status": "running",
+                                "current_slide": slide_idx,
+                                "total_slides": total_slides,
+                            },
+                        )
+                    elif status == "correcting":
+                        yield send(
+                            "stage",
+                            {
+                                "stage": 3,
+                                "message": f"Bước 3: Slide {slide_idx} vượt quá hạn mức ký tự ({details.get('length')}/{details.get('budget')}). Đang chạy Self-Correction lần {details.get('attempt')}...",
+                                "active_agent": "slide_writer",
+                                "agent_status": "correcting",
+                                "self_correction_attempt": details.get("attempt"),
+                                "current_slide": slide_idx,
+                                "total_slides": total_slides,
+                            },
+                        )
+                    elif status == "done":
+                        completed_slides += 1
+                        yield send(
+                            "stage",
+                            {
+                                "stage": 3,
+                                "message": f"Bước 3: Đã hoàn tất Slide {slide_idx}/{total_slides} (Bố cục: {details.get('layout')}).",
+                                "active_agent": "slide_writer",
+                                "agent_status": "completed",
+                                "current_slide": completed_slides,
+                                "total_slides": total_slides,
+                            },
+                        )
                     progress_queue.task_done()
                 except TimeoutError:
                     continue
@@ -408,7 +538,12 @@ async def generate_materials_from_storyboard_stream_generator(
 
         # --- BƯỚC 4: ACTIVE LEARNING PLANNER ---
         yield send(
-            "stage", {"stage": 4, "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp..."}
+            "stage", {
+                "stage": 4,
+                "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp...",
+                "active_agent": "active_learning_scheduler",
+                "agent_status": "running"
+            }
         )
         yield send("token", {"token": "\n---ACTIVE_LEARNING---\n"})
 
@@ -425,7 +560,14 @@ async def generate_materials_from_storyboard_stream_generator(
             return
 
         # --- BƯỚC 5: LOGIC AUDITOR ---
-        yield send("stage", {"stage": 5, "message": "Bước 5: Rà soát tính nhất quán sư phạm..."})
+        yield send(
+            "stage", {
+                "stage": 5,
+                "message": "Bước 5: Rà soát tính nhất quán sư phạm...",
+                "active_agent": "logic_auditor",
+                "agent_status": "running"
+            }
+        )
         try:
             is_valid = await orchestrator.async_run_logic_auditor(trace_or_span=mat_stream_trace)
             if not is_valid:
@@ -434,7 +576,14 @@ async def generate_materials_from_storyboard_stream_generator(
             print(f"[WARNING] Lỗi Logic Auditor: {e}")
 
         # 6. Lưu kết quả cuối cùng vào DB
-        yield send("stage", {"stage": 6, "message": "Bước 6: Đang lưu bài giảng và giáo án..."})
+        yield send(
+            "stage", {
+                "stage": 6,
+                "message": "Bước 6: Đang lưu bài giảng và giáo án...",
+                "active_agent": "saver",
+                "agent_status": "running"
+            }
+        )
         new_db = SessionLocal()
         try:
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()

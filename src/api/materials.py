@@ -48,6 +48,10 @@ class MaterialGenerateRequest(BaseModel):
         "vi", description="Ngôn ngữ bài giảng: 'vi' (Tiếng Việt) hoặc 'en' (Tiếng Anh) hoặc 'bilingual' (Song ngữ)"
     )
     session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
+    pedagogical_style: str = Field("interactive", description="Phong cách giảng dạy")
+    learner_level: str = Field("intermediate", description="Trình độ người học")
+    selected_clos: list[str] = Field([], description="Mã CLO trọng tâm")
+
 
 
 class ReconcileActiveLearningRequest(BaseModel):
@@ -160,6 +164,12 @@ def generate_chapter_materials(
         rag_context=rag_context,
         target_lang=target_lang,
         session_duration=req.session_duration,
+        user_id=current_user.id,
+        course_id=chapter.course_id,
+        chapter_id=chapter_id,
+        pedagogical_style=req.pedagogical_style,
+        learner_level=req.learner_level,
+        selected_clos=req.selected_clos,
     )
 
     # --- Langfuse: Parent Trace ---
@@ -243,6 +253,9 @@ async def generate_chapter_materials_stream(
             chapter_description=chapter_description,
             course_id=course_id,
             user_id=user_id,
+            req_pedagogical_style=req.pedagogical_style,
+            req_learner_level=req.learner_level,
+            req_selected_clos=req.selected_clos,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -266,6 +279,10 @@ class MaterialGenerateFromStoryboardRequest(BaseModel):
     )
     session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
     storyboard: list[StoryboardSlide]
+    pedagogical_style: str = Field("interactive", description="Phong cách giảng dạy")
+    learner_level: str = Field("intermediate", description="Trình độ người học")
+    selected_clos: list[str] = Field([], description="Mã CLO trọng tâm")
+
 
 
 @router.post("/chapters/{chapter_id}/generate-storyboard")
@@ -301,6 +318,12 @@ def generate_storyboard(
         rag_context="",
         target_lang=target_lang,
         session_duration=req.session_duration,
+        user_id=current_user.id,
+        course_id=chapter.course_id,
+        chapter_id=chapter_id,
+        pedagogical_style=req.pedagogical_style,
+        learner_level=req.learner_level,
+        selected_clos=req.selected_clos,
     )
 
     mat_trace = None
@@ -367,6 +390,9 @@ async def generate_materials_from_storyboard_stream(
             chapter_description=chapter_description,
             course_id=course_id,
             user_id=user_id,
+            req_pedagogical_style=req.pedagogical_style,
+            req_learner_level=req.learner_level,
+            req_selected_clos=req.selected_clos,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

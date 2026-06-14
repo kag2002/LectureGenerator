@@ -851,6 +851,58 @@ def get_course_document_content(
         )
 
 
+@router.get("/{course_id}/documents/{file_name}/pages/{page_number}/chunk")
+def get_chunk_by_page(
+    course_id: int,
+    file_name: str,
+    page_number: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Lấy đoạn văn bản trích dẫn của một trang tài liệu cụ thể trong RAG.
+    """
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    from src.database.vector_db import collection
+
+    try:
+        data = collection.get(
+            where={
+                "$and": [
+                    {"user_id": {"$eq": current_user.id}},
+                    {"course_id": {"$eq": course_id}},
+                    {"file_name": {"$eq": file_name}},
+                    {"page_number": {"$eq": page_number}},
+                ]
+            },
+            include=["documents", "metadatas"],
+        )
+
+        if not data or not data["documents"]:
+            return {"text": None}
+
+        # Sort chunks by id or chunk_index if present
+        chunks = []
+        for i in range(len(data["documents"])):
+            chunks.append({
+                "id": data["ids"][i],
+                "text": data["documents"][i]
+            })
+        chunks.sort(key=lambda x: x["id"])
+        
+        combined_text = "\n\n".join([c["text"] for c in chunks])
+        return {"text": combined_text}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tìm đoạn trích: {str(e)}"
+        )
+
+
 @router.get("/{course_id}/documents/{file_name}/chunks")
 def get_course_document_chunks(
     course_id: int,

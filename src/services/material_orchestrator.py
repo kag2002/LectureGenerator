@@ -1,8 +1,9 @@
 import asyncio
 import json
 import math
+import re
 
-from src.database.vector_db import embedding_func
+from src.database.vector_db import embedding_func, search_rag_isolated
 from src.prompts.materials import (
     build_active_learning_detail_writer_system_prompt,
     build_active_learning_rationale_writer_system_prompt,
@@ -78,6 +79,12 @@ class MaterialOrchestrator:
         rag_context: str,
         target_lang: str,
         session_duration: int = 90,
+        user_id: int | None = None,
+        course_id: int | None = None,
+        chapter_id: int | None = None,
+        pedagogical_style: str = "interactive",
+        learner_level: str = "intermediate",
+        selected_clos: list[str] = None,
     ):
         self.state = {
             "chapter_title": chapter_title,
@@ -86,6 +93,12 @@ class MaterialOrchestrator:
             "rag_context": rag_context,
             "target_lang": target_lang,
             "session_duration": session_duration,
+            "user_id": user_id,
+            "course_id": course_id,
+            "chapter_id": chapter_id,
+            "pedagogical_style": pedagogical_style,
+            "learner_level": learner_level,
+            "selected_clos": selected_clos or [],
             "outline": [],
             "allocations": [],
             "generated_slides": [],
@@ -101,6 +114,8 @@ class MaterialOrchestrator:
             chapter_description=self.state["chapter_description"],
             rag_context=self.state["rag_context"],
             session_duration=self.state["session_duration"],
+            pedagogical_style=self.state["pedagogical_style"],
+            selected_clos=self.state["selected_clos"],
         )
         user_prompt = "Hãy thiết kế Đề cương slide bài giảng dạng JSON chứa danh sách các slide."
 
@@ -183,6 +198,34 @@ class MaterialOrchestrator:
         """Hàm sinh slide đơn lẻ kèm Self-Correction Loop kiểm soát Character Budget."""
         budget = BUDGETS.get(suggested_layout, 500)
 
+        # Dynamic retrieval for this slide
+        query = f"{title} {purpose} {target_clo}"
+        rag_hits = []
+        if self.state.get("user_id") and self.state.get("course_id"):
+            try:
+                rag_hits = search_rag_isolated(
+                    query,
+                    user_id=self.state["user_id"],
+                    course_id=self.state["course_id"],
+                    top_k=3,
+                    chapter_id=self.state.get("chapter_id"),
+                )
+                rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
+            except Exception as e:
+                print(f"[WARNING] Dynamic RAG search failed: {e}")
+
+        # Formulate slide_rag_context and ref_mapping
+        slide_rag_context = ""
+        ref_mapping = {}
+        if rag_hits:
+            slide_rag_context = "Tài liệu tham khảo cho slide này (RAG context):\n"
+            for idx, hit in enumerate(rag_hits, 1):
+                ref_mapping[str(idx)] = {
+                    "file_name": hit.get("file_name", "N/A"),
+                    "page_number": hit.get("page_number", 0)
+                }
+                slide_rag_context += f"[RAG-Ref: {idx}]: {hit['text']}\n\n"
+
         sys_prompt = build_slide_writer_system_prompt(
             slide_index=slide_index,
             title=title,
@@ -193,6 +236,8 @@ class MaterialOrchestrator:
             allocated_text=allocated_text,
             target_lang=self.state["target_lang"],
             previous_slides_markdown=previous_slides_markdown,
+            slide_rag_context=slide_rag_context,
+            learner_level=self.state["learner_level"],
         )
 
         user_prompt = "Hãy viết mã nguồn Markdown cho slide này dưới dạng JSON."
@@ -208,31 +253,39 @@ class MaterialOrchestrator:
         slide_md = res.get("slide_markdown", "").strip()
 
         length = get_slide_body_length(slide_md)
-        if length <= budget:
-            return slide_md
-
-        # Vòng lặp sửa lỗi (Self-Correction Loop - Thử lại tối đa 2 lần)
-        for attempt in range(1, 3):
-            print(
-                f"[Self-Correction] Slide {slide_index} ({suggested_layout}) bị vượt budget ký tự: {length}/{budget} ở lần thử {attempt}. Đang yêu cầu AI tối ưu lại..."
-            )
-            correction_prompt = f"""Slide của bạn vừa sinh dài {length} ký tự, vượt quá hạn mức tối đa {budget} ký tự của layout '{suggested_layout}'.
+        if length > budget:
+            # Vòng lặp sửa lỗi (Self-Correction Loop - Thử lại tối đa 2 lần)
+            for attempt in range(1, 3):
+                print(
+                    f"[Self-Correction] Slide {slide_index} ({suggested_layout}) bị vượt budget ký tự: {length}/{budget} ở lần thử {attempt}. Đang yêu cầu AI tối ưu lại..."
+                )
+                correction_prompt = f"""Slide của bạn vừa sinh dài {length} ký tự, vượt quá hạn mức tối đa {budget} ký tự của layout '{suggested_layout}'.
 Hãy tóm tắt ngắn gọn lại, giữ nguyên tiêu đề '#' và dòng tag metadata ở cuối slide.
 Nội dung slide hiện tại để sửa đổi:
 {slide_md}"""
 
-            res = call_llm_json(
-                correction_prompt,
-                system_instruction=sys_prompt,
-                trace_or_span=trace_or_span,
-                prompt_name=f"slide_writer_correction_slide_{slide_index}",
-                prompt_version="v1",
-            )
-            slide_md = res.get("slide_markdown", "").strip()
-            length = get_slide_body_length(slide_md)
-            if length <= budget:
-                print(f"[Self-Correction] Tối ưu hóa Slide {slide_index} thành công! Kích thước mới: {length}/{budget}")
-                return slide_md
+                res = call_llm_json(
+                    correction_prompt,
+                    system_instruction=sys_prompt,
+                    trace_or_span=trace_or_span,
+                    prompt_name=f"slide_writer_correction_slide_{slide_index}",
+                    prompt_version="v1",
+                )
+                slide_md = res.get("slide_markdown", "").strip()
+                length = get_slide_body_length(slide_md)
+                if length <= budget:
+                    print(f"[Self-Correction] Tối ưu hóa Slide {slide_index} thành công! Kích thước mới: {length}/{budget}")
+                    break
+
+        # Replace placeholders with real citations if mapping exists
+        if ref_mapping:
+            def replacer(match):
+                ref_id = match.group(1).strip()
+                if ref_id in ref_mapping:
+                    info = ref_mapping[ref_id]
+                    return f"[Nguồn: {info['file_name']} - Trang: {info['page_number']}]"
+                return match.group(0)
+            slide_md = re.sub(r'\[RAG-Ref:\s*(\d+)\]', replacer, slide_md, flags=re.IGNORECASE)
 
         return slide_md
 
@@ -359,6 +412,8 @@ Nội dung slide hiện tại để sửa đổi:
             chapter_description=self.state["chapter_description"],
             rag_context=self.state["rag_context"],
             session_duration=self.state["session_duration"],
+            pedagogical_style=self.state["pedagogical_style"],
+            selected_clos=self.state["selected_clos"],
         )
         user_prompt = "Hãy thiết kế Đề cương slide bài giảng dạng JSON chứa danh sách các slide."
 
@@ -397,7 +452,7 @@ Nội dung slide hiện tại để sửa đổi:
         self.state["allocations"] = res.get("allocations", [])
         return self.state["allocations"]
 
-    async def async_run_slide_writer(self, trace_or_span=None, progress_callback=None):
+    async def async_run_slide_writer(self, trace_or_span=None, progress_callback=None, slide_status_callback=None):
         """Bước 3: Slide Writer Agent sinh slide chi tiết và chạy Self-Correction bất đồng bộ theo tuần tự."""
         if not self.state["allocations"]:
             raise ValueError("Allocations are empty. Please run Content Allocator first.")
@@ -416,6 +471,15 @@ Nội dung slide hiện tại để sửa đổi:
 
             previous_slides_md = "\n\n".join(self.state["generated_slides"])
 
+            if slide_status_callback:
+                try:
+                    if asyncio.iscoroutinefunction(slide_status_callback):
+                        await slide_status_callback(idx, "start", {"title": plan["title"]})
+                    else:
+                        slide_status_callback(idx, "start", {"title": plan["title"]})
+                except Exception as callback_err:
+                    print(f"[WARNING] slide_status_callback error: {callback_err}")
+
             res = await self._async_generate_single_slide_with_retry(
                 slide_index=idx,
                 title=plan["title"],
@@ -426,6 +490,7 @@ Nội dung slide hiện tại để sửa đổi:
                 allocated_text=allocated_text,
                 previous_slides_markdown=previous_slides_md,
                 trace_or_span=trace_or_span,
+                slide_status_callback=slide_status_callback,
             )
 
             self.state["generated_slides"].append(res)
@@ -454,9 +519,39 @@ Nội dung slide hiện tại để sửa đổi:
         allocated_text: str,
         previous_slides_markdown: str = "",
         trace_or_span=None,
+        slide_status_callback=None,
     ) -> str:
         """Hàm sinh slide đơn lẻ kèm Self-Correction Loop bất đồng bộ."""
         budget = BUDGETS.get(suggested_layout, 500)
+
+        # Dynamic retrieval for this slide
+        query = f"{title} {purpose} {target_clo}"
+        rag_hits = []
+        if self.state.get("user_id") and self.state.get("course_id"):
+            try:
+                # Runs sync search in executor or runs normally since Chroma query is usually fast
+                rag_hits = search_rag_isolated(
+                    query,
+                    user_id=self.state["user_id"],
+                    course_id=self.state["course_id"],
+                    top_k=3,
+                    chapter_id=self.state.get("chapter_id"),
+                )
+                rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
+            except Exception as e:
+                print(f"[WARNING] Dynamic RAG search failed: {e}")
+
+        # Formulate slide_rag_context and ref_mapping
+        slide_rag_context = ""
+        ref_mapping = {}
+        if rag_hits:
+            slide_rag_context = "Tài liệu tham khảo cho slide này (RAG context):\n"
+            for idx, hit in enumerate(rag_hits, 1):
+                ref_mapping[str(idx)] = {
+                    "file_name": hit.get("file_name", "N/A"),
+                    "page_number": hit.get("page_number", 0)
+                }
+                slide_rag_context += f"[RAG-Ref: {idx}]: {hit['text']}\n\n"
 
         sys_prompt = build_slide_writer_system_prompt(
             slide_index=slide_index,
@@ -468,6 +563,8 @@ Nội dung slide hiện tại để sửa đổi:
             allocated_text=allocated_text,
             target_lang=self.state["target_lang"],
             previous_slides_markdown=previous_slides_markdown,
+            slide_rag_context=slide_rag_context,
+            learner_level=self.state["learner_level"],
         )
 
         user_prompt = "Hãy viết mã nguồn Markdown cho slide này dưới dạng JSON."
@@ -485,34 +582,60 @@ Nội dung slide hiện tại để sửa đổi:
         slide_md = res.get("slide_markdown", "").strip()
 
         length = get_slide_body_length(slide_md)
-        if length <= budget:
-            return slide_md
+        if length > budget:
+            # Vòng lặp sửa lỗi bất đồng bộ (Thử lại tối đa 2 lần)
+            for attempt in range(1, 3):
+                print(
+                    f"[Self-Correction-Async] Slide {slide_index} ({suggested_layout}) bị vượt budget ký tự: {length}/{budget} ở lần thử {attempt}. Đang yêu cầu AI tối ưu lại..."
+                )
+                if slide_status_callback:
+                    try:
+                        if asyncio.iscoroutinefunction(slide_status_callback):
+                            await slide_status_callback(slide_index, "correcting", {"attempt": attempt, "length": length, "budget": budget})
+                        else:
+                            slide_status_callback(slide_index, "correcting", {"attempt": attempt, "length": length, "budget": budget})
+                    except Exception as callback_err:
+                        print(f"[WARNING] slide_status_callback error: {callback_err}")
 
-        # Vòng lặp sửa lỗi bất đồng bộ (Thử lại tối đa 2 lần)
-        for attempt in range(1, 3):
-            print(
-                f"[Self-Correction-Async] Slide {slide_index} ({suggested_layout}) bị vượt budget ký tự: {length}/{budget} ở lần thử {attempt}. Đang yêu cầu AI tối ưu lại..."
-            )
-            await asyncio.sleep(12.0)
-            correction_prompt = f"""Slide của bạn vừa sinh dài {length} ký tự, vượt quá hạn mức tối đa {budget} ký tự của layout '{suggested_layout}'.
+                await asyncio.sleep(12.0)
+                correction_prompt = f"""Slide của bạn vừa sinh dài {length} ký tự, vượt quá hạn mức tối đa {budget} ký tự của layout '{suggested_layout}'.
 Hãy tóm tắt ngắn gọn lại, giữ nguyên tiêu đề '#' và dòng tag metadata ở cuối slide.
 Nội dung slide hiện tại để sửa đổi:
 {slide_md}"""
 
-            res = await async_call_llm_json(
-                correction_prompt,
-                system_instruction=sys_prompt,
-                trace_or_span=trace_or_span,
-                prompt_name=f"slide_writer_correction_slide_{slide_index}",
-                prompt_version="v1",
-            )
-            slide_md = res.get("slide_markdown", "").strip()
-            length = get_slide_body_length(slide_md)
-            if length <= budget:
-                print(
-                    f"[Self-Correction-Async] Tối ưu hóa Slide {slide_index} thành công! Kích thước mới: {length}/{budget}"
+                res = await async_call_llm_json(
+                    correction_prompt,
+                    system_instruction=sys_prompt,
+                    trace_or_span=trace_or_span,
+                    prompt_name=f"slide_writer_correction_slide_{slide_index}",
+                    prompt_version="v1",
                 )
-                return slide_md
+                slide_md = res.get("slide_markdown", "").strip()
+                length = get_slide_body_length(slide_md)
+                if length <= budget:
+                    print(
+                        f"[Self-Correction-Async] Tối ưu hóa Slide {slide_index} thành công! Kích thước mới: {length}/{budget}"
+                    )
+                    break
+
+        # Replace placeholders with real citations if mapping exists
+        if ref_mapping:
+            def replacer(match):
+                ref_id = match.group(1).strip()
+                if ref_id in ref_mapping:
+                    info = ref_mapping[ref_id]
+                    return f"[Nguồn: {info['file_name']} - Trang: {info['page_number']}]"
+                return match.group(0)
+            slide_md = re.sub(r'\[RAG-Ref:\s*(\d+)\]', replacer, slide_md, flags=re.IGNORECASE)
+
+        if slide_status_callback:
+            try:
+                if asyncio.iscoroutinefunction(slide_status_callback):
+                    await slide_status_callback(slide_index, "done", {"layout": suggested_layout})
+                else:
+                    slide_status_callback(slide_index, "done", {"layout": suggested_layout})
+            except Exception as callback_err:
+                print(f"[WARNING] slide_status_callback error: {callback_err}")
 
         return slide_md
 
