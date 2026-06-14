@@ -4964,13 +4964,13 @@
    Agent Visualizer and Telemetry Tracker Styles
    ============================================================ */
 .agent-flow-container {
-  background: rgba(15, 23, 42, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 20px;
   backdrop-filter: blur(12px);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
 }
 
@@ -4979,7 +4979,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--border-color);
   padding-bottom: 8px;
 }
 
@@ -4999,11 +4999,11 @@
   align-items: center;
   gap: 12px;
   font-size: 11px;
-  color: #94a3b8;
-  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
   padding: 4px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
 }
 
 .telemetry-item {
@@ -5041,25 +5041,25 @@
 
 .agent-node-desc {
   font-size: 7.5px;
-  fill: #94a3b8;
+  fill: var(--text-secondary);
   text-anchor: middle;
   pointer-events: none;
 }
 
 /* Status: Inactive */
 .agent-node.inactive .agent-node-circle {
-  fill: rgba(30, 41, 59, 0.8);
-  stroke: rgba(71, 85, 105, 0.4);
+  fill: var(--bg-primary);
+  stroke: var(--border-color);
   stroke-width: 2;
 }
 
 .agent-node.inactive .agent-node-text {
-  fill: #64748b;
+  fill: var(--text-muted);
 }
 
 /* Status: Running */
 .agent-node.running .agent-node-circle {
-  fill: rgba(59, 130, 246, 0.2);
+  fill: rgba(59, 130, 246, 0.15);
   stroke: #3b82f6;
   stroke-width: 2.5;
   filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
@@ -5067,13 +5067,13 @@
 }
 
 .agent-node.running .agent-node-text {
-  fill: #60a5fa;
+  fill: #3b82f6;
   font-weight: 700;
 }
 
 /* Status: Correcting */
 .agent-node.correcting .agent-node-circle {
-  fill: rgba(249, 115, 22, 0.2);
+  fill: rgba(249, 115, 22, 0.15);
   stroke: #f97316;
   stroke-width: 2.5;
   filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.6));
@@ -5081,25 +5081,25 @@
 }
 
 .agent-node.correcting .agent-node-text {
-  fill: #fb923c;
+  fill: #f97316;
   font-weight: 700;
 }
 
 /* Status: Completed */
 .agent-node.completed .agent-node-circle {
-  fill: rgba(16, 185, 129, 0.15);
+  fill: rgba(16, 185, 129, 0.1);
   stroke: #10b981;
   stroke-width: 2;
   filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.3));
 }
 
 .agent-node.completed .agent-node-text {
-  fill: #34d399;
+  fill: #10b981;
 }
 
 /* Status: Error */
 .agent-node.error .agent-node-circle {
-  fill: rgba(239, 68, 68, 0.2);
+  fill: rgba(239, 68, 68, 0.15);
   stroke: #ef4444;
   stroke-width: 2.5;
   filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
@@ -5107,7 +5107,7 @@
 }
 
 .agent-node.error .agent-node-text {
-  fill: #f87171;
+  fill: #ef4444;
   font-weight: 700;
 }
 
@@ -5119,7 +5119,8 @@
 }
 
 .connection-line.inactive {
-  stroke: rgba(71, 85, 105, 0.2);
+  stroke: var(--border-color);
+  opacity: 0.6;
 }
 
 .connection-line.active {

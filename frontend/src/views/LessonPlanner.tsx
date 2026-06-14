@@ -108,6 +108,12 @@ export default function LessonPlanner({
     setFurnitureType,
     sessionDuration,
     setSessionDuration,
+    selectedClos,
+    setSelectedClos,
+    pedagogicalStyle,
+    setPedagogicalStyle,
+    learnerLevel,
+    setLearnerLevel,
     error,
     setError,
     message,
@@ -685,6 +691,13 @@ export default function LessonPlanner({
         setFurnitureType={setFurnitureType}
         sessionDuration={sessionDuration}
         setSessionDuration={setSessionDuration}
+        clos={clos}
+        selectedClos={selectedClos}
+        setSelectedClos={setSelectedClos}
+        pedagogicalStyle={pedagogicalStyle}
+        setPedagogicalStyle={setPedagogicalStyle}
+        learnerLevel={learnerLevel}
+        setLearnerLevel={setLearnerLevel}
         handleGenerateMaterials={handleGenerateStoryboard}
       />
       {renderCitationDrawer()}

@@ -1985,21 +1985,34 @@
 }
 
 .checklist-bulk-btn.lesson-plan {
-  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .checklist-bulk-btn.questions {
-  background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  box-shadow: none;
 }
 
 .checklist-bulk-btn.zip-package {
-  background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+  background: var(--accent-gradient);
+  color: #ffffff;
 }
 
 .checklist-bulk-btn:hover {
   transform: translateY(-1px);
-  filter: brightness(1.1);
+  filter: brightness(1.05);
   box-shadow: var(--shadow-md);
+}
+
+.checklist-bulk-btn.lesson-plan:hover,
+.checklist-bulk-btn.questions:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 /* Checklist Table */
@@ -2104,13 +2117,14 @@
 }
 
 .checklist-action-btn {
-  border: none;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  color: #ffffff;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
@@ -2123,21 +2137,38 @@
 }
 
 .checklist-action-btn.pptx {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  border-color: rgba(234, 88, 12, 0.25);
+  color: #ea580c;
 }
 
 .checklist-action-btn.script {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  border-color: rgba(22, 163, 74, 0.25);
+  color: #16a34a;
 }
 
 .checklist-action-btn.questions {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #2563eb;
 }
 
 .checklist-action-btn:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(1.15);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.checklist-action-btn.pptx:hover:not(:disabled) {
+  background: rgba(234, 88, 12, 0.08);
+  border-color: rgba(234, 88, 12, 0.5);
+}
+
+.checklist-action-btn.script:hover:not(:disabled) {
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.5);
+}
+
+.checklist-action-btn.questions:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.5);
 }
 
 .checklist-action-btn-secondary {

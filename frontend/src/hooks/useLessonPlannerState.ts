@@ -117,6 +117,9 @@ export function useLessonPlannerState({
   const [hasWifi, setHasWifi] = useState(true);
   const [furnitureType, setFurnitureType] = useState('movable');
   const [sessionDuration, setSessionDuration] = useState(90);
+  const [selectedClos, setSelectedClos] = useState<string[]>([]);
+  const [pedagogicalStyle, setPedagogicalStyle] = useState('interactive');
+  const [learnerLevel, setLearnerLevel] = useState('intermediate');
 
   // Messages & Errors
   const [error, setError] = useState('');
@@ -234,6 +237,9 @@ export function useLessonPlannerState({
     hasWifi,
     furnitureType,
     sessionDuration,
+    selectedClos,
+    pedagogicalStyle,
+    learnerLevel,
     onRecordAIUsage,
     setAIProcessingStatus,
     setError,
@@ -252,7 +258,8 @@ export function useLessonPlannerState({
     setDocuments,
     setError,
     setMessage,
-    setLoading
+    setLoading,
+    setAIProcessingStatus
   });
 
   // Fetch chapters & documents list
@@ -312,6 +319,7 @@ export function useLessonPlannerState({
     }
 
     setSelectedChapter(chapter);
+    setSelectedClos([]);
     setError('');
     setMessage('');
     
@@ -773,6 +781,12 @@ export function useLessonPlannerState({
     setFurnitureType,
     sessionDuration,
     setSessionDuration,
+    selectedClos,
+    setSelectedClos,
+    pedagogicalStyle,
+    setPedagogicalStyle,
+    learnerLevel,
+    setLearnerLevel,
     error,
     setError,
     message,

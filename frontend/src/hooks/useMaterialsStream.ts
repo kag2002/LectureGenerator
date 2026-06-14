@@ -9,6 +9,9 @@ interface UseMaterialsStreamOptions {
   hasWifi: boolean;
   furnitureType: string;
   sessionDuration: number;
+  selectedClos: string[];
+  pedagogicalStyle: string;
+  learnerLevel: string;
   onRecordAIUsage: (usage: {
     operation: string;
     model?: string;
@@ -36,6 +39,9 @@ export function useMaterialsStream({
   hasWifi,
   furnitureType,
   sessionDuration,
+  selectedClos,
+  pedagogicalStyle,
+  learnerLevel,
   onRecordAIUsage,
   setAIProcessingStatus,
   setError,
@@ -179,7 +185,10 @@ export function useMaterialsStream({
         has_wifi: hasWifi,
         furniture_type: furnitureType,
         language: 'vi',
-        session_duration: sessionDuration
+        session_duration: sessionDuration,
+        pedagogical_style: pedagogicalStyle,
+        learner_level: learnerLevel,
+        selected_clos: selectedClos
       }, {
         signal: controller.signal
       });
@@ -303,7 +312,10 @@ export function useMaterialsStream({
             furniture_type: furnitureType,
             language: 'vi',
             session_duration: sessionDuration,
-            storyboard: confirmedStoryboard
+            storyboard: confirmedStoryboard,
+            pedagogical_style: pedagogicalStyle,
+            learner_level: learnerLevel,
+            selected_clos: selectedClos
           })
         }
       );
