@@ -1,6 +1,7 @@
+import logging
 import os
 import re
-import logging
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ def fetch_unsplash_image_url(keyword: str) -> str:
     if not access_key:
         logger.warning("UNSPLASH_ACCESS_KEY is not configured in .env. Falling back to placeholder.")
         return "https://images.unsplash.com/photo-placeholder"
-        
+
     try:
         url = "https://api.unsplash.com/search/photos"
         params = {
@@ -44,7 +45,7 @@ def fetch_unsplash_image_url(keyword: str) -> str:
             logger.error(f"Unsplash API error: {response.status_code} - {response.text}")
     except Exception as e:
         logger.error(f"Exception while searching image on Unsplash: {str(e)}")
-        
+
     return "https://images.unsplash.com/photo-placeholder"
 
 def process_markdown_images(md_content: str) -> str:
@@ -55,7 +56,7 @@ def process_markdown_images(md_content: str) -> str:
     """
     if not md_content:
         return md_content
-        
+
     # Pattern 1: Matches any unsplash placeholder pattern or direct unsplash URL that we want to replace dynamically
     # E.g. ![business meeting](https://images.unsplash.com/photo-placeholder)
     # E.g. ![business meeting](https://images.unsplash.com/photo-1517245386807-bb43f82c33c4) -> we can replace this too to make it dynamic and prevent repetitions
@@ -63,16 +64,16 @@ def process_markdown_images(md_content: str) -> str:
     matches = re.findall(pattern, md_content)
     if not matches:
         return md_content
-        
+
     processed_content = md_content
     # Cache keywords to avoid duplicate requests for the same keyword in the same lesson
     keyword_cache = {}
-    
+
     for alt_text, full_url in matches:
         clean_keyword = alt_text.strip()
         if not clean_keyword:
             continue
-            
+
         # If it's a real Unsplash URL and we haven't seen it yet, we could keep it,
         # but to prevent repetitions (since LLM outputs same IDs), we force dynamic search for Unsplash URLs!
         if clean_keyword not in keyword_cache:
@@ -80,11 +81,11 @@ def process_markdown_images(md_content: str) -> str:
             keyword_cache[clean_keyword] = img_url
         else:
             img_url = keyword_cache[clean_keyword]
-            
+
         # Replaces only if a valid Unsplash URL was found, otherwise keep original
         if img_url and img_url != "https://images.unsplash.com/photo-placeholder":
             placeholder = f"![{alt_text}]({full_url})"
             processed_content = processed_content.replace(placeholder, f"![{alt_text}]({img_url})")
             logger.info(f"Replaced slide image placeholder '{alt_text}' with dynamic URL: {img_url}")
-            
+
     return processed_content

@@ -59,7 +59,7 @@ def deduplicate_rag_hits(hits: list[dict], threshold: float = 0.75) -> list[dict
 
 def get_slide_body_length(slide_md: str) -> int:
     """Tính độ dài nội dung chính của slide (loại trừ tiêu đề và dòng tag metadata)."""
-    lines = [l.strip() for l in slide_md.split("\n") if l.strip()]
+    lines = [line.strip() for line in slide_md.split("\n") if line.strip()]
     content_lines = []
     for line in lines:
         if line.startswith("#"):

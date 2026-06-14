@@ -28,12 +28,12 @@ def migrate_db():
         # Tao bang tren PostgreSQL
         Base.metadata.create_all(bind=postgres_engine)
 
-        PostgresSession = sessionmaker(bind=postgres_engine)
-        pg_db = PostgresSession()
+        postgres_session_cls = sessionmaker(bind=postgres_engine)
+        pg_db = postgres_session_cls()
 
         # Khoi tao session cho SQLite
-        SQLiteSession = sessionmaker(bind=sqlite_engine)
-        sq_db = SQLiteSession()
+        sqlite_session_cls = sessionmaker(bind=sqlite_engine)
+        sq_db = sqlite_session_cls()
 
         print("[MIGRATION] Tao bang bieu thanh cong tren Postgres. Bat dau doc tu SQLite...")
 

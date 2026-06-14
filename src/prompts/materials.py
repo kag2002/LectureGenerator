@@ -240,9 +240,9 @@ def build_storyboard_architect_system_prompt(
 ) -> str:
     recommended_slides = max(5, min(30, int(session_duration / 3)))
     rag_section = f"\nTài liệu tham khảo (RAG Context) để lập storyboard:\n{rag_context}\n" if rag_context else ""
-    
+
     selected_clos_str = f"Hãy tập trung thiết kế các slide bao phủ các chuẩn đầu ra được lựa chọn: {', '.join(selected_clos)}. " if selected_clos else ""
-    
+
     style_guidelines = ""
     if pedagogical_style == "interactive":
         style_guidelines = "Phong cách giảng dạy: Tương tác chủ động (Interactive Lecture). Thiết kế mạch slide cân bằng giữa truyền đạt khái niệm cốt lõi xen kẽ câu hỏi nhanh, thảo luận ngắn tại chỗ."
@@ -343,7 +343,7 @@ def build_slide_writer_system_prompt(
 ) -> str:
     previous_section = f"\nCác slide đã được viết trước đó (Bộ nhớ chia sẻ):\n{previous_slides_markdown}\n" if previous_slides_markdown else ""
     rag_context_section = f"\n{slide_rag_context}\n" if slide_rag_context else ""
-    
+
     level_guidelines = ""
     if learner_level == "beginner":
         level_guidelines = "Đặc điểm người học: Mới bắt đầu (Beginner). Sử dụng câu từ đơn giản, giải nghĩa rõ ràng các thuật ngữ mới, đưa ví dụ thực tế trực quan sinh động."

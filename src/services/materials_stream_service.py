@@ -10,10 +10,10 @@ from src.prompts.materials import (
     build_material_user_prompt,
     build_slide_designer_system_prompt,
 )
+from src.services.image_service import process_markdown_images
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import call_llm_json, call_llm_stream, get_token_usage, init_token_tracker, langfuse
 from src.utils.task_manager import task_manager
-from src.services.image_service import process_markdown_images
 
 
 async def generate_chapter_materials_stream_generator(

@@ -12,14 +12,14 @@ from src.database.vector_db import search_rag_isolated
 from src.prompts.materials import (
     LANGUAGE_MAP,
     build_consistency_checker_system_prompt,
+    build_reconcile_active_learning_system_prompt,
     build_revision_system_prompt,
     build_single_slide_revision_system_prompt,
-    build_reconcile_active_learning_system_prompt,
 )
+from src.services.image_service import process_markdown_images
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
 from src.utils.task_manager import task_manager
-from src.services.image_service import process_markdown_images
 
 router = APIRouter(prefix="/api/courses", tags=["materials"])
 

@@ -1,12 +1,20 @@
+import base64
 import json
 import os
 import re
+import shutil
 import subprocess
-from typing import List, Optional
-from pydantic import BaseModel
+import tempfile
+import unicodedata
+import zipfile
+from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from pptx import Presentation
+from pptx.dml.color import RGBColor
+from pptx.util import Inches, Pt
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
@@ -866,23 +874,23 @@ def export_lesson_plan(chapter_id: int, current_user: User = Depends(get_current
 
 class SlideItemPayload(BaseModel):
     type: str
-    rawText: Optional[str] = None
-    bullet: Optional[bool] = True
+    rawText: str | None = None  # noqa: N815
+    bullet: bool | None = True
 
 
 class SlidePayload(BaseModel):
     title: str
     layout: str
-    items: List[SlideItemPayload]
-    notes: Optional[str] = None
-    screenshot: Optional[str] = None  # Full slide screenshot
-    has_visual: Optional[bool] = False
-    visual_screenshot: Optional[str] = None  # Base64 of diagram/chart/table
+    items: list[SlideItemPayload]
+    notes: str | None = None
+    screenshot: str | None = None  # Full slide screenshot
+    has_visual: bool | None = False
+    visual_screenshot: str | None = None  # Base64 of diagram/chart/table
 
 
 class ExportCanvasPayload(BaseModel):
-    slides: List[SlidePayload]
-    theme: Optional[str] = "warm_academic"
+    slides: list[SlidePayload]
+    theme: str | None = "warm_academic"
 
 
 @router.post("/chapters/{chapter_id}/export-pptx-canvas")
@@ -1018,11 +1026,6 @@ def export_chapter_pptx_canvas(
 
 
 # --- API EXPORT ZIP COURSE PACKAGE ---
-from fastapi import BackgroundTasks
-import zipfile
-import tempfile
-import shutil
-import unicodedata
 
 
 def format_to_gift(question_text: str, options: list, correct_answer: str) -> str:
@@ -1034,7 +1037,7 @@ def format_to_gift(question_text: str, options: list, correct_answer: str) -> st
 
     q_text = escape_gift(question_text)
     gift_options = []
-    
+
     # Normal case: correct answer matches one of options
     for opt in options:
         opt_escaped = escape_gift(opt)
@@ -1042,7 +1045,7 @@ def format_to_gift(question_text: str, options: list, correct_answer: str) -> st
             gift_options.append(f"={opt_escaped}")
         else:
             gift_options.append(f"~{opt_escaped}")
-            
+
     # Fallback if correct_answer was letter matching index (e.g., 'A', 'B', 'C', 'D')
     has_correct = any(o.startswith('=') for o in gift_options)
     if not has_correct and correct_answer in ["A", "B", "C", "D", "a", "b", "c", "d"]:
@@ -1050,11 +1053,11 @@ def format_to_gift(question_text: str, options: list, correct_answer: str) -> st
         if idx < len(gift_options):
             gift_options[idx] = "=" + gift_options[idx].lstrip('~')
             has_correct = True
-            
+
     # Ultimate fallback: first item
     if not has_correct and gift_options:
         gift_options[0] = "=" + gift_options[0].lstrip('~')
-        
+
     options_str = " ".join(gift_options)
     return f"{q_text} {{{options_str}}}"
 
@@ -1099,7 +1102,7 @@ def export_course_zip(
 
     # 3. Tạo thư mục tạm để đóng gói
     temp_dir = tempfile.mkdtemp(prefix=f"course_export_{course_id}_")
-    
+
     try:
         # A. Đề cương Syllabus.md
         syllabus_path = os.path.join(temp_dir, "Syllabus.md")
@@ -1120,11 +1123,11 @@ def export_course_zip(
         # B. Báo cáo Ma trận Coverage Bloom x CLO
         matrix_path = os.path.join(temp_dir, "Matrix_Coverage.md")
         with open(matrix_path, "w", encoding="utf-8") as f:
-            f.write(f"# MA TRẬN ĐỘ PHỦ CHẤT LƯỢNG (CLO x BLOOM LEVEL)\n")
+            f.write("# MA TRẬN ĐỘ PHỦ CHẤT LƯỢNG (CLO x BLOOM LEVEL)\n")
             f.write(f"Môn học: {course.course_name} ({course.course_code})\n\n")
             f.write("| Chuẩn đầu ra (CLO) | Mức Bloom | Số lượng Câu hỏi | Slide bài giảng | Mô tả CLO |\n")
             f.write("| :--- | :---: | :---: | :---: | :--- |\n")
-            
+
             for c in clos:
                 q_count = len([q for q in questions if q.clo_id == c.id])
                 # Check how many chapter materials mention this CLO
@@ -1144,12 +1147,12 @@ def export_course_zip(
             os.makedirs(storyboard_dir, exist_ok=True)
             os.makedirs(slides_dir, exist_ok=True)
             os.makedirs(quizzes_dir, exist_ok=True)
-        
+
         for idx, ch in enumerate(chapters):
             ch_num = idx + 1
             sanitized_title = sanitize_filename(ch.title)
             ch_folder_name = f"Chapter_{ch_num:02d}_{sanitized_title}"
-            
+
             # Khởi tạo đường dẫn lưu file của chương này
             if organization_style == "by_type":
                 storyboard_dest_dir = storyboard_dir
@@ -1165,7 +1168,7 @@ def export_course_zip(
                 file_prefix = ""
 
             material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
-            
+
             # i. Kịch bản Active Learning (Storyboard)
             if material and material.active_learning_script:
                 sb_path = os.path.join(storyboard_dest_dir, f"{file_prefix}Storyboard.md")
@@ -1179,7 +1182,7 @@ def export_course_zip(
                 src_slide_path = os.path.join(slides_dest_dir, f"{file_prefix}Slides_Source.md")
                 with open(src_slide_path, "w", encoding="utf-8") as f:
                     f.write(material.slide_content)
-                
+
                 # Cố gắng xuất slide PPTX
                 try:
                     # Gọi trực tiếp helper logic của export_chapter_pptx nhưng không trả Response
@@ -1206,7 +1209,7 @@ def export_course_zip(
                         opts = []
                         try:
                             opts = json.loads(q.options_json) if q.options_json else []
-                        except:
+                        except Exception:
                             pass
                         labels = ["A", "B", "C", "D"]
                         for opt_i, opt in enumerate(opts):
@@ -1223,7 +1226,7 @@ def export_course_zip(
                         opts = []
                         try:
                             opts = json.loads(q.options_json) if q.options_json else []
-                        except:
+                        except Exception:
                             pass
                         gift_str = format_to_gift(q.question_text, opts, q.correct_answer)
                         f.write(gift_str + "\n\n")
@@ -1231,7 +1234,7 @@ def export_course_zip(
         # 4. Nén thư mục tạm thành file ZIP
         zip_temp_dir = tempfile.mkdtemp(prefix="course_zip_")
         zip_file_path = os.path.join(zip_temp_dir, f"Course_Package_{course.course_code}.zip")
-        
+
         with zipfile.ZipFile(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
             for root, dirs, files in os.walk(temp_dir):
                 for file in files:
@@ -1246,7 +1249,7 @@ def export_course_zip(
                 shutil.rmtree(zip_temp_dir)
             except Exception as e:
                 print(f"Lỗi khi dọn dẹp thư mục tạm ZIP export: {e}")
-                
+
         background_tasks.add_task(cleanup_temp_directories)
 
         # 6. Trả về file ZIP
@@ -1255,12 +1258,12 @@ def export_course_zip(
             media_type="application/zip",
             filename=f"Course_Package_{course.course_code}.zip"
         )
-        
+
     except Exception as outer_err:
         # Nếu lỗi trong quá trình xử lý, cố gắng dọn dẹp thư mục tạm
         try:
             shutil.rmtree(temp_dir)
-        except:
+        except Exception:
             pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

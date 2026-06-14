@@ -212,15 +212,15 @@ def clean_and_truncate_references(text_by_pages: list[str]) -> list[str]:
         r'^\s*#*\s*Tài liệu tham khảo\s*$',
         r'^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$'
     ]
-    
+
     # We only look for references in the last 20% of pages or at least the last 5 pages
     min_page_to_check = max(0, int(total_pages * 0.8))
     if total_pages <= 3:
         min_page_to_check = total_pages  # disable check for very short documents
-        
+
     found_ref_page_idx = -1
     found_line_idx = -1
-    
+
     for page_idx in range(total_pages - 1, min_page_to_check - 1, -1):
         page_text = text_by_pages[page_idx]
         lines = page_text.split('\n')
@@ -234,13 +234,13 @@ def clean_and_truncate_references(text_by_pages: list[str]) -> list[str]:
                 break
         if found_ref_page_idx != -1:
             break
-            
+
     if found_ref_page_idx != -1:
         print(f"[INFO] Phat hien References o trang {found_ref_page_idx + 1}. Dang tien hanh cat bo.")
         ref_page_lines = text_by_pages[found_ref_page_idx].split('\n')
         text_by_pages[found_ref_page_idx] = '\n'.join(ref_page_lines[:found_line_idx])
         return text_by_pages[:found_ref_page_idx + 1]
-        
+
     return text_by_pages
 
 
@@ -250,12 +250,12 @@ def clean_single_text_references(text: str) -> str:
     """
     if not text:
         return text
-    
+
     min_char_idx = int(len(text) * 0.8)
     lines = text.split('\n')
     char_count = 0
     ref_line_idx = -1
-    
+
     ref_patterns = [
         r'^\s*#*\s*References\s*$',
         r'^\s*#*\s*REFERENCES\s*$',
@@ -264,7 +264,7 @@ def clean_single_text_references(text: str) -> str:
         r'^\s*#*\s*Tài liệu tham khảo\s*$',
         r'^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$'
     ]
-    
+
     for idx, line in enumerate(lines):
         char_count += len(line) + 1
         if char_count > min_char_idx:
@@ -274,11 +274,11 @@ def clean_single_text_references(text: str) -> str:
                     break
             if ref_line_idx != -1:
                 break
-                
+
     if ref_line_idx != -1:
         print(f"[INFO] Phat hien References o dong {ref_line_idx}. Dang tien hanh cat bo.")
         return '\n'.join(lines[:ref_line_idx])
-        
+
     return text
 
 
@@ -288,7 +288,7 @@ def clean_noise(text: str) -> str:
     """
     if not text:
         return ""
-    
+
     lines = text.split('\n')
     cleaned_lines = []
     for line in lines:
@@ -363,7 +363,7 @@ def add_document_vector(
 
     ids = [f"usr_{user_id}_crs_{course_id}_file_{file_name}_c{i}" for i in range(len(all_chunks))]
     documents = [c["text"] for c in all_chunks]
-    
+
     metadatas = []
     for c in all_chunks:
         meta = {
@@ -392,7 +392,7 @@ def migrate_vector_db_metadata():
         all_docs = collection.get(include=["metadatas"])
         if not all_docs or not all_docs["ids"]:
             return
-        
+
         update_ids = []
         update_metas = []
         for i, meta in enumerate(all_docs["metadatas"]):
@@ -400,7 +400,7 @@ def migrate_vector_db_metadata():
                 meta["chapter_id"] = 0
                 update_ids.append(all_docs["ids"][i])
                 update_metas.append(meta)
-        
+
         if update_ids:
             collection.update(ids=update_ids, metadatas=update_metas)
             print(f"[INFO] Da cap nhat chapter_id=0 cho {len(update_ids)} vector cu.")
@@ -427,7 +427,7 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
 
         # 1. Mở rộng câu truy vấn (Query Expansion)
         queries = [query]
-        
+
         # A. Mở rộng từ viết tắt chuyên ngành cục bộ (Rule-based Acronym Expansion)
         acronym_map = {
             "avl": ["cây avl", "cây tự cân bằng avl"],
@@ -469,7 +469,7 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
 
         # 2. Tăng số lượng kết quả lấy ra từ Vector DB để Rerank (lấy top_k * 2 mỗi query)
         fetch_k = max(top_k * 2, 8)
-        
+
         # Gọi ChromaDB query cho danh sách các truy vấn (batch query)
         print(f"[DEBUG] queries: {queries}, where_cond: {where_cond}")
         results = collection.query(
@@ -488,17 +488,17 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
                 q_metas = results["metadatas"][q_idx] if results.get("metadatas") else [None] * len(q_docs)
                 q_distances = results["distances"][q_idx] if results.get("distances") else [0.0] * len(q_docs)
                 q_ids = results["ids"][q_idx] if results.get("ids") else []
-                
+
                 for i in range(len(q_docs)):
                     # Lấy ID của chunk
                     chunk_id = q_ids[i] if i < len(q_ids) else f"chunk_{q_idx}_{i}"
                     text = q_docs[i]
                     meta = q_metas[i] or {}
                     dist = q_distances[i]
-                    
+
                     # Tính điểm semantic gốc (0.0 -> 1.0) sử dụng chuẩn hóa tuyến tính khoảng cách Cosine [0, 2]
                     semantic_score = max(0.0, 1.0 - (dist / 2.0))
-                    
+
                     # Nếu chunk đã xuất hiện, giữ lại điểm tương đồng semantic lớn nhất
                     if chunk_id in unique_chunks:
                         if semantic_score > unique_chunks[chunk_id]["semantic_score"]:
@@ -521,10 +521,10 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
             text_lower = text.lower()
             semantic_score = chunk_data["semantic_score"]
             meta = chunk_data["meta"]
-            
+
             # Tính toán điểm bổ trợ Lexical Boost
             lexical_boost = 0.0
-            
+
             # Khớp cụm từ chính xác
             if query_clean in text_lower:
                 lexical_boost += 0.25
@@ -533,18 +533,18 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
                 if query_tokens:
                     match_count = sum(1 for token in query_tokens if token in text_lower)
                     lexical_boost += (match_count / len(query_tokens)) * 0.15
-            
+
             # Khớp từ khóa chuyên ngành viết hoa (ví dụ: CLO1, AVL)
             if uppercase_tokens:
                 uc_matches = sum(1 for token in uppercase_tokens if token in text)
                 lexical_boost += (uc_matches / len(uppercase_tokens)) * 0.10
-            
+
             final_score = min(1.0, semantic_score + lexical_boost)
-            
+
             # 5. Sentence Window Retrieval: Lấy window_text nếu có trong metadata để làm ngữ cảnh mở rộng
             window_text = meta.get("window_text")
             text_to_return = window_text if window_text else text
-            
+
             formatted_results.append(
                 {
                     "text": text_to_return,
@@ -554,10 +554,10 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
                     "semantic_score": round(semantic_score, 4)
                 }
             )
-        
+
         # Sắp xếp lại kết quả theo điểm số cuối cùng sau khi Rerank
         formatted_results.sort(key=lambda x: x["score"], reverse=True)
-        
+
         # Trả về đúng top_k kết quả có điểm cao nhất
         return formatted_results[:top_k]
     except Exception as e:

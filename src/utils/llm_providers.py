@@ -11,9 +11,9 @@ Each function handles its own error handling and returns results or raises Excep
 Telemetry logging is done via log_generation_to_langfuse imported from llm_client.
 """
 
+import asyncio
 import datetime
 import os
-import asyncio
 
 from google import genai
 from google.genai import types
@@ -181,19 +181,19 @@ def call_gemini_json(
 
     gemini_contents = format_gemini_contents(prompt)
     start_time = datetime.datetime.now(datetime.UTC)
-    
+
     models_to_try = [
         "gemini-3-flash-preview",
         "gemini-3.1-flash-lite",
         "gemini-2.5-flash-lite",
         "gemini-2.5-flash"
     ]
-    
+
     response = None
     res_dict = None
     last_err = None
     chosen_model = None
-    
+
     import time
     for model_name in models_to_try:
         chosen_model = model_name
@@ -207,13 +207,13 @@ def call_gemini_json(
                 err_msg = str(e)
                 is_quota = "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg
                 is_json_err = isinstance(e, ValueError) and "parse json" in err_msg.lower()
-                
+
                 # If daily limit reached or model not found/available, fall back immediately
                 is_daily_limit = is_quota and ("limit: 20" in err_msg or "limit: 0" in err_msg or "limit: 5" not in err_msg)
                 if is_daily_limit or "not found" in err_msg.lower() or "404" in err_msg:
                     print(f"[WARNING] Model {model_name} not available or hit daily quota limit. Falling back to next model...")
                     break
-                
+
                 if attempt < 1 and (is_quota or is_json_err):
                     print(f"[WARNING] Model {model_name} failed (attempt {attempt+1}): {e}. Retrying in 3s...")
                     time.sleep(3.0)
@@ -222,10 +222,10 @@ def call_gemini_json(
                     break
         if res_dict is not None:
             break
-            
+
     if res_dict is None:
         raise last_err or RuntimeError("All Gemini models failed")
-        
+
     end_time = datetime.datetime.now(datetime.UTC)
     usage = _extract_gemini_usage(response, prompt)
     _log_and_return(
@@ -687,7 +687,6 @@ async def async_call_gemini_json(
     """Async call Google Gemini API by running the synchronous call in a thread.
     This prevents async HTTP client hangs in Windows environments.
     """
-    import asyncio
     print("[INFO] [Async -> Sync Thread] Chuyen tiep cuoc goi Gemini qua thread dong bo de tranh loi treo cuoc goi...")
     return await asyncio.to_thread(
         call_gemini_json,

@@ -31,8 +31,8 @@ async def run_chatbot_evaluation(provider_name: str, db: Session) -> dict:
     """
     Chạy đánh giá tự động cho bộ test case của Chatbot.
     """
-    ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    cases_path = os.path.join(ROOT_DIR, "data", "chatbot_eval_cases.json")
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cases_path = os.path.join(root_dir, "data", "chatbot_eval_cases.json")
 
     if not os.path.exists(cases_path):
         raise FileNotFoundError(f"Không tìm thấy file eval cases: {cases_path}")
@@ -194,7 +194,7 @@ async def run_chatbot_evaluation(provider_name: str, db: Session) -> dict:
     db.commit()
 
     # Ghi nhận log JSON ra thư mục backend/runs
-    runs_dir = os.path.join(ROOT_DIR, "runs")
+    runs_dir = os.path.join(root_dir, "runs")
     os.makedirs(runs_dir, exist_ok=True)
     run_file_path = os.path.join(runs_dir, f"{eval_run_id}.json")
     with open(run_file_path, "w", encoding="utf-8") as f:

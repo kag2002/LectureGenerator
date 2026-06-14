@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import CLO, Course, User, RAGDocument
+from src.database.models import CLO, Course, RAGDocument, User
 from src.database.session import SessionLocal, get_db
 from src.utils.parser import safe_parse_bloom_level
 
@@ -450,10 +450,10 @@ def process_document_background(
     chapter_id: int | None,
     document_id: int
 ):
-    from src.database.session import SessionLocal
     from src.database.models import RAGDocument
-    from src.utils.parser import parse_document
+    from src.database.session import SessionLocal
     from src.database.vector_db import add_document_vector
+    from src.utils.parser import parse_document
 
     db = SessionLocal()
     try:
@@ -894,7 +894,7 @@ def get_chunk_by_page(
                 "text": data["documents"][i]
             })
         chunks.sort(key=lambda x: x["id"])
-        
+
         combined_text = "\n\n".join([c["text"] for c in chunks])
         return {"text": combined_text}
     except Exception as e:

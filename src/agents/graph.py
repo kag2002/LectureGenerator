@@ -1,15 +1,15 @@
+import json
 import os
 import time
-import json
 from typing import Any
-from openai import AsyncOpenAI
+
 from langgraph.graph import END, StateGraph
+from openai import AsyncOpenAI
 
 from src.agents.state import AgentState
-from src.database.models import ChatMessage, Course
 from src.services.chatbot_guardrails import validate_input, validate_output
 from src.services.chatbot_tools import execute_chatbot_tool
-from src.utils.llm_client import calculate_cost, langfuse, FREE_MODELS
+from src.utils.llm_client import FREE_MODELS, calculate_cost, langfuse
 
 # --- CONFIGURATION & TOOLS FOR CHATBOT ---
 
@@ -346,10 +346,8 @@ async def llm_router_node(state: AgentState) -> dict[str, Any]:
     if state.get("status") == "blocked":
         return {}
 
-    db = state["db"]
-    on_event = state.get("on_event")
     r_idx = state.get("current_round", 1)
-    
+
     # Chuẩn bị model list
     candidate_models = get_candidate_models()
     working_messages = state["messages"]
@@ -489,7 +487,7 @@ async def llm_router_node(state: AgentState) -> dict[str, Any]:
             "completion_tokens": new_completion_tokens,
             "latency_ms": new_latency_ms,
         }
-    
+
     return {
         "status": "calling_tools",
         "tool_calls": formatted_tool_calls,
@@ -610,13 +608,13 @@ async def guardrail_output_node(state: AgentState) -> dict[str, Any]:
 
 def chatbot_routing_condition(state: AgentState) -> str:
     status = state.get("status")
-    
+
     if status in ["blocked", "waiting_for_user"]:
         return "end"
-    
+
     if status == "calling_tools":
         return "execute_tools"
-    
+
     if status == "answered":
         return "guardrail_output"
 
@@ -645,7 +643,7 @@ def build_graph() -> StateGraph:
 
     # Đặt các edges chuyển đổi trạng thái
     graph.add_edge("guardrail_input", "llm_router")
-    
+
     # Rẽ nhánh có điều kiện từ llm_router
     graph.add_conditional_edges(
         "llm_router",

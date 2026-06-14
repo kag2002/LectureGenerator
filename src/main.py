@@ -44,7 +44,7 @@ try:
         print("[MIGRATION] Adding column 'recommended_readings' to table 'courses'...")
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE courses ADD COLUMN recommended_readings TEXT"))
-            
+
     # Auto-migration for RAGDocument fields
     rag_doc_columns = [col["name"] for col in inspector.get_columns("rag_documents")]
     if "error_message" not in rag_doc_columns:

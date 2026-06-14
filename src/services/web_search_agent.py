@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import Course, User, RAGDocument
+from src.database.models import Course, RAGDocument, User
 from src.database.session import get_db
 from src.database.vector_db import add_document_vector
 from src.services.web_search_mock_data import MOCK_SEARCH_RESULTS_AVL, MOCK_SEARCH_RESULTS_DEFAULT
