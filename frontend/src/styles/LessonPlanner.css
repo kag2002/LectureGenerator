@@ -4960,3 +4960,234 @@
   100% { transform: rotate(360deg); }
 }
 
+/* ============================================================
+   Agent Visualizer and Telemetry Tracker Styles
+   ============================================================ */
+.agent-flow-container {
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  transition: all 0.3s ease;
+}
+
+.agent-flow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.agent-flow-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.agent-flow-telemetry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.telemetry-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.telemetry-cost {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.agent-flow-svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Node styling */
+.agent-node {
+  transition: all 0.3s ease;
+}
+
+.agent-node-circle {
+  transition: all 0.3s ease;
+}
+
+.agent-node-text {
+  font-size: 9px;
+  font-family: inherit;
+  font-weight: 600;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.agent-node-desc {
+  font-size: 7.5px;
+  fill: #94a3b8;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* Status: Inactive */
+.agent-node.inactive .agent-node-circle {
+  fill: rgba(30, 41, 59, 0.8);
+  stroke: rgba(71, 85, 105, 0.4);
+  stroke-width: 2;
+}
+
+.agent-node.inactive .agent-node-text {
+  fill: #64748b;
+}
+
+/* Status: Running */
+.agent-node.running .agent-node-circle {
+  fill: rgba(59, 130, 246, 0.2);
+  stroke: #3b82f6;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.6));
+  animation: agent-node-pulse-blue 2s infinite ease-in-out;
+}
+
+.agent-node.running .agent-node-text {
+  fill: #60a5fa;
+  font-weight: 700;
+}
+
+/* Status: Correcting */
+.agent-node.correcting .agent-node-circle {
+  fill: rgba(249, 115, 22, 0.2);
+  stroke: #f97316;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.6));
+  animation: agent-node-pulse-orange 1s infinite ease-in-out;
+}
+
+.agent-node.correcting .agent-node-text {
+  fill: #fb923c;
+  font-weight: 700;
+}
+
+/* Status: Completed */
+.agent-node.completed .agent-node-circle {
+  fill: rgba(16, 185, 129, 0.15);
+  stroke: #10b981;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.3));
+}
+
+.agent-node.completed .agent-node-text {
+  fill: #34d399;
+}
+
+/* Status: Error */
+.agent-node.error .agent-node-circle {
+  fill: rgba(239, 68, 68, 0.2);
+  stroke: #ef4444;
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.6));
+  animation: agent-node-pulse-red 1s infinite ease-in-out;
+}
+
+.agent-node.error .agent-node-text {
+  fill: #f87171;
+  font-weight: 700;
+}
+
+/* Connection Lines */
+.connection-line {
+  stroke-width: 2;
+  transition: all 0.3s ease;
+  fill: none;
+}
+
+.connection-line.inactive {
+  stroke: rgba(71, 85, 105, 0.2);
+}
+
+.connection-line.active {
+  stroke: #3b82f6;
+  stroke-dasharray: 6, 6;
+  animation: connection-flow 0.8s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.4));
+}
+
+.connection-line.completed {
+  stroke: #10b981;
+}
+
+/* Animations */
+@keyframes agent-node-pulse-blue {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.4));
+    stroke-width: 2.5;
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.8));
+    stroke-width: 3.5;
+  }
+}
+
+@keyframes agent-node-pulse-orange {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px rgba(249, 115, 22, 0.4));
+    stroke-width: 2.5;
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(249, 115, 22, 0.8));
+    stroke-width: 3.5;
+  }
+}
+
+@keyframes agent-node-pulse-red {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px rgba(239, 68, 68, 0.4));
+    stroke-width: 2.5;
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(239, 68, 68, 0.8));
+    stroke-width: 3.5;
+  }
+}
+
+@keyframes connection-flow {
+  from {
+    stroke-dashoffset: 20;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Self-correction alert box */
+.agent-flow-correction-alert {
+  background: rgba(249, 115, 22, 0.1);
+  border: 1px solid rgba(249, 115, 22, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: #fb923c;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: pulse-blink 2s infinite ease-in-out;
+}
+

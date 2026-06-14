@@ -607,7 +607,7 @@ export function useLessonPlannerState({
     }
   };
 
-  const handleCitationClick = (citationStr: string) => {
+  const handleCitationClick = async (citationStr: string) => {
     const cleaned = citationStr.replace(/^(Nguon|Nguồn|Source|Ref|Trang|Page):\s*/i, '');
     const parts = cleaned.split(/-\s*(?:Trang|Page|trang|page):\s*/i);
     const fileName = parts[0]?.trim();
@@ -633,14 +633,54 @@ export function useLessonPlannerState({
         citation: citationStr,
         fileName: matchedRef.file_name,
         pageNumber: matchedRef.page_number,
-        text: matchedRef.text
+        text: matchedRef.text,
+        loading: false
       });
+    } else if (fileName && pageNum !== null) {
+      setSelectedCitation({
+        citation: citationStr,
+        fileName: fileName,
+        pageNumber: pageNum,
+        text: "Đang tải dữ liệu đoạn trích từ hệ thống...",
+        loading: true
+      });
+
+      try {
+        const response = await client.get(`/api/courses/${course.id}/documents/${encodeURIComponent(fileName)}/pages/${pageNum}/chunk`);
+        if (response.data && response.data.text) {
+          setSelectedCitation({
+            citation: citationStr,
+            fileName: fileName,
+            pageNumber: pageNum,
+            text: response.data.text,
+            loading: false
+          });
+        } else {
+          setSelectedCitation({
+            citation: citationStr,
+            fileName: fileName,
+            pageNumber: pageNum,
+            text: "Không tìm thấy nội dung đoạn trích gốc cho trang tài liệu này. Có thể tệp đã bị xóa hoặc trang không còn tồn tại.",
+            loading: false
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching dynamic citation fallback:", err);
+        setSelectedCitation({
+          citation: citationStr,
+          fileName: fileName,
+          pageNumber: pageNum,
+          text: "Đã xảy ra lỗi khi kết nối máy chủ để tải đoạn trích trích dẫn.",
+          loading: false
+        });
+      }
     } else {
       setSelectedCitation({
         citation: citationStr,
         fileName: fileName || "Không rõ tài liệu",
         pageNumber: pageNum || "N/A",
-        text: "Không tìm thấy nội dung đoạn trích gốc trong Vector DB của chương học này. Có thể slide này được trích xuất từ tài liệu khác hoặc cấu trúc trang không khớp."
+        text: "Không tìm thấy nội dung đoạn trích gốc trong Vector DB của chương học này. Có thể slide này được trích xuất từ tài liệu khác hoặc cấu trúc trang không khớp.",
+        loading: false
       });
     }
   };

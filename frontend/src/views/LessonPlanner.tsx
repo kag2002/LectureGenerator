@@ -196,7 +196,10 @@ export default function LessonPlanner({
     handleCancelMaterialsGeneration,
     handleCancelStoryboardGeneration,
     aiSlideProposal,
-    aiActiveLearningProposal
+    aiActiveLearningProposal,
+    generatingChapterId,
+    aiViewMode,
+    setAiViewMode
   } = stream;
 
   const {
@@ -352,12 +355,19 @@ export default function LessonPlanner({
           {citationTab === 'chunk' ? (
             <div className="citation-tab-content">
               <div className="citation-section-label">Đoạn văn bản gốc từ giáo trình</div>
-              <div className="citation-text-box">
-                {selectedCitation.text}
-              </div>
-              {selectedCitation.fileName !== "Không rõ tài liệu" && (
+              {selectedCitation.loading ? (
+                <div className="citation-loading-box" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '24px', justifyContent: 'center', color: 'var(--text-muted)', background: 'var(--citation-box-bg, rgba(0,0,0,0.1))', borderRadius: '8px' }}>
+                  <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                  <span>Đang tải đoạn trích từ tài liệu gốc...</span>
+                </div>
+              ) : (
+                <div className="citation-text-box">
+                  {selectedCitation.text}
+                </div>
+              )}
+              {selectedCitation.fileName !== "Không rõ tài liệu" && !selectedCitation.loading && (
                 <button
-                  onClick={() => handleLoadFullDocument(selectedCitation.fileName)}
+                   onClick={() => handleLoadFullDocument(selectedCitation.fileName)}
                   className="citation-view-source-btn"
                 >
                   <Search size={12} aria-hidden="true" /> Xem toàn bộ tài liệu nguồn
@@ -591,7 +601,7 @@ export default function LessonPlanner({
             loadingMcqs={loadingMcqs}
             onClose={() => setShowSidebar(false)}
             ragReferences={ragReferences}
-            onCitationClick={handleCitationClick}
+            onCitationClick={(ref) => handleCitationClick(`${ref.file_name} - Page: ${ref.page_number}`)}
             generatingChapterId={generatingChapterId}
           />
 
@@ -624,6 +634,12 @@ export default function LessonPlanner({
             onClose={() => setShowAIProposal(false)}
             aiViewMode={aiViewMode}
             setAiViewMode={setAiViewMode}
+            warnings={stream.warnings}
+            ragReferences={ragReferences}
+            activeAgent={stream.activeAgent}
+            agentStatus={stream.agentStatus}
+            selfCorrectionAttempt={stream.selfCorrectionAttempt}
+            tokenUsage={stream.tokenUsage}
           />
 
         <EditorPanel

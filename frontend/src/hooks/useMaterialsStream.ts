@@ -53,20 +53,16 @@ export function useMaterialsStream({
     selectedChapterRef.current = selectedChapter;
   }, [selectedChapter]);
 
-  useEffect(() => {
-    if (selectedChapter && generatingChapterId === selectedChapter.id) {
-      setAiViewMode('slides');
-    }
-  }, [selectedChapter, generatingChapterId]);
-
   const abortControllerRef = useRef<AbortController | null>(null);
   const [storyboardDrafts, setStoryboardDrafts] = useState<Record<number, any[]>>({});
   const [aiSlideProposals, setAiSlideProposals] = useState<Record<number, string>>({});
   const [aiActiveLearningProposals, setAiActiveLearningProposals] = useState<Record<number, string>>({});
+  const [chapterWarnings, setChapterWarnings] = useState<Record<number, string[]>>({});
 
   const storyboardDraft = selectedChapter ? storyboardDrafts[selectedChapter.id] || null : null;
   const aiSlideProposal = selectedChapter ? aiSlideProposals[selectedChapter.id] || '' : '';
   const aiActiveLearningProposal = selectedChapter ? aiActiveLearningProposals[selectedChapter.id] || '' : '';
+  const warnings = selectedChapter ? chapterWarnings[selectedChapter.id] || [] : [];
 
   const setStoryboardDraft = (draft: any[] | null) => {
     if (!selectedChapter) return;
@@ -99,6 +95,10 @@ export function useMaterialsStream({
     });
   };
 
+  const setWarnings = (warns: string[]) => {
+    if (!selectedChapter) return;
+    setChapterWarnings(prev => ({ ...prev, [selectedChapter.id]: warns }));
+  };
   const [isGeneratingStoryboard, setIsGeneratingStoryboard] = useState(false);
   const [currentStage, setCurrentStage] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -108,7 +108,22 @@ export function useMaterialsStream({
   const [aiViewMode, setAiViewMode] = useState<'storyboard' | 'slides'>('storyboard');
   const [generatingChapterId, setGeneratingChapterId] = useState<number | null>(null);
 
-  // Giai đoạn 1: Sinh đề cương Slide (Storyboard)
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const [selfCorrectionAttempt, setSelfCorrectionAttempt] = useState<number | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<{
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_cost: number;
+    model_name: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (selectedChapter && generatingChapterId === selectedChapter.id) {
+      setAiViewMode('slides');
+    }
+  }, [selectedChapter, generatingChapterId]);
+
   const handleGenerateStoryboard = async () => {
     if (!selectedChapter) {
       setError('Vui lòng chọn hoặc sinh một chương học trước.');
@@ -129,6 +144,12 @@ export function useMaterialsStream({
     setApiStatus('generating');
     setGenLog('Giai đoạn 1: AI đang lập cấu trúc slide (Storyboard)…');
     setStoryboardDraft(null);
+    
+    setActiveAgent('storyboard_architect');
+    setAgentStatus('running');
+    setSelfCorrectionAttempt(null);
+    setTokenUsage(null);
+
     const startTime = Date.now();
     setAIProcessingStatus(true, 'AI đang khởi động công cụ lập đề cương bài giảng (Storyboard)…');
     
@@ -167,8 +188,20 @@ export function useMaterialsStream({
       setApiStatus('success');
       setMessage(response.data.message);
       setGenLog('');
-      const opLatency = (Date.now() - startTime) / 1000;
+      
       const usage = response.data.usage;
+      if (usage) {
+        setTokenUsage({
+          prompt_tokens: usage.prompt_tokens || 0,
+          completion_tokens: usage.completion_tokens || 0,
+          total_cost: usage.total_cost !== undefined ? Number(usage.total_cost) : 0.02,
+          model_name: usage.model_name || '',
+        });
+      }
+      setActiveAgent('storyboard_architect');
+      setAgentStatus('completed');
+
+      const opLatency = (Date.now() - startTime) / 1000;
       onRecordAIUsage({
         operation: `Lập Storyboard - ${selectedChapter.title}`,
         latency: Number(opLatency.toFixed(1)),
@@ -189,6 +222,7 @@ export function useMaterialsStream({
       setApiStatus('error');
       setError(err.response?.data?.detail || 'Lỗi khi sinh storyboard.');
       setGenLog('');
+      setAgentStatus('error');
       const opLatency = (Date.now() - startTime) / 1000;
       onRecordAIUsage({
         operation: `Lập Storyboard - ${selectedChapter.title}`,
@@ -236,6 +270,13 @@ export function useMaterialsStream({
     setTotalSlides(0);
     setAiSlideProposal('');
     setAiActiveLearningProposal('');
+    setWarnings([]);
+    
+    setActiveAgent('content_allocator');
+    setAgentStatus('running');
+    setSelfCorrectionAttempt(null);
+    setTokenUsage(null);
+
     const startTime = Date.now();
     const token = localStorage.getItem('token');
     setAIProcessingStatus(true, 'AI đang viết slide chi tiết & giáo án tương tác…');
@@ -292,6 +333,10 @@ export function useMaterialsStream({
             try {
               const data = JSON.parse(line.slice(6));
               
+              if (data.usage && selectedChapterRef.current?.id === targetChapterId) {
+                setTokenUsage(data.usage);
+              }
+
               if (currentEvent === 'stage') {
                 if (selectedChapterRef.current?.id === targetChapterId) {
                   setGenLog(data.message);
@@ -303,6 +348,17 @@ export function useMaterialsStream({
                   }
                   if (data.total_slides !== undefined) {
                     setTotalSlides(data.total_slides);
+                  }
+                  if (data.active_agent !== undefined) {
+                    setActiveAgent(data.active_agent);
+                  }
+                  if (data.agent_status !== undefined) {
+                    setAgentStatus(data.agent_status);
+                  }
+                  if (data.self_correction_attempt !== undefined) {
+                    setSelfCorrectionAttempt(data.self_correction_attempt);
+                  } else {
+                    setSelfCorrectionAttempt(null);
                   }
                   setAIProcessingStatus(true, `Học liệu: ${data.message}`);
                 }
@@ -340,6 +396,7 @@ export function useMaterialsStream({
               } else if (currentEvent === 'done') {
                 setAiSlideProposals(prev => ({ ...prev, [targetChapterId]: data.slide_content }));
                 setAiActiveLearningProposals(prev => ({ ...prev, [targetChapterId]: data.active_learning_script }));
+                setWarnings(data.warnings || []);
                 
                 if (selectedChapterRef.current?.id === targetChapterId) {
                   setSlideContent(data.slide_content);
@@ -354,6 +411,9 @@ export function useMaterialsStream({
                   setMessage(data.message);
                   setGenLog('');
                   setAIProcessingStatus(false);
+                  setActiveAgent('saver');
+                  setAgentStatus('completed');
+                  setSelfCorrectionAttempt(null);
                 }
                 setGeneratingChapterId(null); // Hoàn tất tiến trình chạy ngầm
                 
@@ -387,6 +447,7 @@ export function useMaterialsStream({
                   setApiStatus('error');
                   setGenLog('');
                   setAIProcessingStatus(false);
+                  setAgentStatus('error');
                 }
                 setGeneratingChapterId(null); // Giải phóng tiến trình chạy ngầm
                 
@@ -414,6 +475,7 @@ export function useMaterialsStream({
         setError(`Lỗi kết nối stream: ${err.message}`);
         setGenLog('');
         setAIProcessingStatus(false);
+        setAgentStatus('error');
       }
       setGeneratingChapterId(null); // Giải phóng tiến trình chạy ngầm
       const opLatency = (Date.now() - startTime) / 1000;
@@ -442,6 +504,9 @@ export function useMaterialsStream({
       setGenLog('');
       setAIProcessingStatus(false);
       setGeneratingChapterId(null);
+      setActiveAgent(null);
+      setAgentStatus(null);
+      setSelfCorrectionAttempt(null);
     }
   };
 
@@ -454,6 +519,9 @@ export function useMaterialsStream({
     setApiStatus('idle');
     setGenLog('');
     setAIProcessingStatus(false);
+    setActiveAgent(null);
+    setAgentStatus(null);
+    setSelfCorrectionAttempt(null);
   };
 
   return {
@@ -478,6 +546,12 @@ export function useMaterialsStream({
     aiViewMode,
     setAiViewMode,
     generatingChapterId,
-    setGeneratingChapterId
+    setGeneratingChapterId,
+    warnings,
+    setWarnings,
+    activeAgent,
+    agentStatus,
+    selfCorrectionAttempt,
+    tokenUsage
   };
 }

@@ -73,9 +73,20 @@ export interface AIProposalPanelProps {
   handleGenerateMaterialsFromStoryboard: (draft: any[]) => void;
   handleCancelMaterialsGeneration?: () => void;
   handleCancelStoryboardGeneration?: () => void;
-  onClose?: () => void;
   aiViewMode?: 'storyboard' | 'slides';
   setAiViewMode?: (mode: 'storyboard' | 'slides') => void;
+  warnings?: string[];
+  ragReferences?: any[];
+  onClose?: () => void;
+  activeAgent?: string | null;
+  agentStatus?: string | null;
+  selfCorrectionAttempt?: number | null;
+  tokenUsage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_cost: number;
+    model_name: string;
+  } | null;
 }
 
 export default function AIProposalPanel({
@@ -106,9 +117,41 @@ export default function AIProposalPanel({
   handleCancelStoryboardGeneration,
   onClose,
   aiViewMode = 'storyboard',
-  setAiViewMode
+  setAiViewMode,
+  warnings = [],
+  ragReferences = [],
+  activeAgent = null,
+  agentStatus = null,
+  selfCorrectionAttempt = null,
+  tokenUsage = null
 }: AIProposalPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  const getExpectedReferences = (slideTitle: string, targetClo: string) => {
+    if (!ragReferences || ragReferences.length === 0) return [];
+    const queryWords = `${slideTitle || ''} ${targetClo || ''}`
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !['và', 'của', 'là', 'để', 'trong', 'với', 'cho', 'tại'].includes(w));
+    if (queryWords.length === 0) return [];
+    
+    return ragReferences
+      .map(ref => {
+        const textLower = (ref.text || '').toLowerCase();
+        const filenameLower = (ref.file_name || '').toLowerCase();
+        let matchCount = 0;
+        queryWords.forEach(word => {
+          if (textLower.includes(word) || filenameLower.includes(word)) {
+            matchCount++;
+          }
+        });
+        return { ref, score: matchCount };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2)
+      .map(item => item.ref);
+  };
 
   React.useEffect(() => {
     if (apiStatus === 'generating' || isGeneratingStoryboard) {
@@ -229,6 +272,149 @@ export default function AIProposalPanel({
     );
   };
 
+  const renderAgentVisualizer = () => {
+    if (apiStatus !== 'generating' && !isGeneratingStoryboard) return null;
+
+    const nodes = [
+      { id: 'storyboard_architect', name: 'Storyboard Architect', desc: 'Thiết kế cấu trúc', x: 60, y: 35 },
+      { id: 'content_allocator', name: 'Content Allocator', desc: 'Phân phối thông tin', x: 210, y: 35 },
+      { id: 'slide_writer', name: 'Slide Writer', desc: 'Soạn thảo nội dung', x: 360, y: 35 },
+      { id: 'active_learning_scheduler', name: 'AL Scheduler', desc: 'Thiết kế kịch bản', x: 360, y: 135 },
+      { id: 'logic_auditor', name: 'Logic Auditor', desc: 'Kiểm toán sư phạm', x: 210, y: 135 },
+      { id: 'saver', name: 'DB Saver', desc: 'Lưu trữ học liệu', x: 60, y: 135 }
+    ];
+
+    const getNodeStatus = (nodeId: string): 'inactive' | 'running' | 'completed' | 'correcting' | 'error' => {
+      if (apiStatus === 'error' && activeAgent === nodeId) return 'error';
+      if (activeAgent === nodeId) {
+        if (agentStatus === 'correcting') return 'correcting';
+        if (agentStatus === 'completed') return 'completed';
+        return 'running';
+      }
+      const order = ['storyboard_architect', 'content_allocator', 'slide_writer', 'active_learning_scheduler', 'logic_auditor', 'saver'];
+      const activeIdx = order.indexOf(activeAgent || '');
+      const nodeIdx = order.indexOf(nodeId);
+      if (activeIdx > nodeIdx && activeIdx !== -1) {
+        return 'completed';
+      }
+      if (apiStatus === 'success' && activeIdx === -1) {
+        return 'completed';
+      }
+      return 'inactive';
+    };
+
+    const isConnectionActive = (fromNodeId: string, toNodeId: string): 'inactive' | 'active' | 'completed' => {
+      const order = ['storyboard_architect', 'content_allocator', 'slide_writer', 'active_learning_scheduler', 'logic_auditor', 'saver'];
+      const activeIdx = order.indexOf(activeAgent || '');
+      const fromIdx = order.indexOf(fromNodeId);
+      const toIdx = order.indexOf(toNodeId);
+      
+      if (apiStatus === 'success') return 'completed';
+      if (activeIdx > fromIdx) return 'completed';
+      if (activeIdx === fromIdx && (agentStatus === 'running' || agentStatus === 'correcting')) return 'active';
+      return 'inactive';
+    };
+
+    const formattedCost = tokenUsage && tokenUsage.total_cost !== undefined
+      ? `$${Number(tokenUsage.total_cost).toFixed(4)}`
+      : '$0.0000';
+
+    return (
+      <div className="agent-flow-container">
+        <div className="agent-flow-header">
+          <div className="agent-flow-title">
+            <span className="planner-stepper-pulse-dot" />
+            <span>Multi-Agent Flow Monitor</span>
+          </div>
+          {tokenUsage && (
+            <div className="agent-flow-telemetry" title={`Model: ${tokenUsage.model_name || 'N/A'}`}>
+              <div className="telemetry-item">
+                <span>Prompt:</span>
+                <strong>{tokenUsage.prompt_tokens} tkn</strong>
+              </div>
+              <div className="telemetry-item">
+                <span>Completion:</span>
+                <strong>{tokenUsage.completion_tokens} tkn</strong>
+              </div>
+              <div className="telemetry-item">
+                <span>Cost:</span>
+                <span className="telemetry-cost">{formattedCost}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <svg width="100%" height="180" viewBox="0 0 420 180" className="agent-flow-svg">
+          <defs>
+            <marker id="arrow-inactive" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 2 L 8 5 L 0 8 z" fill="rgba(71, 85, 105, 0.4)" />
+            </marker>
+            <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 2 L 8 5 L 0 8 z" fill="#3b82f6" />
+            </marker>
+            <marker id="arrow-completed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M 0 2 L 8 5 L 0 8 z" fill="#10b981" />
+            </marker>
+          </defs>
+
+          {/* Paths / Connections */}
+          <path 
+            d="M 78 35 L 192 35" 
+            className={`connection-line ${isConnectionActive('storyboard_architect', 'content_allocator')}`}
+            markerEnd={`url(#arrow-${isConnectionActive('storyboard_architect', 'content_allocator')})`}
+          />
+          <path 
+            d="M 228 35 L 342 35" 
+            className={`connection-line ${isConnectionActive('content_allocator', 'slide_writer')}`}
+            markerEnd={`url(#arrow-${isConnectionActive('content_allocator', 'slide_writer')})`}
+          />
+          <path 
+            d="M 360 53 L 360 117" 
+            className={`connection-line ${isConnectionActive('slide_writer', 'active_learning_scheduler')}`}
+            markerEnd={`url(#arrow-${isConnectionActive('slide_writer', 'active_learning_scheduler')})`}
+          />
+          <path 
+            d="M 342 135 L 228 135" 
+            className={`connection-line ${isConnectionActive('active_learning_scheduler', 'logic_auditor')}`}
+            markerEnd={`url(#arrow-${isConnectionActive('active_learning_scheduler', 'logic_auditor')})`}
+          />
+          <path 
+            d="M 192 135 L 78 135" 
+            className={`connection-line ${isConnectionActive('logic_auditor', 'saver')}`}
+            markerEnd={`url(#arrow-${isConnectionActive('logic_auditor', 'saver')})`}
+          />
+
+          {/* Nodes */}
+          {nodes.map((node) => {
+            const status = getNodeStatus(node.id);
+            return (
+              <g key={node.id} className={`agent-node ${status}`} transform={`translate(${node.x}, ${node.y})`}>
+                <circle cx="0" cy="0" r="18" className="agent-node-circle" />
+                <text x="0" y="3" className="agent-node-text">
+                  {node.id === 'storyboard_architect' ? 'STR' :
+                   node.id === 'content_allocator' ? 'ALC' :
+                   node.id === 'slide_writer' ? 'WRT' :
+                   node.id === 'active_learning_scheduler' ? 'ACT' :
+                   node.id === 'logic_auditor' ? 'AUD' : 'SAV'}
+                </text>
+                <text x="0" y="30" className="agent-node-desc">{node.name}</text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {activeAgent === 'slide_writer' && agentStatus === 'correcting' && selfCorrectionAttempt && (
+          <div className="agent-flow-correction-alert animate-pulse">
+            <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+            <span>
+              ⚠️ Đang tự động hiệu chỉnh độ dài Slide {currentSlide} (Lần thử {selfCorrectionAttempt}/2)...
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <section className="planner-ai-proposal-panel">
       <div className="planner-panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px 16px' }}>
@@ -292,6 +478,7 @@ export default function AIProposalPanel({
       )}
 
       <div ref={scrollRef} className="planner-proposal-scroll">
+        {renderAgentVisualizer()}
         {apiStatus === 'generating' && genLog && (
           <div className="planner-log-box planner-log-box-split">
             <div className="planner-log-box-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -472,6 +659,28 @@ export default function AIProposalPanel({
                         </select>
                       </div>
                     </div>
+
+                    {/* Dự kiến tham chiếu RAG */}
+                    {ragReferences && ragReferences.length > 0 && (
+                      <div className="planner-storyboard-field-group" style={{ marginTop: '10px' }}>
+                        <label className="planner-storyboard-label" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Search size={10} /> Tài liệu tham chiếu dự kiến:
+                        </label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                          {getExpectedReferences(slide.title, slide.target_clo).length > 0 ? (
+                            getExpectedReferences(slide.title, slide.target_clo).map((ref, rIdx) => (
+                              <div key={rIdx} style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.08)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(251, 191, 36, 0.15)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${ref.file_name} - Trang ${ref.page_number}`}>
+                                {ref.file_name} (Trang {ref.page_number})
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                              Dựa trên tri thức chung (Không có tài liệu RAG trùng khớp)
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
 
@@ -555,6 +764,26 @@ export default function AIProposalPanel({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+              {warnings && warnings.length > 0 && (
+                <div className="planner-warnings-card" style={{
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  borderRadius: '10px',
+                  padding: '14px 18px',
+                  marginBottom: '18px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>
+                    <AlertTriangle size={16} />
+                    <span>Cảnh báo Kiểm toán Sư phạm (Logic Auditor)</span>
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: '20px', color: '#cbd5e1', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {warnings.map((w, idx) => (
+                      <li key={idx} style={{ lineHeight: '1.5' }}>{w}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
