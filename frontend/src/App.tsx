@@ -780,8 +780,8 @@ export default function App() {
                     onChange={(e) => setIsFastMode(e.target.checked)}
                     style={{ cursor: 'pointer', width: '14px', height: '14px' }}
                   />
-                  <label htmlFor="fast-mode-checkbox" style={{ fontSize: '12px', color: '#fbbf24', cursor: 'pointer', userSelect: 'none', fontWeight: '600' }} title="Bỏ qua bước giải đề thử của Solver giúp rút ngắn thời gian sinh">
-                    ⚡ Chế độ sinh nhanh (Fast Mode - Bỏ qua tự sửa sai)
+                  <label htmlFor="fast-mode-checkbox" style={{ fontSize: '12px', color: '#fbbf24', cursor: 'pointer', userSelect: 'none', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }} title="Bỏ qua bước giải đề thử của Solver giúp rút ngắn thời gian sinh">
+                    <Zap size={12} /> Chế độ tạo nhanh (Fast Mode - Bỏ qua tự sửa lỗi)
                   </label>
                 </div>
               )}

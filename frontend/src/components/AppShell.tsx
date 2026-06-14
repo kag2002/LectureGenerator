@@ -249,7 +249,7 @@ export default function AppShell({
           </div>
         </header>
 
-        <main className="app-main-content">
+        <main className={`app-main-content view-${activeView}`}>
           <div className="animated-fade-in content-container">
             {children}
           </div>

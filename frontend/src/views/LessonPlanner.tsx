@@ -14,7 +14,7 @@ import {
   ArrowLeft, BookOpen, ClipboardList, Plus, AlertTriangle, 
   Scissors, Loader2, Lightbulb, Search, Presentation, 
   Activity, Eye, X, ChevronUp, ChevronDown, Palette, 
-  History, Save, Trash2, Download, FileText, Check, Printer, HelpCircle 
+  History, Save, Trash2, Download, FileText, Check, Printer, HelpCircle, Sparkles 
 } from 'lucide-react';
 import { Course, CLO, Chapter } from '@/types';
 import '../styles/LessonPlanner.css';
@@ -330,7 +330,7 @@ export default function LessonPlanner({
       <div className="citation-drawer">
         <div className="citation-drawer-header">
           <div>
-            <h4 className="citation-drawer-title"><BookOpen size={16} aria-hidden="true" /> Đối chiếu nguồn gốc</h4>
+            <h4 className="citation-drawer-title"><BookOpen size={16} aria-hidden="true" /> Xác minh nguồn trích dẫn</h4>
             <span className="citation-drawer-subtitle">Xác minh độ chính xác của AI từ RAG</span>
           </div>
           <button 
@@ -344,8 +344,8 @@ export default function LessonPlanner({
         <div className="citation-drawer-body">
           <div>
             <div className="citation-section-label">Tài liệu tham chiếu</div>
-            <div className="citation-reference-box">
-              📄 {selectedCitation.fileName} (Trang {selectedCitation.pageNumber})
+            <div className="citation-reference-box" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileText size={14} style={{ color: 'var(--text-muted)' }} /> {selectedCitation.fileName} (Trang {selectedCitation.pageNumber})
             </div>
           </div>
           
@@ -421,9 +421,9 @@ export default function LessonPlanner({
           {selectedChapter && slideContent && (
             <button 
               onClick={handleExportPPTX} 
-              disabled={exporting} 
+              disabled={exporting || apiStatus === 'generating'} 
               className="planner-export-btn" 
-              title="Xuất bài giảng sang định dạng PowerPoint (.pptx)"
+              title={apiStatus === 'generating' ? "Đang sinh slide tự động, vui lòng đợi..." : "Xuất bài giảng sang định dạng PowerPoint (.pptx)"}
             >
               {exporting ? (
                 <>
@@ -488,7 +488,7 @@ export default function LessonPlanner({
           <div className="planner-remedy-content-group">
             <AlertTriangle size={18} aria-hidden="true" />
             <div>
-              <strong>Đang khắc phục điểm mù chất lượng bài giảng:</strong> Hãy chọn chương học phù hợp ở cột trái, sau đó bổ sung nội dung slide có gắn thẻ chuẩn đầu ra <strong>[{initialCloCode}]</strong> và mức Bloom mục tiêu <strong>[Bloom: B{initialBloomLevel}]</strong>.
+              <strong>Bổ sung chuẩn đầu ra còn thiếu:</strong> Hãy chọn chương học phù hợp ở cột trái, sau đó bổ sung nội dung slide có gắn thẻ chuẩn đầu ra <strong>[{initialCloCode}]</strong> và mức Bloom mục tiêu <strong>[Bloom: B{initialBloomLevel}]</strong>.
             </div>
           </div>
           {selectedChapter && (
@@ -508,8 +508,8 @@ export default function LessonPlanner({
 
       {selectedChapter && slideContent && !isZenMode && (
         <div className="planner-whats-next-banner animate-fade-in">
-          <div className="planner-whats-next-content">
-            <span className="whats-next-sparkle">✨</span>
+          <div className="planner-whats-next-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="whats-next-sparkle" style={{ display: 'inline-flex', alignItems: 'center' }}><Sparkles size={16} /></span>
             <div style={{ textAlign: 'left' }}>
               <strong>Học liệu của chương đã sẵn sàng!</strong> Bạn có thể xuất bản slide PowerPoint, in giáo án hoạt động lớp học hoặc đi tiếp để tạo bộ câu hỏi:
             </div>
@@ -517,9 +517,9 @@ export default function LessonPlanner({
           <div className="planner-whats-next-actions">
             <button 
               onClick={handleExportPPTX} 
-              disabled={exporting} 
+              disabled={exporting || apiStatus === 'generating'} 
               className="whats-next-action-btn pptx"
-              title="Xuất bài giảng sang định dạng PowerPoint (.pptx)"
+              title={apiStatus === 'generating' ? "Đang sinh slide tự động, vui lòng đợi..." : "Xuất bài giảng sang định dạng PowerPoint (.pptx)"}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
             >
               {exporting ? 'Đang xuất...' : <><Download size={13} /> Tải Slide (PPTX)</>}
@@ -590,6 +590,9 @@ export default function LessonPlanner({
             chapterMcqs={chapterMcqs}
             loadingMcqs={loadingMcqs}
             onClose={() => setShowSidebar(false)}
+            ragReferences={ragReferences}
+            onCitationClick={handleCitationClick}
+            generatingChapterId={generatingChapterId}
           />
 
         <AIProposalPanel
@@ -619,6 +622,8 @@ export default function LessonPlanner({
             handleCancelMaterialsGeneration={handleCancelMaterialsGeneration}
             handleCancelStoryboardGeneration={handleCancelStoryboardGeneration}
             onClose={() => setShowAIProposal(false)}
+            aiViewMode={aiViewMode}
+            setAiViewMode={setAiViewMode}
           />
 
         <EditorPanel
@@ -649,6 +654,7 @@ export default function LessonPlanner({
             handleResetMaterials={handleResetMaterials}
             setShowRevisionModal={setShowRevisionModal}
             loadRevisionsExternal={loadRevisions}
+            isAIGenerating={apiStatus === 'generating' && selectedChapter?.id === generatingChapterId}
           />
       </ResizableLayout>
 
@@ -670,9 +676,9 @@ export default function LessonPlanner({
       {showRevisionModal && (
         <div className="history-modal-overlay">
           <div className="history-modal-card">
-            <h3 className="history-modal-title"><History size={18} /> Lịch sử hiệu đính chương học</h3>
+            <h3 className="history-modal-title"><History size={18} /> Lịch sử chỉnh sửa chương học</h3>
             <p className="history-modal-desc">
-              Danh sách các phiên bản cũ đã được lưu hoặc hiệu đính bởi AI.
+              Danh sách các phiên bản cũ đã được lưu hoặc chỉnh sửa bởi AI.
             </p>
             <div className="history-modal-list">
               {revisions.length === 0 ? (

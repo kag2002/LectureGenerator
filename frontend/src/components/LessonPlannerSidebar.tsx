@@ -1,6 +1,6 @@
 import React from 'react';
 import { Chapter, CLO } from '@/types';
-import { BookOpen, FileText, ClipboardList, HelpCircle, Sparkles, Upload, Search, Trash2, Check, X, RefreshCw, ChevronLeft, EyeOff } from 'lucide-react';
+import { BookOpen, FileText, ClipboardList, HelpCircle, Sparkles, Upload, Search, Trash2, Check, X, RefreshCw, ChevronLeft, EyeOff, Library, ArrowRight } from 'lucide-react';
 
 export interface SearchResultType {
   accepted: Array<{ title: string; url: string }>;
@@ -10,8 +10,8 @@ export interface SearchResultType {
 export interface LessonPlannerSidebarProps {
   chapters: Chapter[];
   selectedChapter: Chapter | null;
-  activeLeftTab: 'outline' | 'documents' | 'compliance' | 'mcqs';
-  setActiveLeftTab: (tab: 'outline' | 'documents' | 'compliance' | 'mcqs') => void;
+  activeLeftTab: 'outline' | 'documents' | 'compliance' | 'mcqs' | 'citations';
+  setActiveLeftTab: (tab: 'outline' | 'documents' | 'compliance' | 'mcqs' | 'citations') => void;
   clos: CLO[];
   documents: string[];
   uploadFile: File | null;
@@ -46,6 +46,9 @@ export interface LessonPlannerSidebarProps {
   chapterMcqs: any[];
   loadingMcqs: boolean;
   onClose?: () => void;
+  ragReferences?: Array<{ file_name: string; page_number: number; text: string }>;
+  onCitationClick?: (citation: { file_name: string; page_number: number; text: string }) => void;
+  generatingChapterId?: number | null;
 }
 
 export default function LessonPlannerSidebar({
@@ -70,7 +73,10 @@ export default function LessonPlannerSidebar({
   isCloCovered,
   chapterMcqs,
   loadingMcqs,
-  onClose
+  onClose,
+  ragReferences = [],
+  onCitationClick,
+  generatingChapterId = null
 }: LessonPlannerSidebarProps) {
   return (
     <aside className="planner-sidebar">
@@ -98,6 +104,12 @@ export default function LessonPlannerSidebar({
           className={`sidebar-tab-btn ${activeLeftTab === 'mcqs' ? 'active' : 'inactive'}`}
         >
           <span className="sidebar-tab-btn-content"><HelpCircle size={12} aria-hidden="true" /> MCQs Đề thi</span>
+        </button>
+        <button 
+          onClick={() => setActiveLeftTab('citations')}
+          className={`sidebar-tab-btn ${activeLeftTab === 'citations' ? 'active' : 'inactive'}`}
+        >
+          <span className="sidebar-tab-btn-content"><Library size={12} aria-hidden="true" /> Trích dẫn</span>
         </button>
         {onClose && (
           <button 
@@ -167,7 +179,13 @@ export default function LessonPlannerSidebar({
                     onClick={() => handleSelectChapter(ch)}
                     className={selectedChapter?.id === ch.id ? "planner-active-chapter-card" : "planner-chapter-card"}
                   >
-                    <span className="planner-chapter-order">{idx + 1}</span>
+                    <span className="planner-chapter-order">
+                      {generatingChapterId === ch.id ? (
+                        <RefreshCw size={12} className="planner-sidebar-spinner-pulse" style={{ color: 'var(--accent-color, #818cf8)', display: 'inline-block' }} aria-hidden="true" />
+                      ) : (
+                        idx + 1
+                      )}
+                    </span>
                     <div className="sidebar-chapter-info">
                       <div className="planner-chapter-title">{ch.title}</div>
                       <div className="planner-chapter-desc">{ch.description || 'Chưa có mô tả.'}</div>
@@ -392,6 +410,49 @@ export default function LessonPlannerSidebar({
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeLeftTab === 'citations' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <div>
+              <h4 className="planner-sub-title sidebar-sub-header">
+                <Library size={16} aria-hidden="true" /> Trích dẫn học liệu
+              </h4>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '0 0 15px 0', lineHeight: '1.4' }}>
+                Danh sách các tài liệu tham chiếu RAG được sử dụng trực tiếp trong nội dung slide bài giảng của chương này.
+              </p>
+            </div>
+
+            {!ragReferences || ragReferences.length === 0 ? (
+              <div className="planner-empty-state">Chưa phát hiện trích dẫn nguồn RAG nào trong slide chương này.</div>
+            ) : (
+              <div className="sidebar-clo-list">
+                {ragReferences.map((ref, idx) => (
+                  <div 
+                    key={idx} 
+                    className="sidebar-clo-card covered"
+                    style={{ cursor: 'pointer', borderLeft: '3px solid var(--vinuni-gold)' }}
+                    onClick={() => onCitationClick && onCitationClick(ref)}
+                  >
+                    <div className="sidebar-clo-header" style={{ marginBottom: '6px' }}>
+                      <span className="sidebar-clo-badge covered" style={{ background: 'rgba(217, 119, 6, 0.15)', color: 'var(--vinuni-gold)', borderColor: 'var(--vinuni-gold-light)', fontSize: '11px' }}>
+                        Nguồn: {ref.file_name}
+                      </span>
+                      <span className="sidebar-clo-status covered" style={{ fontSize: '11px' }}>
+                        Trang: {ref.page_number}
+                      </span>
+                    </div>
+                    <div className="sidebar-clo-desc" style={{ fontSize: '12px', fontStyle: 'italic', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                      "{ref.text}"
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '4px', marginTop: '6px', fontSize: '11px', color: 'var(--vinuni-gold)', fontWeight: 'bold' }}>
+                      Xác minh nguồn trích dẫn <ArrowRight size={12} />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

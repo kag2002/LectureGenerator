@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import client from '../api/client';
 import {
   CheckCircle2, Clock, Circle, X, ChevronRight, Maximize2,
-  Check, Minus
+  Check, Minus, FileText, Search
 } from 'lucide-react';
 import { Course, CLO } from '@/types';
 
@@ -128,8 +128,8 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
 
           {/* DYNAMIC QUICK PREVIEW DRAWERS */}
           <div className="roadmap-sidebar-section">
-            <h4 className="roadmap-sidebar-section-title">
-              🔍 Xem nhanh nội dung
+            <h4 className="roadmap-sidebar-section-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Search size={16} /> Xem nhanh nội dung
             </h4>
             
             {loadingContent ? (
@@ -207,8 +207,8 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
                   ) : (
                     <div className="roadmap-sidebar-list-scroll">
                       {ragDocs.map((doc, idx) => (
-                        <div key={idx} className="roadmap-sidebar-doc-card">
-                          <span className="roadmap-sidebar-doc-emoji">📄</span>
+                        <div key={idx} className="roadmap-sidebar-doc-card" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <FileText size={14} className="roadmap-sidebar-doc-icon" style={{ color: 'var(--text-muted)' }} />
                           <span className="roadmap-sidebar-doc-title" title={doc}>{doc}</span>
                         </div>
                       ))}

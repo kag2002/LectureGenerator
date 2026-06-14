@@ -5,8 +5,47 @@ import { Chapter } from '@/types';
 import { 
   Sparkles, Loader2, Layers, Trash2, X, Plus, 
   Play, Presentation, Activity, Lightbulb, AlertTriangle, ArrowRight, ArrowUp, ArrowDown, Check, ChevronRight, EyeOff,
-  Clock
+  Clock, Search, Shield, Save
 } from 'lucide-react';
+
+const cleanLogText = (text: string) => {
+  if (!text) return '';
+  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}️\s✅⚡⏳🛡️🎨🔍✍️🧩💾☁️⏱️]+/u, '').trim();
+};
+
+const getLogIcon = (stage: number, text: string) => {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.includes('hoàn tất') || lowerText.includes('thành công') || lowerText.includes('xong')) {
+    return <Check className="text-emerald-400" size={16} style={{ flexShrink: 0 }} />;
+  }
+  if (lowerText.includes('lỗi') || lowerText.includes('thất bại')) {
+    return <AlertTriangle className="text-rose-400" size={16} style={{ flexShrink: 0 }} />;
+  }
+  
+  switch (stage) {
+    case 1:
+      return <Search className="text-sky-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 2:
+      return <Layers className="text-indigo-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 3:
+      return <Presentation className="text-teal-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 4:
+      return <Activity className="text-amber-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 5:
+      return <Shield className="text-rose-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+    case 6:
+      return <Save className="text-emerald-400" size={16} style={{ flexShrink: 0 }} />;
+    default:
+      if (lowerText.includes('truy xuất') || lowerText.includes('rag') || lowerText.includes('tìm kiếm')) {
+        return <Search className="text-sky-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+      }
+      if (lowerText.includes('gọi mô hình') || lowerText.includes('khởi động')) {
+        return <Loader2 className="text-indigo-400 animate-spin" size={16} style={{ flexShrink: 0 }} />;
+      }
+      return <Sparkles className="text-violet-400 animate-pulse" size={16} style={{ flexShrink: 0 }} />;
+  }
+};
 
 export interface AIProposalPanelProps {
   selectedChapter: Chapter | null;
@@ -35,6 +74,8 @@ export interface AIProposalPanelProps {
   handleCancelMaterialsGeneration?: () => void;
   handleCancelStoryboardGeneration?: () => void;
   onClose?: () => void;
+  aiViewMode?: 'storyboard' | 'slides';
+  setAiViewMode?: (mode: 'storyboard' | 'slides') => void;
 }
 
 export default function AIProposalPanel({
@@ -63,7 +104,9 @@ export default function AIProposalPanel({
   handleGenerateMaterialsFromStoryboard,
   handleCancelMaterialsGeneration,
   handleCancelStoryboardGeneration,
-  onClose
+  onClose,
+  aiViewMode = 'storyboard',
+  setAiViewMode
 }: AIProposalPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
@@ -139,7 +182,7 @@ export default function AIProposalPanel({
       { id: 2, name: "Dàn ý & Phân bổ", desc: "AI phân chia nội dung các slide" },
       { id: 3, name: "Viết Slide", desc: "Slide Writer viết slide chi tiết" },
       { id: 4, name: "Kịch bản tương tác", desc: "Thiết kế hoạt động Active Learning" },
-      { id: 5, name: "Kiểm định logic", desc: "Kiểm chéo chất lượng & nhất quán" },
+      { id: 5, name: "Rà soát tính nhất quán", desc: "Kiểm chéo chất lượng & nhất quán" },
       { id: 6, name: "Lưu & Hoàn tất", desc: "Lưu học liệu hoàn chỉnh vào DB" }
     ];
 
@@ -229,12 +272,31 @@ export default function AIProposalPanel({
         </div>
       </div>
 
+      {storyboardDraft && setAiViewMode && (
+        <div className="planner-ai-subtabs">
+          <button
+            type="button"
+            className={`planner-ai-subtab-btn ${aiViewMode === 'storyboard' ? 'active' : ''}`}
+            onClick={() => setAiViewMode('storyboard')}
+          >
+            <Layers size={14} /> Đề cương (Storyboard)
+          </button>
+          <button
+            type="button"
+            className={`planner-ai-subtab-btn ${aiViewMode === 'slides' ? 'active' : ''}`}
+            onClick={() => setAiViewMode('slides')}
+          >
+            <Presentation size={14} /> Nội dung Slide
+          </button>
+        </div>
+      )}
+
       <div ref={scrollRef} className="planner-proposal-scroll">
         {apiStatus === 'generating' && genLog && (
           <div className="planner-log-box planner-log-box-split">
-            <div className="planner-log-box-content">
-              <div className="planner-pulse-dot"></div>
-              <span className="planner-log-text">{genLog}</span>
+            <div className="planner-log-box-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {getLogIcon(currentStage, genLog)}
+              <span className="planner-log-text">{cleanLogText(genLog)}</span>
             </div>
             {handleCancelMaterialsGeneration && (
               <button
@@ -242,7 +304,7 @@ export default function AIProposalPanel({
                 onClick={handleCancelMaterialsGeneration}
                 className="planner-btn-cancel-gen"
               >
-                Hủy sinh
+                Dừng tạo
               </button>
             )}
           </div>
@@ -262,15 +324,23 @@ export default function AIProposalPanel({
                 <button
                   type="button"
                   onClick={handleCancelStoryboardGeneration}
-                  className="planner-btn-cancel-gen"
-                  style={{ marginTop: '8px' }}
-                >
-                  Hủy sinh
-                </button>
+                className="planner-btn-cancel-gen"
+                style={{ marginTop: '8px' }}
+              >
+                Dừng tạo
+              </button>
               )}
             </div>
-          ) : storyboardDraft ? (
+          ) : (storyboardDraft && aiViewMode === 'storyboard') ? (
             <div className="planner-storyboard-wrapper">
+              {apiStatus === 'generating' && (
+                <div className="planner-storyboard-locked-banner">
+                  <AlertTriangle size={16} className="planner-storyboard-locked-banner-icon" />
+                  <p className="planner-storyboard-locked-banner-text">
+                    AI đang sinh slide chi tiết dựa trên dàn ý này. Bản thiết kế đề cương tạm thời được khóa để đảm bảo tính nhất quán.
+                  </p>
+                </div>
+              )}
               <div className="planner-storyboard-banner">
                 <h4 className="planner-storyboard-banner-title">
                   <Layers size={14} /> Giai đoạn 1: Phê duyệt Đề cương Slide (Storyboard)
@@ -290,7 +360,7 @@ export default function AIProposalPanel({
                       <div className="planner-storyboard-actions">
                         <button
                           type="button"
-                          disabled={index === 0}
+                          disabled={index === 0 || apiStatus === 'generating'}
                           onClick={() => {
                             const newDraft = [...storyboardDraft];
                             const temp = newDraft[index];
@@ -306,7 +376,7 @@ export default function AIProposalPanel({
                         </button>
                         <button
                           type="button"
-                          disabled={index === storyboardDraft.length - 1}
+                          disabled={index === storyboardDraft.length - 1 || apiStatus === 'generating'}
                           onClick={() => {
                             const newDraft = [...storyboardDraft];
                             const temp = newDraft[index];
@@ -322,6 +392,7 @@ export default function AIProposalPanel({
                         </button>
                         <button
                           type="button"
+                          disabled={apiStatus === 'generating'}
                           onClick={() => {
                             const newDraft = storyboardDraft.filter((_, idx) => idx !== index);
                             newDraft.forEach((s, idx) => s.slide_index = idx + 1);
@@ -339,6 +410,7 @@ export default function AIProposalPanel({
                       <input 
                         type="text"
                         value={slide.title}
+                        disabled={apiStatus === 'generating'}
                         onChange={(e) => {
                           const newDraft = [...storyboardDraft];
                           newDraft[index].title = e.target.value;
@@ -352,6 +424,7 @@ export default function AIProposalPanel({
                       <label className="planner-storyboard-label">Mục tiêu sư phạm (Purpose)</label>
                       <textarea 
                         value={slide.purpose}
+                        disabled={apiStatus === 'generating'}
                         onChange={(e) => {
                           const newDraft = [...storyboardDraft];
                           newDraft[index].purpose = e.target.value;
@@ -368,6 +441,7 @@ export default function AIProposalPanel({
                         <input 
                           type="text"
                           value={slide.target_clo || ''}
+                          disabled={apiStatus === 'generating'}
                           onChange={(e) => {
                             const newDraft = [...storyboardDraft];
                             newDraft[index].target_clo = e.target.value;
@@ -381,6 +455,7 @@ export default function AIProposalPanel({
                         <label className="planner-storyboard-label">Mức Bloom</label>
                         <select 
                           value={slide.bloom_level}
+                          disabled={apiStatus === 'generating'}
                           onChange={(e) => {
                             const newDraft = [...storyboardDraft];
                             newDraft[index].bloom_level = parseInt(e.target.value);
@@ -402,6 +477,7 @@ export default function AIProposalPanel({
 
                 <button
                   type="button"
+                  disabled={apiStatus === 'generating'}
                   onClick={() => {
                     const newDraft = [...storyboardDraft, {
                       slide_index: storyboardDraft.length + 1,
@@ -421,6 +497,7 @@ export default function AIProposalPanel({
               <div className="planner-storyboard-footer">
                 <button
                   type="button"
+                  disabled={apiStatus === 'generating'}
                   onClick={() => setStoryboardDraft(null)}
                   className="planner-storyboard-footer-btn planner-storyboard-footer-btn-cancel"
                 >
@@ -428,6 +505,7 @@ export default function AIProposalPanel({
                 </button>
                 <button
                   type="button"
+                  disabled={apiStatus === 'generating'}
                   onClick={() => handleGenerateMaterialsFromStoryboard(storyboardDraft)}
                   className="planner-storyboard-footer-btn planner-storyboard-footer-btn-confirm"
                 >
@@ -437,7 +515,11 @@ export default function AIProposalPanel({
             </div>
           ) : (!aiSlideProposal && !aiActiveLearningProposal && apiStatus !== 'generating') ? (
             <div className="planner-empty-state">
-              <p>Chọn một chương ở cột bên trái và bấm <strong>Tạo bài giảng & Giáo án</strong> để AI trích xuất nội dung đề xuất.</p>
+              {storyboardDraft ? (
+                <p>Đề cương bài giảng đã sẵn sàng. Vui lòng chuyển sang tab <strong>Đề cương (Storyboard)</strong> để duyệt và bắt đầu sinh slide chi tiết.</p>
+              ) : (
+                <p>Chọn một chương ở cột bên trái và bấm <strong>Tạo bài giảng & Giáo án</strong> để AI trích xuất nội dung đề xuất.</p>
+              )}
             </div>
           ) : (
             <>
@@ -498,21 +580,21 @@ export default function AIProposalPanel({
                         </div>
                         <button 
                           onClick={() => {
-                            if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ slide hiện tại trong bản soạn thảo để thay thế bằng bản đề xuất từ AI. Bạn có chắc chắn không?')) {
+                            if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ slide hiện tại để thay thế bằng bản đề xuất từ AI. Bạn có chắc chắn không?')) {
                               setSlideContent(aiSlideProposal);
                             }
                           }}
                           disabled={apiStatus === 'generating'}
                           className="planner-btn-override"
                         >
-                          Ghi đè bản thảo <AlertTriangle size={12} />
+                          Thay thế bài giảng <AlertTriangle size={12} />
                         </button>
                         <button 
                           onClick={() => setSlideContent((prev: string) => prev ? (prev + '\n\n' + aiSlideProposal) : aiSlideProposal)}
                           disabled={apiStatus === 'generating'}
                           className="planner-insert-btn"
                         >
-                          Nối tiếp cuối <ArrowRight size={12} />
+                          Chèn vào cuối bài giảng <ArrowRight size={12} />
                         </button>
                       </div>
                     </div>
@@ -542,21 +624,21 @@ export default function AIProposalPanel({
                       <div className="planner-block-header-actions">
                         <button 
                           onClick={() => {
-                            if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ kịch bản hiện tại trong bản soạn thảo để thay thế bằng kịch bản tương tác từ AI. Bạn có chắc chắn không?')) {
+                            if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ kịch bản hiện tại để thay thế bằng kịch bản tương tác từ AI. Bạn có chắc chắn không?')) {
                               setActiveLearningScript(aiActiveLearningProposal);
                             }
                           }}
                           disabled={apiStatus === 'generating'}
                           className="planner-btn-override"
                         >
-                          Ghi đè kịch bản <AlertTriangle size={12} />
+                          Thay thế kịch bản <AlertTriangle size={12} />
                         </button>
                         <button 
                           onClick={() => setActiveLearningScript(activeLearningScript ? (activeLearningScript + '\n\n' + aiActiveLearningProposal) : aiActiveLearningProposal)}
                           disabled={apiStatus === 'generating'}
                           className="planner-insert-btn"
                         >
-                          Nối tiếp cuối <ArrowRight size={12} />
+                          Chèn vào cuối bài giảng <ArrowRight size={12} />
                         </button>
                       </div>
                     </div>

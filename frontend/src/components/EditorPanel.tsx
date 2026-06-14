@@ -59,6 +59,7 @@ export interface EditorPanelProps {
   handleResetMaterials?: () => void;
   setShowRevisionModal?: (show: boolean) => void;
   loadRevisionsExternal?: (chapterId: number) => void;
+  isAIGenerating?: boolean;
 }
 
 export default function EditorPanel({
@@ -88,7 +89,8 @@ export default function EditorPanel({
   handleSaveMaterials,
   handleResetMaterials,
   setShowRevisionModal,
-  loadRevisionsExternal
+  loadRevisionsExternal,
+  isAIGenerating = false
 }: EditorPanelProps) {
   const [revPrompt, setRevPrompt] = useState('');
   const [revisions, setRevisions] = useState<RevisionType[]>([]);
@@ -166,7 +168,7 @@ export default function EditorPanel({
       : `/api/courses/chapters/${selectedChapter.id}/revise-active-learning`;
       
     const opStartTime = Date.now();
-    setAIProcessingStatus(true, `AI đang hiệu đính ${activeWorkTab === 'slides' ? 'slide' : 'kịch bản'}…`);
+    setAIProcessingStatus(true, `AI đang chỉnh sửa ${activeWorkTab === 'slides' ? 'slide' : 'kịch bản'}…`);
 
     try {
       const response = await client.post(endpoint, { prompt: revPrompt });
@@ -178,7 +180,7 @@ export default function EditorPanel({
         setActiveLearningScript(data.active_learning_script);
       }
       
-      setRevSuccess(`Đã hiệu đính: ${data.changes_summary || 'AI đã cập nhật nội dung.'}`);
+      setRevSuccess(`Đã chỉnh sửa: ${data.changes_summary || 'AI đã cập nhật nội dung.'}`);
       setWarnings(data.consistency_warnings || []);
       
       if (data.consistency_check && data.consistency_check.issues) {
@@ -191,7 +193,7 @@ export default function EditorPanel({
       setAIProcessingStatus(false);
       const opLatency = (Date.now() - opStartTime) / 1000;
       onRecordAIUsage({
-        operation: `AI Hiệu đính - Yêu cầu: "${revPrompt}"`,
+        operation: `AI Chỉnh sửa - Yêu cầu: "${revPrompt}"`,
         latency: Number(opLatency.toFixed(1)),
         cost: data.usage?.total_cost !== undefined ? Number(data.usage.total_cost) : 0.01,
         tokens: data.usage ? {
@@ -203,12 +205,12 @@ export default function EditorPanel({
       });
     } catch (err: any) {
       console.error(err);
-      setRevError(err.response?.data?.detail || 'Lỗi khi gửi yêu cầu hiệu đính đến AI.');
+      setRevError(err.response?.data?.detail || 'Lỗi khi gửi yêu cầu chỉnh sửa đến AI.');
 
       setAIProcessingStatus(false);
       const opLatency = (Date.now() - opStartTime) / 1000;
       onRecordAIUsage({
-        operation: `AI Hiệu đính - Yêu cầu: "${revPrompt}"`,
+        operation: `AI Chỉnh sửa - Yêu cầu: "${revPrompt}"`,
         latency: Number(opLatency.toFixed(1)),
         cost: 0,
         status: 'error'
@@ -243,7 +245,7 @@ export default function EditorPanel({
       <div className="editor-revision-widget">
         <div className="editor-revision-header">
           <span className="editor-revision-title">
-            <Sparkles size={14} /> AI Hiệu Đính & Kiểm Tra Xung Đột
+            <Sparkles size={14} /> AI Chỉnh sửa & Kiểm tra đồng bộ
           </span>
           <button 
             type="button"
@@ -266,7 +268,7 @@ export default function EditorPanel({
             }
             value={revPrompt}
             onChange={(e) => setRevPrompt(e.target.value)}
-            disabled={revising}
+            disabled={revising || isAIGenerating}
             className="editor-revision-input"
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleReviseContent();
@@ -275,10 +277,10 @@ export default function EditorPanel({
           <button
             type="button"
             onClick={handleReviseContent}
-            disabled={revising || !revPrompt.trim()}
+            disabled={revising || !revPrompt.trim() || isAIGenerating}
             className="editor-revision-submit-btn"
           >
-            {revising ? 'Đang hiệu đính…' : 'Hiệu Đính'}
+            {revising ? 'Đang chỉnh sửa…' : 'Chỉnh sửa bằng AI'}
           </button>
         </div>
 
@@ -296,7 +298,7 @@ export default function EditorPanel({
 
         {consistencyIssues.length > 0 && (
           <div className="editor-consistency-box">
-            <strong className="editor-consistency-title"><AlertTriangle size={12} /> Phát hiện điểm chưa đồng bộ trong bài giảng (Kiểm tra sư phạm):</strong>
+            <strong className="editor-consistency-title"><AlertTriangle size={12} /> Rà soát tính nhất quán sư phạm:</strong>
             {consistencyIssues.map((issue, idx) => (
               <div key={idx} className="editor-consistency-issue-card">
                 <div className="editor-consistency-issue-header">
@@ -361,8 +363,9 @@ export default function EditorPanel({
                   loadRevisionsExternal(selectedChapter.id);
                   setShowRevisionModal(true);
                 }}
+                disabled={isAIGenerating}
                 className="editor-header-icon-btn"
-                title="Xem lịch sử chỉnh sửa / khôi phục các phiên bản cũ"
+                title={isAIGenerating ? "Không thể xem lịch sử khi AI đang sinh slide" : "Xem lịch sử chỉnh sửa / khôi phục các phiên bản cũ"}
               >
                 <History size={14} aria-hidden="true" />
               </button>
@@ -371,9 +374,9 @@ export default function EditorPanel({
             {handleSaveMaterials && (
               <button 
                 onClick={handleSaveMaterials} 
-                disabled={saving || (slideContent === savedSlideContent && activeLearningScript === savedScript)} 
+                disabled={saving || isAIGenerating || (slideContent === savedSlideContent && activeLearningScript === savedScript)} 
                 className="planner-save-btn" 
-                title={saving ? "Đang lưu thay đổi…" : (slideContent === savedSlideContent && activeLearningScript === savedScript) ? "Tất cả thay đổi đã được tự động lưu" : "Lưu thay đổi bài soạn thảo hiện tại lên đám mây"}
+                title={isAIGenerating ? "Không thể lưu khi AI đang sinh slide" : saving ? "Đang lưu thay đổi…" : (slideContent === savedSlideContent && activeLearningScript === savedScript) ? "Tất cả thay đổi đã được tự động lưu" : "Lưu thay đổi bài soạn thảo hiện tại lên đám mây"}
               >
                 {saving ? (
                   <>
@@ -394,9 +397,9 @@ export default function EditorPanel({
             {handleResetMaterials && (slideContent || activeLearningScript) && (
               <button 
                 onClick={handleResetMaterials} 
-                disabled={saving}
+                disabled={saving || isAIGenerating}
                 className="editor-header-icon-btn btn-reset"
-                title="Xóa/Reset toàn bộ học liệu (Slide và Kịch bản) của chương này"
+                title={isAIGenerating ? "Không thể reset khi AI đang sinh slide" : "Xóa/Reset toàn bộ học liệu (Slide và Kịch bản) của chương này"}
               >
                 <Trash2 size={14} aria-hidden="true" />
               </button>
@@ -485,8 +488,9 @@ export default function EditorPanel({
                     <textarea
                       value={localSlideContent}
                       onChange={handleSlideTextChange}
-                      placeholder="Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"
+                      placeholder={isAIGenerating ? "Đang tải đề xuất slide từ AI, vui lòng đợi..." : "Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"}
                       className={`textarea-editor editor-font-${editorFontSize}`}
+                      disabled={isAIGenerating}
                       style={{
                         resize: 'none',
                         flex: 1,
@@ -511,8 +515,9 @@ export default function EditorPanel({
                   <textarea
                     value={slideContent}
                     onChange={(e) => setSlideContent(e.target.value)}
-                    placeholder="Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"
+                    placeholder={isAIGenerating ? "Đang tải đề xuất slide từ AI, vui lòng đợi..." : "Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"}
                     className={`textarea-editor editor-font-${editorFontSize}`}
+                    disabled={isAIGenerating}
                     style={{
                       resize: 'none',
                       flex: 1,
@@ -590,8 +595,9 @@ export default function EditorPanel({
                   <textarea
                     value={activeLearningScript}
                     onChange={(e) => setActiveLearningScript(e.target.value)}
-                    placeholder="Lịch trình giảng dạy, câu hỏi tương tác trên lớp…"
+                    placeholder={isAIGenerating ? "Đang sinh kịch bản giáo án tương tác, vui lòng đợi..." : "Lịch trình giảng dạy, câu hỏi tương tác trên lớp…"}
                     className={`textarea-editor editor-font-${editorFontSize}`}
+                    disabled={isAIGenerating}
                     style={{
                       resize: 'none',
                       flex: 1,

@@ -671,7 +671,7 @@ body.editor-fullscreen .app-main-content {
   background-color: var(--bg-primary);
 }
 
-.app-main-content:has(.chatbot-container) {
+.app-main-content.view-chatbot {
   overflow: hidden;
 }
 

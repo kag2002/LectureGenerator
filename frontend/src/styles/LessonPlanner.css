@@ -1743,6 +1743,60 @@
   min-height: 0;
 }
 
+.slide-proposal-wrapper.grid-view {
+  height: 60vh;
+  min-height: 480px;
+}
+
+/* Kiểu dáng cho slide tải ảo (loading-placeholder) */
+.slide-frame.loading-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(99, 102, 241, 0.3) !important;
+  background: rgba(99, 102, 241, 0.03) !important;
+}
+
+.slide-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 20px;
+}
+
+.slide-frame.thumbnail-view .slide-loading-content {
+  gap: 4px;
+  padding: 8px;
+}
+
+.slide-loading-spinner {
+  color: var(--accent-color, #818cf8);
+}
+
+.slide-loading-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.slide-frame.full-view .slide-loading-title {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.slide-frame.thumbnail-view .slide-loading-title {
+  font-size: 9px;
+  margin-bottom: 0;
+}
+
+.slide-loading-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+
 .slide-proposal-toolbar {
   display: flex;
   justify-content: space-between;
@@ -1874,7 +1928,7 @@
 .slide-frame.full-view {
   max-width: 100%;
   max-height: 100%;
-  width: auto;
+  width: 100%;
   height: auto;
   padding: 2cqw 2.5cqw;
   box-shadow: 0 8px 32px rgba(0,0,0,0.4);
@@ -4822,13 +4876,87 @@
   transform: scale(1.1);
 }
 
+/* Sub-tabs for AI Proposal Panel */
+.planner-ai-subtabs {
+  display: flex;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 16px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
 
+.planner-ai-subtab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
 
+.planner-ai-subtab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
 
+.planner-ai-subtab-btn.active {
+  color: #ffffff;
+  background: var(--vinuni-navy);
+}
 
+[data-theme="dark"] .planner-ai-subtab-btn.active {
+  background: var(--accent-color);
+}
 
+/* Warning banner for locked storyboard */
+.planner-storyboard-locked-banner {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text-primary);
+}
 
+.planner-storyboard-locked-banner-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
 
+.planner-storyboard-locked-banner-text {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+  text-align: left;
+}
 
+/* Blinking/pulse animation for sidebar loading indicator */
+@keyframes pulse-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
 
+.planner-sidebar-spinner-pulse {
+  animation: spin 1.5s linear infinite, pulse-blink 1.5s ease-in-out infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
 

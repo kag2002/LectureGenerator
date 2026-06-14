@@ -23,9 +23,14 @@ import {
   XCircle,
   Sparkles,
   Check,
+  Zap,
   X,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Edit2
 } from 'lucide-react';
 import { Course, Chapter } from '@/types';
 import '../styles/KnowledgeBase.css';
@@ -53,6 +58,36 @@ interface WebSearchResult {
   rejected: WebSearchResultItem[];
 }
 
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!text) return "";
+  if (!query || !query.trim()) return text;
+  
+  const stopWords = new Set(['và', 'thì', 'của', 'là', 'để', 'trong', 'với', 'cho', 'tại', 'những', 'các', 'the', 'and', 'of', 'in', 'to', 'a', 'is', 'for', 'with', 'on']);
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map(t => t.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").trim())
+    .filter(t => t.length > 1 && !stopWords.has(t));
+    
+  if (terms.length === 0) return text;
+  
+  const escapedTerms = terms.map(t => t.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+  const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  
+  return (
+    <>
+      {parts.map((part, idx) => 
+        regex.test(part) ? (
+          <mark key={idx} className="highlighted-term" style={{ backgroundColor: 'rgba(217, 119, 6, 0.2)', color: 'inherit', borderRadius: '2px', padding: '0 2px' }}>{part}</mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
 export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, activeView, isActive }: KnowledgeBaseProps) {
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -63,11 +98,33 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
   
   // Data lists
   const [documents, setDocuments] = useState<string[]>([]);
+  const [documentsDetailed, setDocumentsDetailed] = useState<any[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [editingDocName, setEditingDocName] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string>('Textbook');
+  const [editingTags, setEditingTags] = useState<string>('');
+  const [editingChapterId, setEditingChapterId] = useState<number | ''>('');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapterId, setSelectedChapterId] = useState<number | ''>('');
   
-  // RAG upload
+  // RAG upload with metadata
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<string>('Textbook');
+  const [uploadTags, setUploadTags] = useState<string>('');
+  const [selectedChapterIdForUpload, setSelectedChapterIdForUpload] = useState<number | ''>('');
+  
+  // RAG Vector DB Chunk inspector states
+  const [inspectDocName, setInspectDocName] = useState<string | null>(null);
+  const [docChunks, setDocChunks] = useState<any[]>([]);
+  const [docChunksPage, setDocChunksPage] = useState(1);
+  const [totalChunks, setTotalChunks] = useState(0);
+  const [chunksLoading, setChunksLoading] = useState(false);
+  const [inspectActiveTab, setInspectActiveTab] = useState<'chunks' | 'playground'>('chunks');
+  
+  // RAG Similarity query test states
+  const [testQuery, setTestQuery] = useState('');
+  const [testResults, setTestResults] = useState<any[]>([]);
+  const [testLoading, setTestLoading] = useState(false);
   
   // Academic Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,6 +138,7 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [summaries, setSummaries] = useState<Record<string, string>>({});
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
+  const [collapsedSummaries, setCollapsedSummaries] = useState<Record<string, boolean>>({});
   const [showMetricGuide, setShowMetricGuide] = useState(false);
   const [selectedRejected, setSelectedRejected] = useState<Record<string, boolean>>({});
   
@@ -91,7 +149,8 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
   
   // Global messages & loading
   const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<string | React.ReactNode>('');
+  const [newlyIngestedDocs, setNewlyIngestedDocs] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const handleViewDocument = async (fileName: string) => {
@@ -109,6 +168,71 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     }
   };
 
+  const handleDownloadDocumentText = async (fileName: string) => {
+    setError('');
+    setMessage('');
+    try {
+      const response = await client.get(`/api/courses/${course.id}/documents/${encodeURIComponent(fileName)}`);
+      const content = response.data.content || '';
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const baseName = fileName.replace(/\.[^/.]+$/, "");
+      link.setAttribute('download', `${baseName}_extracted.txt`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setMessage(`Tải xuống tệp văn bản bóc tách '${fileName}' thành công.`);
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi khi tải xuống tệp văn bản bóc tách.');
+    }
+  };
+
+  const handleSaveMetadata = async (fileName: string) => {
+    setError('');
+    setMessage('');
+    try {
+      await client.put(`/api/courses/${course.id}/documents/${encodeURIComponent(fileName)}/metadata`, {
+        category: editingCategory,
+        tags: editingTags,
+        chapter_id: editingChapterId || 0
+      });
+      setEditingDocName(null);
+      loadDocuments();
+      setMessage(`Đã cập nhật siêu dữ liệu cho tài liệu '${fileName}' thành công.`);
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi khi cập nhật siêu dữ liệu tài liệu.');
+    }
+  };
+
+  const handleStartEditMetadata = (doc: any) => {
+    setEditingDocName(doc.file_name);
+    setEditingCategory(doc.category || 'Textbook');
+    setEditingTags(doc.tags || '');
+    setEditingChapterId(doc.chapter_id || '');
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      setUploadFile(e.dataTransfer.files[0]);
+    }
+  };
+
   // Load documents and chapters on mount or when activeView changes to knowledge_base
   useEffect(() => {
     if (!course) return;
@@ -118,10 +242,23 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     }
   }, [course.id, activeView]);
 
+  // Poll status of processing documents every 3 seconds
+  useEffect(() => {
+    const hasProcessing = documentsDetailed.some(doc => doc.status === 'processing');
+    if (!hasProcessing) return;
+
+    const interval = setInterval(() => {
+      loadDocuments();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [documentsDetailed]);
+
   const loadDocuments = async () => {
     try {
       const docResponse = await client.get(`/api/courses/${course.id}/documents`);
       setDocuments(docResponse.data.documents || []);
+      setDocumentsDetailed(docResponse.data.documents_detailed || []);
     } catch (err) {
       console.error(err);
       setError('Lỗi khi tải danh sách tài liệu RAG.');
@@ -172,12 +309,24 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     formData.append('file', uploadFile);
 
     try {
-      await client.post(`/api/courses/${course.id}/documents`, formData, {
+      let url = `/api/courses/${course.id}/documents?category=${encodeURIComponent(uploadCategory)}`;
+      if (uploadTags.trim()) {
+        url += `&tags=${encodeURIComponent(uploadTags.trim())}`;
+      }
+      if (selectedChapterIdForUpload) {
+        url += `&chapter_id=${selectedChapterIdForUpload}`;
+      }
+      const response = await client.post(url, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      setDocuments([uploadFile.name, ...documents]);
       setUploadFile(null);
-      setMessage('Nạp tài liệu nguồn thành công! Vector DB đã được cập nhật.');
+      setUploadTags('');
+      setSelectedChapterIdForUpload('');
+      if (response.data.file_name) {
+        setNewlyIngestedDocs(prev => [...prev, response.data.file_name]);
+      }
+      setMessage('Nạp tài liệu nguồn thành công! Vector DB đang xử lý tài liệu.');
+      await loadDocuments();
     } catch (err) {
       console.error(err);
       setError('Lỗi khi tải tài liệu lên Vector DB.');
@@ -195,10 +344,50 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     try {
       await client.delete(`/api/courses/${course.id}/documents/${fileName}`);
       setDocuments(documents.filter(d => d !== fileName));
+      setDocumentsDetailed(documentsDetailed.filter(d => d.file_name !== fileName));
       setMessage('Đã xóa tài liệu khỏi Vector DB.');
     } catch (err) {
       console.error(err);
       setError('Lỗi khi xóa tài liệu.');
+    }
+  };
+
+  // Inspect Vector chunks
+  const handleInspectDocument = async (fileName: string, pageNum: number = 1) => {
+    setInspectDocName(fileName);
+    setDocChunksPage(pageNum);
+    setChunksLoading(true);
+    setError('');
+    try {
+      const response = await client.get(`/api/courses/${course.id}/documents/${encodeURIComponent(fileName)}/chunks?page=${pageNum}&page_size=5`);
+      setDocChunks(response.data.chunks || []);
+      setTotalChunks(response.data.total_chunks || 0);
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi khi tải danh sách chunks từ Vector DB.');
+    } finally {
+      setChunksLoading(false);
+    }
+  };
+
+  // Run Semantic similarity search test query
+  const handleSearchTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testQuery.trim()) return;
+    setTestLoading(true);
+    setTestResults([]);
+    setError('');
+    try {
+      const response = await client.post(`/api/courses/${course.id}/documents/search-test`, {
+        query: testQuery.trim(),
+        top_k: 5
+      });
+      setTestResults(response.data.results || []);
+    } catch (err) {
+      console.error(err);
+      setError('Lỗi khi thực hiện thử nghiệm tìm kiếm Vector.');
+    } finally {
+      setTestLoading(false);
     }
   };
 
@@ -212,15 +401,40 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     setSearchResult(null);
     setExpandedSearch({});
     setSummaries({});
+    setCollapsedSummaries({});
 
     try {
       const response = await client.post(`/api/courses/${course.id}/web-search-ingest`, {
         query: searchQuery,
         max_results: maxResults,
-        threshold: credibilityThreshold
+        threshold: credibilityThreshold,
+        chapter_id: selectedChapterId || undefined
       });
       setSearchResult(response.data);
-      setMessage('Đã hoàn thành khảo sát độ uy tín và nạp RAG!');
+      
+      const fileNames = response.data.ingested?.map((x: any) => x.file_name).filter(Boolean) || [];
+      if (fileNames.length > 0) {
+        setNewlyIngestedDocs(prev => [...prev, ...fileNames]);
+      }
+
+      const ingestedCount = response.data.ingested?.length || 0;
+      if (ingestedCount > 0) {
+        setMessage(
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Zap size={14} style={{ color: '#fbbf24' }} /> Đã tự động nạp thành công {ingestedCount} tài liệu học thuật vào RAG (đã được tự động phân tách văn bản & vector hóa).</span>
+            <button 
+              type="button" 
+              onClick={() => setActiveTab('documents')} 
+              className="rag-success-alert-btn"
+            >
+              Xem trong Thư viện RAG
+            </button>
+          </div>
+        );
+      } else {
+        setMessage('Đã hoàn thành khảo sát độ uy tín. Không có tài liệu nào đủ ngưỡng độ tin cậy để nạp tự động.');
+      }
+      
       loadDocuments(); // Reload documents list to reflect changes
     } catch (err) {
       console.error(err);
@@ -238,6 +452,14 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     }));
   };
 
+  // Toggle collapse state for summary
+  const toggleSummaryCollapse = (key: string) => {
+    setCollapsedSummaries(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
   // Summarize content
   const handleSummarizeContent = async (key: string, title: string, content: string) => {
     if (summaries[key]) return;
@@ -250,6 +472,10 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
       setSummaries(prev => ({
         ...prev,
         [key]: response.data.summary
+      }));
+      setCollapsedSummaries(prev => ({
+        ...prev,
+        [key]: false
       }));
     } catch (err) {
       console.error(err);
@@ -275,18 +501,23 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
     let successCount = 0;
     const ingestedList = [...(searchResult.ingested || [])];
     let rejectedList = [...(searchResult.rejected || [])];
-    const targetChapter = chapters.find(c => c.id === selectedChapterId);
+    const newlyIngested: string[] = [];
 
     try {
       for (const url of selectedUrls) {
         const item = rejectedList.find(r => r.url === url);
         if (!item) continue;
         
-        await client.post(`/api/courses/${course.id}/force-ingest-url`, {
+        const response = await client.post(`/api/courses/${course.id}/force-ingest-url`, {
           url: item.url,
           title: item.title,
-          content: item.content
+          content: item.content,
+          chapter_id: selectedChapterId || undefined
         });
+        
+        if (response.data.file_name) {
+          newlyIngested.push(response.data.file_name);
+        }
         
         successCount++;
         // Add to ingested with a forced flag
@@ -304,9 +535,25 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
         rejected: rejectedList
       });
       
+      if (newlyIngested.length > 0) {
+        setNewlyIngestedDocs(prev => [...prev, ...newlyIngested]);
+      }
+      
       loadDocuments();
       setSelectedRejected({});
-      setMessage(`⚡ Đã ép nạp thành công ${successCount} tài liệu vào RAG! Các tài liệu này đã được gán làm nguồn tham khảo trực tiếp cho chương học đang chọn: "${targetChapter ? targetChapter.title : 'Chương học tương ứng'}".`);
+      
+      setMessage(
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Zap size={14} style={{ color: '#fbbf24' }} /> Đã ép nạp thành công {successCount} tài liệu vào RAG (đã được tự động phân tách văn bản & vector hóa).</span>
+          <button 
+            type="button" 
+            onClick={() => setActiveTab('documents')} 
+            className="rag-success-alert-btn"
+          >
+            Xem trong Thư viện RAG
+          </button>
+        </div>
+      );
     } catch (err) {
       console.error(err);
       setError('Lỗi khi nạp thủ công tài liệu vào RAG.');
@@ -412,12 +659,87 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                 <h3 className="rag-section-title">Nạp tài liệu mới vào Vector DB</h3>
                 <p className="rag-section-desc">Hệ thống RAG sẽ bóc tách văn bản trong file và băm vector để cung cấp kiến thức thực tế cho AI lúc soạn giáo án.</p>
                 <form onSubmit={handleUploadDocument} className="rag-upload-form">
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.txt"
-                    onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
-                    className="rag-file-input"
-                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Chọn hoặc Kéo thả tệp:</label>
+                    <div 
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => document.getElementById('drag-file-input')?.click()}
+                      style={{
+                        border: isDragOver ? '2px dashed var(--vinuni-gold)' : '2px dashed var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '24px 16px',
+                        background: isDragOver ? 'rgba(217, 119, 6, 0.05)' : 'var(--bg-secondary)',
+                        color: 'var(--text-secondary)',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px'
+                      }}
+                    >
+                      <Upload size={24} style={{ color: isDragOver ? 'var(--vinuni-gold)' : 'var(--text-muted)' }} />
+                      {uploadFile ? (
+                        <span style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: '13.5px' }}>
+                          {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '13px' }}>Kéo thả file PDF, DOCX, TXT vào đây hoặc nhấp để chọn</span>
+                      )}
+                      <input
+                        id="drag-file-input"
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
+                        style={{ display: 'none' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Phân loại tài liệu:</label>
+                    <select
+                      value={uploadCategory}
+                      onChange={(e) => setUploadCategory(e.target.value)}
+                      className="search-select"
+                    >
+                      <option value="Textbook">Giáo trình / Sách giáo khoa (Textbook)</option>
+                      <option value="Slides">Bài giảng Slide (Slides)</option>
+                      <option value="Syllabus">Đề cương chi tiết (Syllabus)</option>
+                      <option value="Exam">Đề thi / Câu hỏi (Exam)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Nhãn (Tags - Phân tách bằng dấu phẩy):</label>
+                    <input
+                      type="text"
+                      placeholder="Ví dụ: dsa, avl tree, midterm..."
+                      value={uploadTags}
+                      onChange={(e) => setUploadTags(e.target.value)}
+                      className="search-input"
+                      style={{ minHeight: '42px', padding: '10px 14px', fontSize: '14px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Liên kết Chương học (Tùy chọn):</label>
+                    <select
+                      value={selectedChapterIdForUpload}
+                      onChange={(e) => setSelectedChapterIdForUpload(e.target.value ? Number(e.target.value) : '')}
+                      className="search-select"
+                    >
+                      <option value="">Không liên kết</option>
+                      {chapters.map(ch => (
+                        <option key={ch.id} value={ch.id}>{ch.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <button type="submit" disabled={!uploadFile || loading} className="rag-upload-btn">
                     {loading ? 'Đang nạp Vector…' : (
                       <>
@@ -430,38 +752,218 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
 
               {/* CỘT PHẢI: Documents list */}
               <div className="rag-list-panel">
-                <h3 className="rag-section-title">Danh mục tài liệu RAG đã nạp ({documents.length})</h3>
-                {documents.length === 0 ? (
+                <h3 className="rag-section-title">Danh mục tài liệu RAG đã nạp ({documentsDetailed.length})</h3>
+                {documentsDetailed.length === 0 ? (
                   <div className="rag-empty-state">Chưa nạp tài liệu tham khảo nào cho môn học này.</div>
                 ) : (
-                  <div className="rag-doc-grid">
-                    {documents.map((doc, idx) => (
-                      <div key={idx} className="rag-doc-card">
-                        <span className="rag-doc-name" title={doc}>
-                          <FileText size={14} className="rag-doc-icon" /> {doc}
-                        </span>
-                        <div className="rag-doc-actions">
-                          <button 
-                            type="button"
-                            onClick={() => handleViewDocument(doc)} 
-                            className="rag-action-btn-circle rag-action-btn-view"
-                            title="Xem nội dung tài liệu"
-                            aria-label="Xem nội dung tài liệu"
-                          >
-                            <Eye size={14} aria-hidden="true" />
-                          </button>
-                          <button 
-                            type="button"
-                            onClick={() => handleDeleteDocument(doc)} 
-                            className="rag-action-btn-circle rag-action-btn-delete"
-                            title="Xóa tài liệu"
-                            aria-label="Xóa tài liệu"
-                          >
-                            <Trash2 size={14} aria-hidden="true" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="rag-table-wrapper">
+                    <table className="rag-doc-table">
+                      <thead>
+                        <tr>
+                          <th>Tên tài liệu</th>
+                          <th>Phân loại & Nhãn</th>
+                          <th>Trạng thái</th>
+                          <th style={{ textAlign: 'right' }}>Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {documentsDetailed.map((doc, idx) => {
+                          const isEditing = editingDocName === doc.file_name;
+                          if (isEditing) {
+                            return (
+                              <tr key={idx} className="rag-table-row-editing">
+                                <td colSpan={4}>
+                                  <div className="rag-inline-edit-container">
+                                    <div className="rag-edit-title">
+                                      <Edit2 size={14} className="rag-doc-icon" /> Đang sửa: <strong>{doc.file_name}</strong>
+                                    </div>
+                                    <form 
+                                      onSubmit={(e) => { 
+                                        e.preventDefault(); 
+                                        handleSaveMetadata(doc.file_name); 
+                                      }} 
+                                      className="rag-inline-edit-form"
+                                    >
+                                      <div className="rag-inline-edit-fields">
+                                        <div className="rag-inline-edit-field">
+                                          <label>Phân loại:</label>
+                                          <select
+                                            value={editingCategory}
+                                            onChange={(e) => setEditingCategory(e.target.value)}
+                                            className="rag-inline-edit-input"
+                                          >
+                                            <option value="Textbook">Giáo trình</option>
+                                            <option value="Slides">Bài giảng Slide</option>
+                                            <option value="Syllabus">Đề cương chi tiết</option>
+                                            <option value="Exam">Đề thi / Câu hỏi</option>
+                                          </select>
+                                        </div>
+                                        <div className="rag-inline-edit-field">
+                                          <label>Nhãn (Tags):</label>
+                                          <input
+                                            type="text"
+                                            value={editingTags}
+                                            onChange={(e) => setEditingTags(e.target.value)}
+                                            placeholder="Ví dụ: dsa, tree..."
+                                            className="rag-inline-edit-input"
+                                          />
+                                        </div>
+                                        <div className="rag-inline-edit-field">
+                                          <label>Chương liên kết:</label>
+                                          <select
+                                            value={editingChapterId}
+                                            onChange={(e) => setEditingChapterId(e.target.value ? Number(e.target.value) : '')}
+                                            className="rag-inline-edit-input"
+                                          >
+                                            <option value="">Không liên kết</option>
+                                            {chapters.map(ch => (
+                                              <option key={ch.id} value={ch.id}>{ch.title}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                      </div>
+                                      <div className="rag-inline-edit-actions">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingDocName(null)}
+                                          className="doc-viewer-btn"
+                                          style={{ minHeight: '32px', padding: '4px 12px', fontSize: '12.5px' }}
+                                        >
+                                          Hủy
+                                        </button>
+                                        <button
+                                          type="submit"
+                                          className="doc-viewer-btn"
+                                          style={{ 
+                                            minHeight: '32px', 
+                                            padding: '4px 12px', 
+                                            fontSize: '12.5px', 
+                                            background: 'var(--vinuni-navy)', 
+                                            color: '#fff', 
+                                            borderColor: 'var(--vinuni-navy)' 
+                                          }}
+                                        >
+                                          Lưu
+                                        </button>
+                                      </div>
+                                    </form>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          return (
+                            <tr key={idx} className={`rag-table-row ${newlyIngestedDocs.includes(doc.file_name) ? 'rag-table-row-new' : ''}`}>
+                              <td className="rag-table-cell-name" title={doc.file_name}>
+                                <div className="rag-doc-name-wrapper">
+                                  <FileText size={14} className="rag-doc-icon" />
+                                  <span className="rag-doc-name-text">{doc.file_name}</span>
+                                  {newlyIngestedDocs.includes(doc.file_name) && (
+                                    <span className="rag-new-badge">Mới</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="rag-table-cell-meta">
+                                {doc.status === 'ready' && (
+                                  <div className="rag-doc-meta-container" style={{ marginTop: 0 }}>
+                                    <span className="rag-doc-meta-badge">
+                                      {doc.category || 'Giáo trình'}
+                                    </span>
+                                    {doc.tags && doc.tags.split(',').map((tag: string, tIdx: number) => (
+                                      <span key={tIdx} className="rag-doc-meta-badge" style={{ fontSize: '10px' }}>
+                                        #{tag.trim()}
+                                      </span>
+                                    ))}
+                                    {doc.chapter_id && (
+                                      <span className="rag-doc-meta-badge" style={{ fontSize: '10px', color: 'var(--vinuni-gold)' }}>
+                                        Chương: {chapters.find(ch => ch.id === doc.chapter_id)?.title || doc.chapter_id}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="rag-table-cell-status">
+                                {doc.status === 'processing' && (
+                                  <span className="rag-doc-status-badge rag-doc-status-processing">
+                                    <Loader2 size={12} className="animate-spin" /> Đang xử lý...
+                                  </span>
+                                )}
+                                {doc.status === 'failed' && (
+                                  <span 
+                                    className="rag-doc-status-badge rag-doc-status-failed" 
+                                    title={doc.error_message || "Lỗi không xác định khi nạp dữ liệu"}
+                                  >
+                                    <AlertTriangle size={12} /> Thất bại
+                                  </span>
+                                )}
+                                {doc.status === 'ready' && (
+                                  <span className="rag-doc-status-badge rag-doc-status-ready">
+                                    <Check size={12} /> Sẵn sàng
+                                  </span>
+                                )}
+                              </td>
+                              <td className="rag-table-cell-actions">
+                                <div className="rag-doc-actions" style={{ justifyContent: 'flex-end' }}>
+                                  {doc.status === 'ready' && (
+                                    <>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleViewDocument(doc.file_name)} 
+                                        className="rag-action-btn-circle rag-action-btn-view"
+                                        title="Xem nội dung tài liệu"
+                                        aria-label="Xem nội dung tài liệu"
+                                      >
+                                        <Eye size={14} aria-hidden="true" />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleDownloadDocumentText(doc.file_name)} 
+                                        className="rag-action-btn-circle rag-action-btn-download"
+                                        title="Tải xuống file text bóc tách"
+                                        aria-label="Tải xuống file text bóc tách"
+                                      >
+                                        <Download size={14} aria-hidden="true" />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleStartEditMetadata(doc)} 
+                                        className="rag-action-btn-circle rag-action-btn-edit"
+                                        style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#6366f1', borderColor: 'rgba(99, 102, 241, 0.3)' }}
+                                        title="Chỉnh sửa Phân loại & Nhãn"
+                                        aria-label="Chỉnh sửa Phân loại & Nhãn"
+                                      >
+                                        <Edit2 size={14} aria-hidden="true" />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleInspectDocument(doc.file_name, 1)} 
+                                        className="rag-action-btn-circle rag-action-btn-inspect"
+                                        title="Kiểm tra Vector Chunks"
+                                        aria-label="Kiểm tra Vector Chunks"
+                                      >
+                                        <Settings size={14} aria-hidden="true" />
+                                      </button>
+                                    </>
+                                  )}
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleDeleteDocument(doc.file_name)} 
+                                    className="rag-action-btn-circle rag-action-btn-delete"
+                                    title="Xóa tài liệu"
+                                    aria-label="Xóa tài liệu"
+                                    disabled={doc.status === 'processing'}
+                                    style={{ opacity: doc.status === 'processing' ? 0.4 : 1 }}
+                                  >
+                                    <Trash2 size={14} aria-hidden="true" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -630,7 +1132,9 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                             <span className="credibility-score-badge credibility-score-badge-green">{(src.score * 100).toFixed(0)}% Uy tín</span>
                             <span className={`credibility-recommend-badge credibility-recommend-badge--${rec.level}`}>{rec.label}</span>
                             {src.isForced && (
-                              <span className="credibility-recommend-badge credibility-recommend-badge--forced">⚡ Đã ép nạp vào RAG</span>
+                              <span className="credibility-recommend-badge credibility-recommend-badge--forced" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                <Zap size={10} /> Đã ép nạp vào RAG
+                              </span>
                             )}
                           </div>
                           <strong className="credibility-title">{src.title}</strong>
@@ -663,11 +1167,25 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                             {src.content && (
                               <button
                                 type="button"
-                                onClick={() => handleSummarizeContent(key, src.title, src.content)}
-                                disabled={isSummarizing || !!summary}
+                                onClick={
+                                  summary
+                                    ? () => toggleSummaryCollapse(key)
+                                    : () => handleSummarizeContent(key, src.title, src.content)
+                                }
+                                disabled={isSummarizing}
                                 className="credibility-btn-outline"
                               >
-                                {isSummarizing ? <><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Đang tóm tắt…</> : <><Sparkles size={12} aria-hidden="true" /> {summary ? 'Đã tóm tắt' : 'Tóm tắt (AI)'}</>}
+                                {isSummarizing ? (
+                                  <><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Đang tóm tắt…</>
+                                ) : summary ? (
+                                  collapsedSummaries[key] ? (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ChevronDown size={12} /> Xem tóm tắt</span>
+                                  ) : (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ChevronUp size={12} /> Thu gọn tóm tắt</span>
+                                  )
+                                ) : (
+                                  <><Sparkles size={12} aria-hidden="true" /> Tóm tắt (AI)</>
+                                )}
                               </button>
                             )}
                           </div>
@@ -676,8 +1194,8 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                             <pre className="scraped-content-box">{src.content}</pre>
                           )}
 
-                          {summary && (
-                            <div className="ai-summary-box">
+                          {summary && !collapsedSummaries[key] && (
+                            <div className="ai-summary-box animate-fade-in">
                               <div className="ai-summary-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Sparkles size={14} /> Phân tích học thuật chuyên sâu (AI):</div>
                               <div>{summary}</div>
                             </div>
@@ -696,8 +1214,9 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                               type="button"
                               onClick={handleForceIngest}
                               className="force-ingest-btn"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                             >
-                              ⚡ Force Nạp ({Object.values(selectedRejected).filter(Boolean).length})
+                              <Zap size={12} /> Nạp lại tài liệu ({Object.values(selectedRejected).filter(Boolean).length})
                             </button>
                           )}
                         </div>
@@ -753,11 +1272,25 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                                     {src.content && (
                                       <button
                                         type="button"
-                                        onClick={() => handleSummarizeContent(key, src.title, src.content)}
-                                        disabled={isSummarizing || !!summary}
+                                        onClick={
+                                          summary
+                                            ? () => toggleSummaryCollapse(key)
+                                            : () => handleSummarizeContent(key, src.title, src.content)
+                                        }
+                                        disabled={isSummarizing}
                                         className="credibility-btn-outline"
                                       >
-                                        {isSummarizing ? <><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Đang tóm tắt…</> : <><Sparkles size={12} aria-hidden="true" /> {summary ? 'Đã tóm tắt' : 'Tóm tắt (AI)'}</>}
+                                        {isSummarizing ? (
+                                          <><Loader2 size={12} className="animate-spin" aria-hidden="true" /> Đang tóm tắt…</>
+                                        ) : summary ? (
+                                          collapsedSummaries[key] ? (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ChevronDown size={12} /> Xem tóm tắt</span>
+                                          ) : (
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><ChevronUp size={12} /> Thu gọn tóm tắt</span>
+                                          )
+                                        ) : (
+                                          <><Sparkles size={12} aria-hidden="true" /> Tóm tắt (AI)</>
+                                        )}
                                       </button>
                                     )}
                                   </div>
@@ -766,8 +1299,8 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                                     <pre className="scraped-content-box">{src.content}</pre>
                                   )}
 
-                                  {summary && (
-                                    <div className="ai-summary-box">
+                                  {summary && !collapsedSummaries[key] && (
+                                    <div className="ai-summary-box animate-fade-in">
                                       <div className="ai-summary-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Sparkles size={14} /> Phân tích học thuật chuyên sâu (AI):</div>
                                       <div>{summary}</div>
                                     </div>
@@ -798,7 +1331,8 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
             <div className="doc-viewer-header">
               <div>
                 <h4 className="doc-viewer-title">
-                  📄 Đang xem: {viewingDocName}
+                  <FileText size={18} className="doc-viewer-title-icon" />
+                  <span className="doc-viewer-title-text">Đang xem: {viewingDocName}</span>
                 </h4>
                 <span className="doc-viewer-subtitle">Dữ liệu bóc tách được lưu trữ trong RAG Vector DB</span>
               </div>
@@ -821,10 +1355,169 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
                 viewingDocContent
               )}
             </div>
-            <div className="doc-viewer-footer">
+            <div className="doc-viewer-footer" style={{ gap: '12px' }}>
+              <button 
+                type="button"
+                onClick={() => handleDownloadDocumentText(viewingDocName!)}
+                className="doc-viewer-btn"
+                style={{ background: 'var(--success-bg)', color: 'var(--success-color)', borderColor: 'var(--success-color)' }}
+              >
+                Tải xuống file Text
+              </button>
               <button 
                 type="button"
                 onClick={() => setViewingDocName(null)}
+                className="doc-viewer-btn"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL VECTOR DB INSPECTOR */}
+      {inspectDocName && (
+        <div className="doc-viewer-overlay">
+          <div className="doc-viewer-modal" style={{ maxWidth: '900px', height: '85%' }}>
+            <div className="doc-viewer-header">
+              <div>
+                <h4 className="doc-viewer-title">
+                  <Library size={18} className="doc-viewer-title-icon" />
+                  <span className="doc-viewer-title-text">Quản lý Vector DB: {inspectDocName}</span>
+                </h4>
+                <span className="doc-viewer-subtitle">Kiểm tra trực quan các vector chunks và kiểm nghiệm RAG</span>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setInspectDocName(null)} 
+                className="doc-viewer-close-btn" 
+                aria-label="Đóng"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            
+            <div className="doc-viewer-body" style={{ display: 'flex', flexDirection: 'column', padding: '20px', gap: '16px' }}>
+              <div className="chunks-tab-headers">
+                <button
+                  type="button"
+                  onClick={() => setInspectActiveTab('chunks')}
+                  className={`chunks-tab-btn ${inspectActiveTab === 'chunks' ? 'chunks-tab-btn-active' : ''}`}
+                >
+                  Chunks của tài liệu
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInspectActiveTab('playground')}
+                  className={`chunks-tab-btn ${inspectActiveTab === 'playground' ? 'chunks-tab-btn-active' : ''}`}
+                >
+                  Thử nghiệm truy vấn (Playground)
+                </button>
+              </div>
+
+              {inspectActiveTab === 'chunks' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                  {chunksLoading ? (
+                    <div className="doc-viewer-loading">
+                      <Loader2 className="animate-spin doc-viewer-loader-icon" size={24} aria-hidden="true" />
+                      <span>Đang tải các vector chunks…</span>
+                    </div>
+                  ) : docChunks.length === 0 ? (
+                    <div className="rag-empty-state">Tài liệu không có vector chunks nào.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                      <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px' }}>
+                        {docChunks.map((chunk, idx) => (
+                          <div key={chunk.id || idx} className="chunk-card">
+                            <div className="chunk-header">
+                              <span style={{ fontWeight: 'bold' }}>Chunk #{((docChunksPage - 1) * 5) + idx + 1}</span>
+                              <span>Trang: {chunk.page_number}</span>
+                            </div>
+                            <div className="chunk-meta-badges">
+                              <span className="chunk-badge">Phân loại: {chunk.category || 'Chưa rõ'}</span>
+                              {chunk.tags && (
+                                <span className="chunk-badge">Tags: {chunk.tags}</span>
+                              )}
+                              {chunk.chapter_id && (
+                                <span className="chunk-badge">Chương ID: {chunk.chapter_id}</span>
+                              )}
+                            </div>
+                            <pre className="chunk-text">{chunk.text}</pre>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="chunks-pagination">
+                        <button 
+                          type="button"
+                          disabled={docChunksPage <= 1 || chunksLoading} 
+                          onClick={() => handleInspectDocument(inspectDocName, docChunksPage - 1)}
+                          className="rag-action-btn-circle"
+                          style={{ minHeight: '36px', minWidth: '36px' }}
+                        >
+                          <ChevronLeft size={16} />
+                        </button>
+                        <span className="pagination-text">Trang {docChunksPage} / {Math.ceil(totalChunks / 5) || 1} ({totalChunks} chunks)</span>
+                        <button 
+                          type="button"
+                          disabled={docChunksPage >= Math.ceil(totalChunks / 5) || chunksLoading} 
+                          onClick={() => handleInspectDocument(inspectDocName, docChunksPage + 1)}
+                          className="rag-action-btn-circle"
+                          style={{ minHeight: '36px', minWidth: '36px' }}
+                        >
+                          <ChevronRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                  <form onSubmit={handleSearchTest} className="search-test-form">
+                    <input
+                      type="text"
+                      placeholder="Nhập câu truy vấn ngữ nghĩa để thử nghiệm tìm kiếm (ví dụ: AVL tree complexity)..."
+                      value={testQuery}
+                      onChange={(e) => setTestQuery(e.target.value)}
+                      className="search-input"
+                      style={{ flex: 1, minHeight: '42px', padding: '10px 14px' }}
+                      required
+                    />
+                    <button type="submit" disabled={testLoading} className="search-submit-btn" style={{ flex: 'none', width: '120px', minHeight: '42px' }}>
+                      {testLoading ? 'Đang truy vấn…' : 'Tìm thử'}
+                    </button>
+                  </form>
+
+                  {testLoading ? (
+                    <div className="doc-viewer-loading">
+                      <Loader2 className="animate-spin doc-viewer-loader-icon" size={24} aria-hidden="true" />
+                      <span>Đang thực hiện tìm kiếm tương đồng trên Vector DB…</span>
+                    </div>
+                  ) : testResults.length === 0 ? (
+                    <div className="rag-empty-state">Nhập câu hỏi và nhấn 'Tìm thử' để xem các đoạn ngữ nghĩa tương đồng nhất.</div>
+                  ) : (
+                    <div className="search-test-results">
+                      <div className="search-results-header">Các kết quả tương đồng nhất trong môn học:</div>
+                      {testResults.map((hit, idx) => (
+                        <div key={idx} className="search-test-hit">
+                          <div className="search-test-header">
+                            <span className="search-test-score">Score: {(hit.score * 100).toFixed(0)}%</span>
+                            <span style={{ color: 'var(--text-muted)' }}>Nguồn: {hit.file_name} - Trang: {hit.page_number}</span>
+                          </div>
+                          <pre className="chunk-text" style={{ maxHeight: '100px', whiteSpace: 'pre-wrap' }}>{highlightText(hit.text, testQuery)}</pre>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="doc-viewer-footer">
+              <button 
+                type="button"
+                onClick={() => setInspectDocName(null)}
                 className="doc-viewer-btn"
               >
                 Đóng

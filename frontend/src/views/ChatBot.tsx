@@ -92,7 +92,7 @@ interface EvalHistoryItem {
   run_at: string;
 }
 
-const renderMarkdown = (text: string) => {
+const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageNum: string) => void) => {
   if (!text) return null;
   
   const parts = text.split(/(```[\s\S]*?```)/g);
@@ -174,6 +174,47 @@ const renderMarkdown = (text: string) => {
               fontFamily: 'Consolas, monospace',
               fontSize: '12px'
             }}>{m.slice(1, -1)}</code>;
+          }
+          return m;
+        });
+      });
+
+      segments = segments.flatMap(seg => {
+        if (typeof seg !== 'string') return seg;
+        // Match [Nguồn: document.pdf - Trang: 5] or [Ref: document.pdf - Page: 5]
+        const matches = seg.split(/(\[(?:Nguồn|Ref):\s*[^\]]+?\s*-\s*(?:Trang|Page):\s*[^\]]+?\])/gi);
+        return matches.map((m, idx) => {
+          if (/^\[(?:Nguồn|Ref):\s*[^\]]+?\s*-\s*(?:Trang|Page):\s*[^\]]+?\]$/i.test(m)) {
+            const cleaned = m.slice(1, -1);
+            const parts = cleaned.split(/-\s*(?:Trang|Page):\s*/i);
+            const fileName = parts[0]?.replace(/^(Nguồn|Ref):\s*/i, '').trim();
+            const pageNum = parts[1]?.trim() || '';
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onCitationClick && onCitationClick(fileName, pageNum)}
+                title={`Xem đoạn trích gốc từ ${fileName} - Trang ${pageNum}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'rgba(212, 163, 89, 0.15)',
+                  border: '1px solid rgba(212, 163, 89, 0.3)',
+                  color: '#fcd34d',
+                  borderRadius: '4px',
+                  padding: '2px 6px',
+                  fontSize: '11px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  margin: '0 4px',
+                  verticalAlign: 'middle',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FileText size={12} /> {fileName} (Trang {pageNum})
+              </button>
+            );
           }
           return m;
         });
@@ -287,6 +328,44 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
   }, []);
 
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [selectedCitation, setSelectedCitation] = useState<{
+    fileName: string;
+    pageNumber: string;
+    text: string;
+  } | null>(null);
+
+  const handleCitationClick = (fileName: string, pageNum: string) => {
+    let matchedText = '';
+    
+    // Tìm kiếm trong lịch sử các tin nhắn của phiên trò chuyện hiện tại
+    for (const msg of messages) {
+      if (msg.tool_results) {
+        const results = parseToolResults(msg.tool_results);
+        const searchHit = results.find((item: any) => {
+          if (item.tool === 'search_course_knowledge') {
+            const hits = item.result.results || [];
+            return hits.some((h: any) => {
+              const fileMatch = h.file_name?.toLowerCase().includes(fileName.toLowerCase()) || fileName.toLowerCase().includes(h.file_name?.toLowerCase());
+              const pageMatch = String(h.page_number) === String(pageNum);
+              if (fileMatch && pageMatch) {
+                matchedText = h.text;
+                return true;
+              }
+              return false;
+            });
+          }
+          return false;
+        });
+        if (searchHit) break;
+      }
+    }
+    
+    setSelectedCitation({
+      fileName,
+      pageNumber: pageNum,
+      text: matchedText || "Không tìm thấy nội dung đoạn trích trong lịch sử cuộc gọi RAG của phiên trò chuyện này."
+    });
+  };
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -856,7 +935,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                             </div>
                           ) : (
                             <>
-                              <div className="chatbot-message-content">{renderMarkdown(m.content)}</div>
+                              <div className="chatbot-message-content">{renderMarkdown(m.content, handleCitationClick)}</div>
                               <div className="chatbot-message-bubble-footer">
                                 {isUser && !loading && (
                                   <button 
@@ -1253,6 +1332,51 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
           </div>
         </div>
       )}
+      {selectedCitation && (
+        <div className="chatbot-modal-overlay" style={{ zIndex: 1000 }}>
+          <div className="chatbot-modal-content" style={{ maxWidth: '600px', width: '90%' }}>
+            <h3 className="chatbot-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <BookOpen size={18} style={{ color: 'var(--vinuni-gold)' }} />
+              Xác minh nguồn trích dẫn RAG
+            </h3>
+            <div className="chatbot-modal-body" style={{ textAlign: 'left', margin: '15px 0' }}>
+              <div style={{ marginBottom: '12px', fontSize: '13.5px' }}>
+                <strong>Tài liệu:</strong> <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>{selectedCitation.fileName}</code> 
+                {selectedCitation.pageNumber && (
+                  <span style={{ marginLeft: '12px' }}>
+                    <strong>Trang:</strong> <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{selectedCitation.pageNumber}</code>
+                  </span>
+                )}
+              </div>
+              <div style={{ 
+                background: 'rgba(15, 23, 42, 0.4)', 
+                border: '1px solid var(--border-color)', 
+                borderRadius: '8px', 
+                padding: '16px', 
+                maxHeight: '300px', 
+                overflowY: 'auto',
+                fontStyle: 'italic',
+                lineHeight: '1.6',
+                color: '#cbd5e1',
+                fontSize: '13px',
+                whiteSpace: 'pre-wrap'
+              }}>
+                "{selectedCitation.text}"
+              </div>
+            </div>
+            <div className="chatbot-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button 
+                type="button" 
+                onClick={() => setSelectedCitation(null)} 
+                className="chatbot-edit-cancel-btn"
+                style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1461,7 +1585,7 @@ function MaterialsWidget({ data }: { data: any }) {
       </div>
       <div className="chatbot-widget-stats-row">
         <div>Số slide đã sinh: <strong className="chatbot-widget-stats-val-blue">{slideCount} slides</strong></div>
-        <div>Cảnh báo kiểm toán: <strong className={warnings.length > 0 ? 'chatbot-widget-stats-val-rose' : 'chatbot-widget-stats-val-green'}>{warnings.length}</strong></div>
+        <div>Cảnh báo sư phạm: <strong className={warnings.length > 0 ? 'chatbot-widget-stats-val-rose' : 'chatbot-widget-stats-val-green'}>{warnings.length}</strong></div>
       </div>
       
       {slideTitles.length > 0 && (
@@ -1492,7 +1616,7 @@ function MaterialsWidget({ data }: { data: any }) {
             onClick={() => setShowWarnings(!showWarnings)} 
             className="chatbot-widget-collapse-btn-rose"
           >
-            {showWarnings ? <><ChevronDown size={14} /> Ẩn cảnh báo kiểm toán</> : <><ChevronRight size={14} /> Xem cảnh báo kiểm toán</>}
+            {showWarnings ? <><ChevronDown size={14} /> Ẩn cảnh báo sư phạm</> : <><ChevronRight size={14} /> Xem cảnh báo sư phạm</>}
           </button>
           {showWarnings && (
             <div className="chatbot-widget-warning-box">

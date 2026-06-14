@@ -7,7 +7,7 @@ import FlowSteps from '../components/FlowSteps';
 import QuestionConfigForm from '../components/QuestionConfigForm';
 import QuestionEditorForm from '../components/QuestionEditorForm';
 import QuestionCard from '../components/QuestionCard';
-import { ArrowLeft, BookOpen, BarChart2, Download, Plus } from 'lucide-react';
+import { ArrowLeft, BookOpen, BarChart2, Download, Plus, Sparkles, Map, Target } from 'lucide-react';
 import { Course, CLO, Chapter, Question } from '@/types';
 import '../styles/QuestionBank.css';
 
@@ -471,16 +471,16 @@ export default function QuestionBank({
 
       {initialCloId && initialBloomLevel && (
         <div className="qb-remedy-alert">
-          <div>
-            🎯 <strong>Đang khắc phục điểm mù chất lượng:</strong> AI Generator và Bộ lọc đã được tự động điều chỉnh chọn chuẩn đầu ra và mức Bloom tương ứng. Nhấn <strong>"Bắt đầu tạo câu hỏi"</strong> ở bảng bên trái hoặc thêm thủ công để bù đắp.
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Target size={16} /> <strong>Bổ sung chuẩn đầu ra còn thiếu:</strong> Công cụ tạo câu hỏi và bộ lọc đã được tự động điều chỉnh chọn chuẩn đầu ra và mức Bloom tương ứng. Nhấn <strong>"Bắt đầu tạo câu hỏi"</strong> ở bảng bên trái hoặc thêm thủ công để bù đắp.
           </div>
         </div>
       )}
 
       {questions.length > 0 && (
         <div className="qb-whats-next-banner animate-fade-in">
-          <div className="qb-whats-next-content">
-            <span className="whats-next-sparkle">✨</span>
+          <div className="qb-whats-next-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="whats-next-sparkle" style={{ display: 'inline-flex', alignItems: 'center' }}><Sparkles size={16} /></span>
             <div style={{ textAlign: 'left' }}>
               <strong>Ngân hàng đề thi hiện có {questions.length} câu hỏi!</strong> Bạn có thể xuất bản toàn bộ đề thi, xem ma trận bao phủ hoặc quay về bảng tiến độ:
             </div>
@@ -490,22 +490,25 @@ export default function QuestionBank({
               onClick={handleExportExam} 
               className="whats-next-action-btn questions"
               title="Tải toàn bộ bộ câu hỏi trắc nghiệm dưới dạng tệp Markdown (.md)"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
             >
-              📥 Tải Đề thi (.md)
+              <Download size={14} /> Tải Đề thi (.md)
             </button>
             <button 
               onClick={onViewDashboard} 
               className="whats-next-action-btn matrix"
               title="Xem ma trận phân loại phân bố mức Bloom và CLO"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
             >
-              📊 Xem Ma trận Bloom-CLO
+              <BarChart2 size={14} /> Xem Ma trận Bloom-CLO
             </button>
             <button 
               onClick={() => onNavigate('course_roadmap')}
               className="whats-next-action-btn roadmap"
               title="Quay lại sơ đồ tổng thể và trung tâm tải học liệu"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
             >
-              🗺️ Quay về Sơ đồ Lộ trình
+              <Map size={14} /> Quay về Sơ đồ Lộ trình
             </button>
           </div>
         </div>

@@ -29,6 +29,22 @@ export default function SlideProposalPreview({
   const slides = parseMarkdownToSlidesJS(mdContent);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'slideshow' | 'grid'>('slideshow');
+
+  // Thêm slide ảo đang tải vào cuối danh sách khi AI đang chạy
+  const isGenerating = apiStatus === 'generating';
+  const displaySlides = isGenerating
+    ? [
+        ...slides,
+        {
+          title: "Đang soạn thảo slide tiếp theo...",
+          layout: "standard_list",
+          items: [],
+          citations: [],
+          rawMarkdown: "",
+          isLoadingPlaceholder: true,
+        } as any,
+      ]
+    : slides;
   
   // States for single slide revision
   const [isReviseModalOpen, setIsReviseModalOpen] = useState(false);
@@ -63,31 +79,53 @@ export default function SlideProposalPreview({
   };
   
   useEffect(() => {
-    setCurrentIndex(0);
+    // Không reset về slide 0 khi đang stream
+    if (apiStatus !== 'generating') {
+      setCurrentIndex(0);
+    }
   }, [mdContent]);
   
-  if (apiStatus === 'generating' && slides.length === 0) {
-    return (
-      <div className="planner-loading-indicator">
-        <Loader2 size={16} className="animate-spin" aria-hidden="true" /> Đang thiết kế slide…
-      </div>
-    );
-  }
-  
-  if (slides.length === 0) {
+  if (displaySlides.length === 0) {
     return <div className="planner-empty-state">Không có slide đề xuất.</div>;
   }
   
-  const safeIndex = currentIndex >= slides.length ? 0 : currentIndex;
-  const slide = slides[safeIndex];
+  const safeIndex = currentIndex >= displaySlides.length ? 0 : currentIndex;
+  const slide = displaySlides[safeIndex];
 
   const theme = THEMES[themeName] || THEMES.warm_academic;
 
   const renderSlideContent = (s: Slide, idx: number, isThumbnail = false) => {
+    if ((s as any).isLoadingPlaceholder) {
+      return (
+        <div 
+          className={`slide-frame loading-placeholder ${isThumbnail ? 'thumbnail-view' : 'full-view'} ${!isThumbnail && isFullscreen ? 'fullscreen' : ''}`}
+          style={{
+            borderColor: isThumbnail ? 'rgba(255, 255, 255, 0.08)' : undefined
+          }}
+        >
+          <div className="slide-loading-content">
+            <Loader2 className="animate-spin slide-loading-spinner" size={isThumbnail ? 16 : 28} />
+            <div>
+              <div className="slide-loading-title">
+                Đang soạn thảo slide {idx + 1}...
+              </div>
+              {!isThumbnail && (
+                <div className="slide-loading-desc">
+                  AI đang tra cứu dữ liệu RAG môn học và tối ưu cấu trúc sư phạm.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     const slideLayout = s.layout || 'standard_list';
     const optimizedItems = optimizeSlideItemsJS(s.items);
     const tableItem = optimizedItems.find(item => item.type === 'table');
     const textItems = optimizedItems.filter(item => item.type === 'text');
+    const nonImgItems = textItems.filter(item => !(item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')')));
+    const hasNonBullet = nonImgItems.some(item => item.bullet === false);
     
     let useCardLayout = false;
     if (slideLayout === 'card_grid') {
@@ -118,12 +156,13 @@ export default function SlideProposalPreview({
               <ul className="slide-bullet-list full-view" style={{ color: theme.textColor }}>
                 {textItems.map((item, itemIdx) => {
                   const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                  const hideBullet = isImgOnly || item.bullet === false || textItems.length === 1 || hasNonBullet;
                   return (
                     <li 
                       key={itemIdx} 
                       style={{ 
                         fontSize: textItems.length > 3 ? '1.5cqw' : '1.8cqw',
-                        ...(isImgOnly ? { listStyleType: 'none', marginLeft: '-20px' } : {})
+                        ...(hideBullet ? { listStyleType: 'none', marginLeft: '-2.5cqw' } : {})
                       }}
                     >
                       {renderMarkdownInline(item.rawText || '', theme.titleColor)}
@@ -346,10 +385,11 @@ export default function SlideProposalPreview({
             <ul className={`slide-split-list ${isThumbnail ? 'thumbnail-view' : 'full-view'}`} style={{ color: theme.textColor }}>
               {rightSideItems.slice(0, isThumbnail ? 2 : undefined).map((item, itemIdx) => {
                 const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                const hideBullet = isImgOnly || item.bullet === false || rightSideItems.length === 1 || hasNonBullet;
                 return (
                   <li 
                     key={itemIdx}
-                    style={isImgOnly ? { listStyleType: 'none', marginLeft: '-20px' } : undefined}
+                    style={hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-4px' : '-2cqw' } : undefined}
                   >
                     {isThumbnail ? (item.rawText || '').replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '') : renderMarkdownInline(item.rawText || '', theme.titleColor)}
                   </li>
@@ -380,12 +420,13 @@ export default function SlideProposalPreview({
             <ul style={{ color: theme.textColor }}>
               {leftItems.map((item, itemIdx) => {
                 const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                const hideBullet = isImgOnly || item.bullet === false || leftItems.length === 1 || hasNonBullet;
                 return (
                   <li 
                     key={itemIdx} 
                     style={{
                       ...(!isThumbnail ? { fontSize: colFontSize } : {}),
-                      ...(isImgOnly ? { listStyleType: 'none', marginLeft: '-20px' } : {})
+                      ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-5px' : '-1.5cqw' } : {})
                     }}
                   >
                     {isThumbnail ? (item.rawText || '').replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '') : renderMarkdownInline(item.rawText || '', theme.titleColor)}
@@ -398,12 +439,13 @@ export default function SlideProposalPreview({
             <ul style={{ color: theme.textColor }}>
               {rightItems.map((item, itemIdx) => {
                 const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                const hideBullet = isImgOnly || item.bullet === false || rightItems.length === 1 || hasNonBullet;
                 return (
                   <li 
                     key={itemIdx} 
                     style={{
                       ...(!isThumbnail ? { fontSize: colFontSize } : {}),
-                      ...(isImgOnly ? { listStyleType: 'none', marginLeft: '-20px' } : {})
+                      ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-5px' : '-1.5cqw' } : {})
                     }}
                   >
                     {isThumbnail ? (item.rawText || '').replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '') : renderMarkdownInline(item.rawText || '', theme.titleColor)}
@@ -449,12 +491,13 @@ export default function SlideProposalPreview({
           <ul className={`slide-bullet-list ${isThumbnail ? 'thumbnail-view' : 'full-view'}`} style={{ color: theme.textColor }}>
             {textItems.slice(0, isThumbnail ? 3 : undefined).map((item, itemIdx) => {
               const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+              const hideBullet = isImgOnly || item.bullet === false || textItems.length === 1 || hasNonBullet;
               return (
                 <li 
                   key={itemIdx} 
                   style={{
                     ...(!isThumbnail ? { fontSize: fontSize } : {}),
-                    ...(isImgOnly ? { listStyleType: 'none', marginLeft: '-20px' } : {})
+                    ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-10px' : '-2.5cqw' } : {})
                   }}
                 >
                   {isThumbnail ? (item.rawText || '').replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '') : renderMarkdownInline(item.rawText || '', theme.titleColor)}
@@ -514,7 +557,7 @@ export default function SlideProposalPreview({
   };
 
   return (
-    <div className="slide-proposal-wrapper">
+    <div className={`slide-proposal-wrapper ${viewMode === 'grid' ? 'grid-view' : ''}`}>
       <div className="slide-proposal-toolbar">
         <div className="slide-view-mode-group">
           <button 
@@ -535,7 +578,7 @@ export default function SlideProposalPreview({
 
         {viewMode === 'slideshow' && (
           <div className="slide-toolbar-right">
-            {chapterId && onSaveRevisedSlide && (
+            {chapterId && onSaveRevisedSlide && !(slide as any).isLoadingPlaceholder && (
               <button
                 type="button"
                 onClick={() => {
@@ -553,7 +596,7 @@ export default function SlideProposalPreview({
                 <Sparkles size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Tinh chỉnh Slide bằng AI
               </button>
             )}
-            {onInsertSlide && (
+            {onInsertSlide && !(slide as any).isLoadingPlaceholder && (
               <button
                 type="button"
                 onClick={() => onInsertSlide(slide.rawMarkdown)}
@@ -562,7 +605,7 @@ export default function SlideProposalPreview({
                 <Plus size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Chèn slide này
               </button>
             )}
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>{safeIndex + 1} / {slides.length}</span>
+            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>{safeIndex + 1} / {displaySlides.length}</span>
             <div className="slide-nav-group">
               <button 
                 type="button"
@@ -574,7 +617,7 @@ export default function SlideProposalPreview({
               </button>
               <button 
                 type="button"
-                disabled={safeIndex === slides.length - 1} 
+                disabled={safeIndex === displaySlides.length - 1} 
                 onClick={() => setCurrentIndex(safeIndex + 1)}
                 className="slide-nav-btn"
               >
@@ -591,16 +634,18 @@ export default function SlideProposalPreview({
         </div>
       ) : (
         <div className="slide-grid-container">
-          {slides.map((s, idx) => (
+          {displaySlides.map((s, idx) => (
             <div 
               key={idx} 
               className="slide-thumbnail-wrapper"
               onClick={() => {
+                if ((s as any).isLoadingPlaceholder) return;
                 setCurrentIndex(idx);
                 setViewMode('slideshow');
               }}
+              style={(s as any).isLoadingPlaceholder ? { cursor: 'default' } : undefined}
             >
-              {chapterId && onSaveRevisedSlide && (
+              {chapterId && onSaveRevisedSlide && !(s as any).isLoadingPlaceholder && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -619,7 +664,7 @@ export default function SlideProposalPreview({
                   <Sparkles size={10} aria-hidden="true" />
                 </button>
               )}
-              {onInsertSlide && (
+              {onInsertSlide && !(s as any).isLoadingPlaceholder && (
                 <button
                   type="button"
                   onClick={(e) => {
