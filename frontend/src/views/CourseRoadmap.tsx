@@ -81,6 +81,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
 
   const [viewMode, setViewMode] = useState<'mindmap' | 'checklist'>('checklist');
   const [downloadingChapterId, setDownloadingChapterId] = useState<number | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   // Direct export handlers
   const handleExportPPTX = async (chapterId: number) => {
@@ -134,6 +135,44 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
   const handleExportCourseQuestions = () => {
     const token = localStorage.getItem('token');
     window.open(`http://localhost:8000/api/courses/${course.id}/export-questions?token=${token}`, '_blank');
+  };
+
+  const handleExportZIPPackage = async () => {
+    setDownloadingZip(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `http://localhost:8000/api/courses/${course.id}/export-zip?organization_style=by_chapter&theme=warm_academic`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Lỗi server: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Course_Package_${course.course_code || 'export'}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Không thể tải trọn bộ học liệu ZIP: ${err.message}`);
+    } finally {
+      setDownloadingZip(false);
+    }
   };
 
   // Canvas Refs & Control State
@@ -435,6 +474,9 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                 <span className="checklist-summary-subtitle">Đảm bảo chuẩn sư phạm VinUni</span>
               </div>
               <div className="checklist-bulk-actions">
+                <button onClick={handleExportZIPPackage} disabled={downloadingZip} className="checklist-bulk-btn zip-package" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <Download size={14} /> {downloadingZip ? 'Đang đóng gói...' : 'Tải Trọn bộ Môn học (.zip)'}
+                </button>
                 <button onClick={handleExportCourseLessonPlan} className="checklist-bulk-btn lesson-plan" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                   <BookOpen size={14} /> Tải Giáo án Cả khóa (.md)
                 </button>
