@@ -7,7 +7,7 @@ import { Chapter } from '@/types';
 import { 
   Sparkles, AlertTriangle, Lightbulb, CheckCircle2, 
   Loader2, Download, FileText, History, Save, Trash2, 
-  Maximize2, Minimize2, Check, Palette, Cpu, Minus, Plus 
+  Maximize2, Minimize2, Check, Palette, Cpu, Minus, Plus, Undo2, Redo2 
 } from 'lucide-react';
 
 export interface RevisionType {
@@ -60,6 +60,10 @@ export interface EditorPanelProps {
   setShowRevisionModal?: (show: boolean) => void;
   loadRevisionsExternal?: (chapterId: number) => void;
   isAIGenerating?: boolean;
+  handleUndo?: () => void;
+  handleRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export default function EditorPanel({
@@ -90,7 +94,11 @@ export default function EditorPanel({
   handleResetMaterials,
   setShowRevisionModal,
   loadRevisionsExternal,
-  isAIGenerating = false
+  isAIGenerating = false,
+  handleUndo = () => {},
+  handleRedo = () => {},
+  canUndo = false,
+  canRedo = false
 }: EditorPanelProps) {
   const [revPrompt, setRevPrompt] = useState('');
   const [revisions, setRevisions] = useState<RevisionType[]>([]);
@@ -357,6 +365,24 @@ export default function EditorPanel({
 
         {selectedChapter && (
           <div className="editor-header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Undo / Redo Buttons */}
+            <button 
+              onClick={handleUndo} 
+              disabled={!canUndo}
+              className="editor-header-icon-btn"
+              title="Hoàn tác (Ctrl+Z)"
+            >
+              <Undo2 size={14} aria-hidden="true" />
+            </button>
+            <button 
+              onClick={handleRedo} 
+              disabled={!canRedo}
+              className="editor-header-icon-btn"
+              title="Làm lại (Ctrl+Y)"
+            >
+              <Redo2 size={14} aria-hidden="true" />
+            </button>
+
             {loadRevisionsExternal && setShowRevisionModal && (
               <button 
                 onClick={() => {

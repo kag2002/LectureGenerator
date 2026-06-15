@@ -420,7 +420,7 @@ function RenderSlideForExport({ s, idx, theme }: { s: Slide; idx: number; theme:
       </div>
       
       <div className="slide-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '15px' }}>
-        <div className="slide-citations-list full-view" style={{ display: 'flex', gap: '10px', fontSize: '12px' }}>
+        <div className="slide-citations-list full-view" style={{ display: 'flex', gap: '10px', fontSize: '12px', flexWrap: 'wrap', maxWidth: '85%' }}>
           {s.citations.map((cit, citIdx) => (
             <span key={citIdx} style={{ color: '#818cf8' }}>
               {cit}

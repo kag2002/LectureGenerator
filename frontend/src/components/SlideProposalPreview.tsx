@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import client from '../api/client';
 import { parseMarkdownToSlidesJS, optimizeSlideItemsJS, splitBulletText, THEMES, Slide, SlideItem } from '../utils/slideParser';
 import { renderBoldRuns, renderMarkdownInline } from '../utils/markdown';
-import { Loader2, BookOpen, BarChart2, Presentation, LayoutGrid, Plus, ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle } from 'lucide-react';
+import { Loader2, BookOpen, BarChart2, Presentation, LayoutGrid, Plus, ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
 
 export interface SlideProposalPreviewProps {
   mdContent: string;
@@ -29,6 +29,7 @@ export default function SlideProposalPreview({
   const slides = parseMarkdownToSlidesJS(mdContent);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'slideshow' | 'grid'>('slideshow');
+  const [isSlideFullscreen, setIsSlideFullscreen] = useState(false);
 
   // Thêm slide ảo đang tải vào cuối danh sách khi AI đang chạy
   const isGenerating = apiStatus === 'generating';
@@ -578,6 +579,17 @@ export default function SlideProposalPreview({
 
         {viewMode === 'slideshow' && (
           <div className="slide-toolbar-right">
+            {!(slide as any).isLoadingPlaceholder && (
+              <button
+                type="button"
+                onClick={() => setIsSlideFullscreen(true)}
+                className="slide-action-btn-zoom"
+                title="Phóng to slide toàn màn hình"
+                style={{ marginRight: '8px' }}
+              >
+                <Maximize2 size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Phóng to
+              </button>
+            )}
             {chapterId && onSaveRevisedSlide && !(slide as any).isLoadingPlaceholder && (
               <button
                 type="button"
@@ -801,6 +813,23 @@ export default function SlideProposalPreview({
                 Đồng ý thay thế
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {isSlideFullscreen && typeof document !== 'undefined' && createPortal(
+        <div className="slide-fullscreen-overlay" onClick={() => setIsSlideFullscreen(false)}>
+          <div className="slide-fullscreen-container" onClick={(e) => e.stopPropagation()}>
+            <button 
+              type="button" 
+              onClick={() => setIsSlideFullscreen(false)} 
+              className="slide-fullscreen-close-btn"
+              title="Thoát chế độ phóng to"
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
+            {renderSlideContent(slide, safeIndex, false)}
           </div>
         </div>,
         document.body

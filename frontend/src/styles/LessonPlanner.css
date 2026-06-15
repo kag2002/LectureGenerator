@@ -1105,6 +1105,8 @@
   color: var(--text-primary);
   font-size: 14.5px;
   outline: none;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .planner-modal-input:focus {
@@ -1120,6 +1122,8 @@
   font-size: 14.5px;
   outline: none;
   cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .planner-modal-select:focus {
@@ -1164,6 +1168,53 @@
 
 .planner-modal-confirm-btn:hover {
   background: var(--accent-gradient-hover);
+}
+
+/* Custom premium scrollbar for CLO list */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--vinuni-gold);
+}
+
+/* Custom styles for Segmented buttons & cards */
+.planner-segmented-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.planner-segmented-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.pedagogical-style-card {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.pedagogical-style-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--vinuni-gold) !important;
+  box-shadow: 0 6px 16px rgba(197, 168, 128, 0.08) !important;
+}
+
+.planner-save-default-card {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.planner-save-default-card:hover {
+  border-color: var(--vinuni-gold) !important;
+}
+
+.planner-modal-confirm-btn {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.planner-modal-confirm-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(197, 168, 128, 0.15);
 }
 
 /* ============================================================
@@ -2677,8 +2728,8 @@
 .slide-citations-list {
   display: flex;
   align-items: center;
-  max-width: 75%;
-  overflow: hidden;
+  flex-wrap: wrap;
+  max-width: 85%;
 }
 
 .slide-citations-list.full-view {
@@ -4010,7 +4061,7 @@
   backdrop-filter: blur(20px);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: -10px 0 30px rgba(0,0,0,0.5);
-  z-index: 1000;
+  z-index: 11000;
   display: flex;
   flex-direction: column;
   font-family: "Inter", sans-serif;
@@ -5190,5 +5241,86 @@
   align-items: center;
   gap: 8px;
   animation: pulse-blink 2s infinite ease-in-out;
+}
+
+/* Slide Zoom/Fullscreen Styles */
+.slide-action-btn-zoom {
+  background: rgba(0, 210, 255, 0.1);
+  border: 1px solid rgba(0, 210, 255, 0.3);
+  color: #00d2ff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.slide-action-btn-zoom:hover {
+  background: #00d2ff;
+  color: #0c1524;
+}
+
+.slide-fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(15px);
+  z-index: 12000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.slide-fullscreen-container {
+  width: 90vw;
+  max-width: 1600px;
+  aspect-ratio: 16 / 9;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.slide-fullscreen-container .slide-frame.full-view {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 16 / 9;
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  container-type: inline-size;
+}
+
+.slide-fullscreen-close-btn {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #ffffff;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  z-index: 12100;
+}
+
+.slide-fullscreen-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+  transform: scale(1.05);
 }
 

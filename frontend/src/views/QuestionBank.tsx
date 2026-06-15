@@ -32,6 +32,18 @@ export interface QuestionBankProps {
   isActive?: boolean;
 }
 
+export interface AgentMonitorState {
+  traceId?: string;
+  modelName?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalCost?: number;
+  latency?: number;
+  stages: { stage: number; message: string; status: 'pending' | 'success' | 'error' | 'running' }[];
+  questionAttempts: { [key: number]: { attempts: number; guardrail_ok: boolean } };
+  status: 'idle' | 'running' | 'success' | 'error';
+}
+
 export default function QuestionBank({
   course,
   initialChapterId,
@@ -63,6 +75,11 @@ export default function QuestionBank({
   const [generating, setGenerating] = useState(false);
   const [genLog, setGenLog] = useState('');
   const [isFastMode, setIsFastMode] = useState(false);
+  const [agentMonitor, setAgentMonitor] = useState<AgentMonitorState>({
+    stages: [],
+    questionAttempts: {},
+    status: 'idle'
+  });
 
   // General States
   const [loading, setLoading] = useState(false);
@@ -140,6 +157,26 @@ export default function QuestionBank({
     const opStartTime = Date.now();
     setAIProcessingStatus(true, 'AI đang khởi động generator sinh câu hỏi...');
 
+    setAgentMonitor({
+      stages: [
+        { stage: 1, message: 'Đang kết nối OpenRouter và chuẩn bị...', status: 'pending' }
+      ],
+      questionAttempts: {},
+      status: 'running',
+      latency: 0
+    });
+
+    let timer: any = null;
+    timer = setInterval(() => {
+      setAgentMonitor(prev => {
+        if (prev.status !== 'running') return prev;
+        return {
+          ...prev,
+          latency: Number(((Date.now() - opStartTime) / 1000).toFixed(1))
+        };
+      });
+    }, 200);
+
     try {
       const response = await fetch(
         `http://localhost:8000/api/courses/${course.id}/questions/generate-stream`,
@@ -187,11 +224,58 @@ export default function QuestionBank({
               if (currentEvent === 'stage') {
                 setGenLog(data.message);
                 setAIProcessingStatus(true, `Sinh câu hỏi: ${data.message}`);
+
+                const stageNum = data.stage || 1;
+                const traceId = data.trace_id;
+                setAgentMonitor(prev => {
+                  const existingStageIdx = prev.stages.findIndex(s => s.stage === stageNum);
+                  let newStages = [...prev.stages];
+                  if (existingStageIdx > -1) {
+                    newStages[existingStageIdx] = {
+                      stage: stageNum,
+                      message: data.message,
+                      status: 'running'
+                    };
+                  } else {
+                    newStages = newStages.map(s => ({ ...s, status: s.status === 'running' ? 'success' : s.status }));
+                    newStages.push({
+                      stage: stageNum,
+                      message: data.message,
+                      status: 'running'
+                    });
+                  }
+                  return {
+                    ...prev,
+                    traceId: traceId || prev.traceId,
+                    stages: newStages
+                  };
+                });
+
               } else if (currentEvent === 'question') {
                 newQuestions.push(data.question);
                 setQuestions(prev => [...prev, data.question]);
                 setGenLog(`Câu ${data.index}/${data.total} đã xác minh và lưu vào CSDL!`);
+
+                const attempts = data.attempts !== undefined ? data.attempts : 1;
+                const guardrail_ok = data.guardrail_ok !== undefined ? data.guardrail_ok : true;
+                const index = data.index;
+                setAgentMonitor(prev => {
+                  const nextAttempts = { ...prev.questionAttempts, [index]: { attempts, guardrail_ok } };
+                  const newStages = prev.stages.map(s => {
+                    if (s.stage === 3) {
+                      return { ...s, message: `⏳ Đang tự sửa lỗi và xác minh câu ${index}/${data.total}...`, status: 'running' as const };
+                    }
+                    return s;
+                  });
+                  return {
+                    ...prev,
+                    questionAttempts: nextAttempts,
+                    stages: newStages
+                  };
+                });
+
               } else if (currentEvent === 'done') {
+                if (timer) clearInterval(timer);
                 setMessage(data.message);
                 setGenerating(false);
                 setGenLog('');
@@ -208,7 +292,20 @@ export default function QuestionBank({
                   model: data.usage?.model_name,
                   status: 'success'
                 });
+
+                setAgentMonitor(prev => ({
+                  ...prev,
+                  status: 'success',
+                  latency: Number(opLatency.toFixed(1)),
+                  modelName: data.usage?.model_name || 'OpenRouter API',
+                  promptTokens: data.usage?.prompt_tokens || 0,
+                  completionTokens: data.usage?.completion_tokens || 0,
+                  totalCost: data.usage?.total_cost !== undefined ? Number(data.usage.total_cost) : Number((parseInt(count.toString()) * 0.005).toFixed(4)),
+                  stages: prev.stages.map(s => ({ ...s, status: 'success' }))
+                }));
+
               } else if (currentEvent === 'error') {
+                if (timer) clearInterval(timer);
                 setError(data.message);
                 setGenerating(false);
                 setGenLog('');
@@ -220,6 +317,18 @@ export default function QuestionBank({
                   cost: 0,
                   status: 'error'
                 });
+
+                setAgentMonitor(prev => ({
+                  ...prev,
+                  status: 'error',
+                  latency: Number(opLatency.toFixed(1)),
+                  stages: prev.stages.map((s, idx) => {
+                    if (idx === prev.stages.length - 1) {
+                      return { ...s, message: `❌ Lỗi: ${data.message}`, status: 'error' };
+                    }
+                    return s;
+                  })
+                }));
               }
             } catch (_) {}
           }
@@ -227,6 +336,7 @@ export default function QuestionBank({
       }
 
     } catch (err: any) {
+      if (timer) clearInterval(timer);
       console.error(err);
       setError(`Lỗi kết nối stream: ${err.message}`);
       setGenerating(false);
@@ -239,6 +349,18 @@ export default function QuestionBank({
         cost: 0,
         status: 'error'
       });
+
+      setAgentMonitor(prev => ({
+        ...prev,
+        status: 'error',
+        latency: Number(opLatency.toFixed(1)),
+        stages: prev.stages.map((s, idx) => {
+          if (idx === prev.stages.length - 1) {
+            return { ...s, message: `❌ Lỗi kết nối stream: ${err.message}`, status: 'error' };
+          }
+          return s;
+        })
+      }));
     }
   };
 
@@ -533,6 +655,7 @@ export default function QuestionBank({
           handleGenerateQuestions={handleGenerateQuestions}
           isFastMode={isFastMode}
           setIsFastMode={setIsFastMode}
+          agentMonitor={agentMonitor}
         />
 
         {/* BẢNG CHÍNH BÊN PHẢI: CHI TIẾT CÂU HỎI */}

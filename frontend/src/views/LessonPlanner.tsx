@@ -127,6 +127,10 @@ export default function LessonPlanner({
     loadingMcqs,
     editorFontSize,
     setEditorFontSize,
+    handleUndo,
+    handleRedo,
+    canUndo,
+    canRedo,
 
     // Handlers
     handleSelectChapter,
@@ -335,7 +339,7 @@ export default function LessonPlanner({
 
   const renderCitationDrawer = () => {
     if (!selectedCitation) return null;
-    return (
+    const drawerContent = (
       <div className="citation-drawer">
         <div className="citation-drawer-header">
           <div>
@@ -410,6 +414,11 @@ export default function LessonPlanner({
         </div>
       </div>
     );
+
+    if (typeof document !== 'undefined') {
+      return createPortal(drawerContent, document.body);
+    }
+    return drawerContent;
   };
 
   return (
@@ -677,6 +686,10 @@ export default function LessonPlanner({
             setShowRevisionModal={setShowRevisionModal}
             loadRevisionsExternal={loadRevisions}
             isAIGenerating={apiStatus === 'generating' && selectedChapter?.id === generatingChapterId}
+            handleUndo={handleUndo}
+            handleRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
       </ResizableLayout>
 

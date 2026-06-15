@@ -303,7 +303,7 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
           textBefore = textBefore.replace(/!\[[^\]]*\]\s*\(\s*<?$/, '').trim();
           if (textBefore) {
             let { cleanedText: cb, citation: cit } = extractAndCleanCitations(textBefore);
-            if (cit) citations.push(cit);
+            if (cit && !citations.includes(cit)) citations.push(cit);
             let layoutRes = extractAndCleanLayout(cb);
             cb = layoutRes.cleanedText;
             if (layoutRes.layout) slideLayout = layoutRes.layout;
@@ -370,7 +370,7 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
       }
       
       let { cleanedText, citation } = extractAndCleanCitations(line);
-      if (citation) {
+      if (citation && !citations.includes(citation)) {
         citations.push(citation);
       }
       

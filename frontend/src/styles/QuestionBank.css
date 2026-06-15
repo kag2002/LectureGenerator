@@ -833,4 +833,293 @@
   transform: none;
 }
 
+/* ============================================================
+   AI Agent Monitor Flow Styling
+   ============================================================ */
+
+.qb-monitor-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: var(--shadow-md);
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: slideIn 0.3s ease-out;
+  text-align: left;
+}
+
+.qb-monitor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+}
+
+.qb-monitor-title {
+  font-size: 14.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.qb-monitor-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 8px;
+  text-transform: capitalize;
+}
+
+.qb-monitor-status-badge.running {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.qb-monitor-status-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.qb-monitor-status-badge.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.qb-monitor-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.qb-monitor-led.running {
+  background: #6366f1;
+  box-shadow: 0 0 8px #6366f1;
+  animation: pulse 1.5s infinite;
+}
+
+.qb-monitor-led.success {
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.qb-monitor-led.error {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
+  animation: pulse 0.75s infinite;
+}
+
+.qb-monitor-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  padding-left: 4px;
+}
+
+.qb-monitor-steps::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  bottom: 15px;
+  width: 2px;
+  background: var(--border-color);
+  z-index: 0;
+}
+
+.qb-monitor-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  z-index: 1;
+}
+
+.qb-monitor-step-icon-wrapper {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s;
+  color: var(--text-muted);
+}
+
+.qb-monitor-step.success .qb-monitor-step-icon-wrapper {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.qb-monitor-step.running .qb-monitor-step-icon-wrapper {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: #6366f1;
+  color: #6366f1;
+  animation: pulse 1.5s infinite;
+}
+
+.qb-monitor-step.error .qb-monitor-step-icon-wrapper {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.qb-monitor-step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qb-monitor-step-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.qb-monitor-step-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Validation attempts log details */
+.qb-monitor-validation-log {
+  margin-top: 8px;
+  padding-left: 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.qb-monitor-val-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-tertiary);
+  border-radius: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  font-size: 11.5px;
+}
+
+.qb-monitor-val-name {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.qb-monitor-val-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.qb-monitor-val-badge.passed {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.qb-monitor-val-badge.corrected {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+/* Metrics Grid */
+.qb-monitor-metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.qb-monitor-metric-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.qb-monitor-metric-card.span-2 {
+  grid-column: span 2;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.qb-monitor-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.qb-monitor-metric-value {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.qb-monitor-metric-value.cost {
+  color: #fbbf24;
+}
+
+.qb-monitor-trace-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.qb-monitor-trace-code {
+  font-family: monospace;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+}
+
+.qb-monitor-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.qb-monitor-copy-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+
 

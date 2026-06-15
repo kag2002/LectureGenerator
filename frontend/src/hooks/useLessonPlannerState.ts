@@ -98,10 +98,200 @@ export function useLessonPlannerState({
   }, [isZenMode]);
 
   // Chapter material states
-  const [slideContent, setSlideContent] = useState('');
-  const [activeLearningScript, setActiveLearningScript] = useState('');
+  const [slideContent, setSlideContentInternal] = useState('');
+  const [activeLearningScript, setActiveLearningScriptInternal] = useState('');
   const [savedSlideContent, setSavedSlideContent] = useState('');
   const [savedScript, setSavedScript] = useState('');
+
+  // History stacks for Undo / Redo
+  const [slideHistory, setSlideHistory] = useState<{ past: string[]; future: string[] }>({ past: [], future: [] });
+  const [scriptHistory, setScriptHistory] = useState<{ past: string[]; future: string[] }>({ past: [], future: [] });
+
+  const lastSavedSlideContentRef = useRef('');
+  const lastSavedScriptRef = useRef('');
+  const slideHistoryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const scriptHistoryTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSlideUpdateTimeRef = useRef<number>(0);
+  const lastScriptUpdateTimeRef = useRef<number>(0);
+
+  const setSlideContent = (valOrFunc: string | ((prev: string) => string)) => {
+    const prev = slideContentRef.current;
+    const newVal = typeof valOrFunc === 'function' ? valOrFunc(prev) : valOrFunc;
+    if (newVal === prev) return;
+
+    const now = Date.now();
+    const lengthDiff = Math.abs(newVal.length - prev.length);
+    const timeDiff = now - lastSlideUpdateTimeRef.current;
+    
+    // Classify as programmatic if length changes significantly or reset or long time elapsed
+    const isProgrammatic = typeof valOrFunc === 'function' || lengthDiff > 30 || newVal === '' || timeDiff > 1500;
+
+    if (isProgrammatic) {
+      if (slideHistoryTimerRef.current) clearTimeout(slideHistoryTimerRef.current);
+      setSlideHistory(h => {
+        const lastPast = h.past[h.past.length - 1];
+        if (lastPast === prev) return h;
+        return {
+          past: [...h.past.slice(-49), prev],
+          future: []
+        };
+      });
+      lastSavedSlideContentRef.current = newVal;
+    } else {
+      if (slideHistoryTimerRef.current) clearTimeout(slideHistoryTimerRef.current);
+      slideHistoryTimerRef.current = setTimeout(() => {
+        setSlideHistory(h => {
+          const lastPast = h.past[h.past.length - 1];
+          if (lastPast === lastSavedSlideContentRef.current) return h;
+          return {
+            past: [...h.past.slice(-49), lastSavedSlideContentRef.current],
+            future: []
+          };
+        });
+        lastSavedSlideContentRef.current = newVal;
+      }, 1000);
+    }
+
+    lastSlideUpdateTimeRef.current = now;
+    setSlideContentInternal(newVal);
+  };
+
+  const setActiveLearningScript = (valOrFunc: string | ((prev: string) => string)) => {
+    const prev = activeLearningScriptRef.current;
+    const newVal = typeof valOrFunc === 'function' ? valOrFunc(prev) : valOrFunc;
+    if (newVal === prev) return;
+
+    const now = Date.now();
+    const lengthDiff = Math.abs(newVal.length - prev.length);
+    const timeDiff = now - lastScriptUpdateTimeRef.current;
+    
+    const isProgrammatic = typeof valOrFunc === 'function' || lengthDiff > 30 || newVal === '' || timeDiff > 1500;
+
+    if (isProgrammatic) {
+      if (scriptHistoryTimerRef.current) clearTimeout(scriptHistoryTimerRef.current);
+      setScriptHistory(h => {
+        const lastPast = h.past[h.past.length - 1];
+        if (lastPast === prev) return h;
+        return {
+          past: [...h.past.slice(-49), prev],
+          future: []
+        };
+      });
+      lastSavedScriptRef.current = newVal;
+    } else {
+      if (scriptHistoryTimerRef.current) clearTimeout(scriptHistoryTimerRef.current);
+      scriptHistoryTimerRef.current = setTimeout(() => {
+        setScriptHistory(h => {
+          const lastPast = h.past[h.past.length - 1];
+          if (lastPast === lastSavedScriptRef.current) return h;
+          return {
+            past: [...h.past.slice(-49), lastSavedScriptRef.current],
+            future: []
+          };
+        });
+        lastSavedScriptRef.current = newVal;
+      }, 1000);
+    }
+
+    lastScriptUpdateTimeRef.current = now;
+    setActiveLearningScriptInternal(newVal);
+  };
+
+  const handleUndo = () => {
+    if (activeWorkTab === 'slides') {
+      if (slideHistory.past.length === 0) return;
+      const prevVal = slideHistory.past[slideHistory.past.length - 1];
+      const newPast = slideHistory.past.slice(0, slideHistory.past.length - 1);
+      
+      setSlideHistory({
+        past: newPast,
+        future: [slideContentRef.current, ...slideHistory.future]
+      });
+      lastSavedSlideContentRef.current = prevVal;
+      setSlideContentInternal(prevVal);
+    } else {
+      if (scriptHistory.past.length === 0) return;
+      const prevVal = scriptHistory.past[scriptHistory.past.length - 1];
+      const newPast = scriptHistory.past.slice(0, scriptHistory.past.length - 1);
+      
+      setScriptHistory({
+        past: newPast,
+        future: [activeLearningScriptRef.current, ...scriptHistory.future]
+      });
+      lastSavedScriptRef.current = prevVal;
+      setActiveLearningScriptInternal(prevVal);
+    }
+  };
+
+  const handleRedo = () => {
+    if (activeWorkTab === 'slides') {
+      if (slideHistory.future.length === 0) return;
+      const nextVal = slideHistory.future[0];
+      const newFuture = slideHistory.future.slice(1);
+      
+      setSlideHistory({
+        past: [...slideHistory.past, slideContentRef.current],
+        future: newFuture
+      });
+      lastSavedSlideContentRef.current = nextVal;
+      setSlideContentInternal(nextVal);
+    } else {
+      if (scriptHistory.future.length === 0) return;
+      const nextVal = scriptHistory.future[0];
+      const newFuture = scriptHistory.future.slice(1);
+      
+      setScriptHistory({
+        past: [...scriptHistory.past, activeLearningScriptRef.current],
+        future: newFuture
+      });
+      lastSavedScriptRef.current = nextVal;
+      setActiveLearningScriptInternal(nextVal);
+    }
+  };
+
+  const canUndo = activeWorkTab === 'slides' ? slideHistory.past.length > 0 : scriptHistory.past.length > 0;
+  const canRedo = activeWorkTab === 'slides' ? slideHistory.future.length > 0 : scriptHistory.future.length > 0;
+
+  const handleUndoRef = useRef(handleUndo);
+  const handleRedoRef = useRef(handleRedo);
+  
+  useEffect(() => {
+    handleUndoRef.current = handleUndo;
+    handleRedoRef.current = handleRedo;
+  });
+
+  // Setup global event listener for Ctrl+Z and Ctrl+Y shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCtrl = e.ctrlKey || e.metaKey;
+      if (isCtrl && !e.altKey) {
+        const key = e.key?.toLowerCase();
+        if (key === 'z' || key === 'y') {
+          const activeEl = document.activeElement;
+          const isOtherInput = activeEl && (
+            (activeEl.tagName === 'INPUT' && !activeEl.classList.contains('textarea-editor')) ||
+            (activeEl.tagName === 'TEXTAREA' && !activeEl.classList.contains('textarea-editor'))
+          );
+          
+          if (isOtherInput) return;
+          
+          e.preventDefault();
+          if (key === 'z') {
+            if (e.shiftKey) {
+              handleRedoRef.current();
+            } else {
+              handleUndoRef.current();
+            }
+          } else if (key === 'y') {
+            handleRedoRef.current();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const [slideEditMode, setSlideEditMode] = useState<'edit' | 'preview' | 'split'>('edit');
   const [scriptEditMode, setScriptEditMode] = useState<'edit' | 'preview'>('edit');
   const [slideProposalViewMode, setSlideProposalViewMode] = useState<'visual' | 'code'>('visual');
@@ -328,8 +518,14 @@ export function useLessonPlannerState({
       const sCont = response.data.slide_content || '';
       const aScript = response.data.active_learning_script || '';
       
-      setSlideContent(sCont);
-      setActiveLearningScript(aScript);
+      // Reset history stacks on chapter switch
+      setSlideHistory({ past: [], future: [] });
+      setScriptHistory({ past: [], future: [] });
+      lastSavedSlideContentRef.current = sCont;
+      lastSavedScriptRef.current = aScript;
+
+      setSlideContentInternal(sCont);
+      setActiveLearningScriptInternal(aScript);
       setSavedSlideContent(sCont);
       setSavedScript(aScript);
 
@@ -758,6 +954,10 @@ export function useLessonPlannerState({
     setSlideContent,
     activeLearningScript,
     setActiveLearningScript,
+    handleUndo,
+    handleRedo,
+    canUndo,
+    canRedo,
     savedSlideContent,
     savedScript,
     slideEditMode,

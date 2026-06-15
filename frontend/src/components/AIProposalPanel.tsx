@@ -126,6 +126,7 @@ export default function AIProposalPanel({
   tokenUsage = null
 }: AIProposalPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [showAgentMonitor, setShowAgentMonitor] = React.useState<boolean>(false);
 
   const getExpectedReferences = (slideTitle: string, targetClo: string) => {
     if (!ragReferences || ragReferences.length === 0) return [];
@@ -135,7 +136,7 @@ export default function AIProposalPanel({
       .filter(w => w.length > 2 && !['và', 'của', 'là', 'để', 'trong', 'với', 'cho', 'tại'].includes(w));
     if (queryWords.length === 0) return [];
     
-    return ragReferences
+    const scoredItems = ragReferences
       .map(ref => {
         const textLower = (ref.text || '').toLowerCase();
         const filenameLower = (ref.file_name || '').toLowerCase();
@@ -148,9 +149,21 @@ export default function AIProposalPanel({
         return { ref, score: matchCount };
       })
       .filter(item => item.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 2)
-      .map(item => item.ref);
+      .sort((a, b) => b.score - a.score);
+
+    // Deduplicate on file_name + page_number to avoid visual duplication
+    const seen = new Set<string>();
+    const uniqueRefs: typeof ragReferences = [];
+    
+    for (const item of scoredItems) {
+      const key = `${item.ref.file_name}_p${item.ref.page_number}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueRefs.push(item.ref);
+      }
+    }
+    
+    return uniqueRefs.slice(0, 2);
   };
 
   React.useEffect(() => {
@@ -231,9 +244,44 @@ export default function AIProposalPanel({
 
     return (
       <div className="planner-stepper-container">
-        <div className="planner-stepper-title">
-          <span className="planner-stepper-pulse-dot" />
-          TIẾN TRÌNH AI SOẠN BÀI GIẢNG:
+        <div className="planner-stepper-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="planner-stepper-pulse-dot" />
+            TIẾN TRÌNH AI SOẠN BÀI GIẢNG:
+          </div>
+          {!showAgentMonitor && (
+            <button
+              type="button"
+              onClick={() => setShowAgentMonitor(true)}
+              className="planner-storyboard-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                padding: '4px 10px',
+                background: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                color: '#818cf8',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 600,
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#6366f1';
+                e.currentTarget.style.color = '#ffffff';
+                e.currentTarget.style.borderColor = '#6366f1';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.15)';
+                e.currentTarget.style.color = '#818cf8';
+                e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+              }}
+            >
+              <Activity size={12} /> Giám sát luồng AI
+            </button>
+          )}
         </div>
         <div className="planner-stepper-steps-wrapper">
           <div className="planner-stepper-track" />
@@ -274,6 +322,7 @@ export default function AIProposalPanel({
 
   const renderAgentVisualizer = () => {
     if (apiStatus !== 'generating' && !isGeneratingStoryboard) return null;
+    if (!showAgentMonitor) return null;
 
     const nodes = [
       { id: 'storyboard_architect', name: 'Storyboard Architect', desc: 'Thiết kế cấu trúc', x: 60, y: 35 },
@@ -326,22 +375,52 @@ export default function AIProposalPanel({
             <span className="planner-stepper-pulse-dot" />
             <span>Multi-Agent Flow Monitor</span>
           </div>
-          {tokenUsage && (
-            <div className="agent-flow-telemetry" title={`Model: ${tokenUsage.model_name || 'N/A'}`}>
-              <div className="telemetry-item">
-                <span>Prompt:</span>
-                <strong>{tokenUsage.prompt_tokens} tkn</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {tokenUsage && (
+              <div className="agent-flow-telemetry" title={`Model: ${tokenUsage.model_name || 'N/A'}`}>
+                <div className="telemetry-item">
+                  <span>Prompt:</span>
+                  <strong>{tokenUsage.prompt_tokens} tkn</strong>
+                </div>
+                <div className="telemetry-item">
+                  <span>Completion:</span>
+                  <strong>{tokenUsage.completion_tokens} tkn</strong>
+                </div>
+                <div className="telemetry-item">
+                  <span>Cost:</span>
+                  <span className="telemetry-cost">{formattedCost}</span>
+                </div>
               </div>
-              <div className="telemetry-item">
-                <span>Completion:</span>
-                <strong>{tokenUsage.completion_tokens} tkn</strong>
-              </div>
-              <div className="telemetry-item">
-                <span>Cost:</span>
-                <span className="telemetry-cost">{formattedCost}</span>
-              </div>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={() => setShowAgentMonitor(false)}
+              className="agent-flow-close-btn"
+              title="Đóng giám sát tiến trình"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '4px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = 'var(--text-primary)';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-muted)';
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
 
         <svg width="100%" height="180" viewBox="0 0 420 180" className="agent-flow-svg">
@@ -528,13 +607,33 @@ export default function AIProposalPanel({
                   </p>
                 </div>
               )}
-              <div className="planner-storyboard-banner">
-                <h4 className="planner-storyboard-banner-title">
+              <div className="planner-storyboard-banner" style={{ padding: '16px 20px' }}>
+                <h4 className="planner-storyboard-banner-title" style={{ margin: 0, fontSize: '15px' }}>
                   <Layers size={14} /> Giai đoạn 1: Phê duyệt Đề cương Slide (Storyboard)
                 </h4>
-                <p className="planner-storyboard-banner-desc">
+                <p className="planner-storyboard-banner-desc" style={{ marginTop: '8px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
                   Dưới đây là khung bài giảng do AI đề xuất. Bạn có thể chỉnh sửa tiêu đề, mục tiêu sư phạm, CLO và mức Bloom của từng slide trước khi bấm <strong>"Bắt đầu soạn bài giảng chi tiết"</strong>.
                 </p>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    disabled={apiStatus === 'generating'}
+                    onClick={() => setStoryboardDraft(null)}
+                    className="planner-storyboard-footer-btn planner-storyboard-footer-btn-cancel"
+                    style={{ flex: 1, minHeight: '38px', height: '38px', padding: '6px 12px', fontSize: '12.5px', borderRadius: '8px' }}
+                  >
+                    <X size={12} /> Hủy bỏ
+                  </button>
+                  <button
+                    type="button"
+                    disabled={apiStatus === 'generating'}
+                    onClick={() => handleGenerateMaterialsFromStoryboard(storyboardDraft)}
+                    className="planner-storyboard-footer-btn planner-storyboard-footer-btn-confirm"
+                    style={{ flex: 2, minHeight: '38px', height: '38px', padding: '6px 12px', fontSize: '12.5px', borderRadius: '8px', boxShadow: 'none' }}
+                  >
+                    <Play size={12} /> Bắt đầu sinh học liệu chi tiết
+                  </button>
+                </div>
               </div>
 
               <div className="planner-storyboard-list">
@@ -669,7 +768,7 @@ export default function AIProposalPanel({
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                           {getExpectedReferences(slide.title, slide.target_clo).length > 0 ? (
                             getExpectedReferences(slide.title, slide.target_clo).map((ref, rIdx) => (
-                              <div key={rIdx} style={{ fontSize: '11px', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.08)', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(251, 191, 36, 0.15)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${ref.file_name} - Trang ${ref.page_number}`}>
+                              <div key={rIdx} style={{ fontSize: '11px', color: 'var(--warning-color)', background: 'var(--warning-bg)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--warning-color)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${ref.file_name} - Trang ${ref.page_number}`}>
                                 {ref.file_name} (Trang {ref.page_number})
                               </div>
                             ))
@@ -768,18 +867,18 @@ export default function AIProposalPanel({
               )}
               {warnings && warnings.length > 0 && (
                 <div className="planner-warnings-card" style={{
-                  background: 'rgba(239, 68, 68, 0.08)',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  background: 'var(--danger-bg)',
+                  border: '1px solid var(--danger-color)',
                   borderRadius: '10px',
                   padding: '14px 18px',
                   marginBottom: '18px',
                   boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f87171', fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--danger-color)', fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>
                     <AlertTriangle size={16} />
                     <span>Cảnh báo Kiểm toán Sư phạm (Logic Auditor)</span>
                   </div>
-                  <ul style={{ margin: 0, paddingLeft: '20px', color: '#cbd5e1', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <ul style={{ margin: 0, paddingLeft: '20px', color: 'var(--text-primary)', fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {warnings.map((w, idx) => (
                       <li key={idx} style={{ lineHeight: '1.5' }}>{w}</li>
                     ))}
