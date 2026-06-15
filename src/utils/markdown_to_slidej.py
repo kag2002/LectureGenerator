@@ -233,7 +233,7 @@ def parse_markdown_to_slides(md_content: str, default_color: str = "E2E8F0", bol
                 continue
 
             line_clean, citation = extract_and_clean_citations(line)
-            if citation:
+            if citation and citation not in citations:
                 citations.append(citation)
 
             line_clean, layout = extract_and_clean_layout(line_clean)

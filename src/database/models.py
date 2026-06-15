@@ -158,6 +158,7 @@ class ChatMessage(Base):
     total_tokens = Column(Integer, default=0)
     latency_ms = Column(Float, default=0.0)
     trace_id = Column(String(255), nullable=True)
+    is_archived = Column(Boolean, default=False)
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -204,3 +205,19 @@ class RAGDocument(Base):
     user = relationship("User")
     course = relationship("Course")
     chapter = relationship("Chapter")
+
+
+class SystemRule(Base):
+    """Lưu trữ các quy tắc/chỉ dẫn tự sinh của Reflection Agent."""
+
+    __tablename__ = "system_rules"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    rule_text = Column(Text, nullable=False)
+    rule_category = Column(String(100), nullable=False)  # ví dụ: "mcq_generation", "slide_style"
+    status = Column(String(50), default="pending_approval")  # pending_approval | approved | rejected
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    course = relationship("Course")

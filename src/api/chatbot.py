@@ -126,6 +126,8 @@ def get_session_messages(
 
     formatted_messages = []
     for msg in active_path_messages:
+        if msg.role == "system":
+            continue
         t_calls = None
         t_results = None
         if msg.tool_calls:
@@ -148,11 +150,12 @@ def get_session_messages(
         )
         versions = [s.id for s in siblings]
 
+        from src.services.consolidation_worker import decompress_message_content
         formatted_messages.append(
             {
                 "id": msg.id,
                 "role": msg.role,
-                "content": msg.content,
+                "content": decompress_message_content(msg.content),
                 "parent_id": msg.parent_id,
                 "versions": versions,  # Thêm thông tin phiên bản
                 "tool_calls": t_calls,
@@ -441,3 +444,94 @@ def get_chatbot_eval_history(current_user: User = Depends(get_current_user), db:
             }
         )
     return formatted_runs
+
+
+# --- API QUẢN LÝ QUY TẮC PHẢN TƯ (SYSTEM RULES) ---
+
+@router.get("/courses/{course_id}/rules")
+def get_course_rules(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Lấy danh sách các quy tắc tự học (approved & pending) của khóa học."""
+    # Xác thực quyền sở hữu môn học
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Môn học không tồn tại hoặc bạn không sở hữu.")
+
+    from src.database.models import SystemRule
+    rules = db.query(SystemRule).filter(SystemRule.course_id == course_id).order_by(SystemRule.created_at.desc()).all()
+
+    return [
+        {
+            "id": r.id,
+            "rule_text": r.rule_text,
+            "rule_category": r.rule_category,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        }
+        for r in rules
+    ]
+
+
+@router.post("/rules/{rule_id}/approve")
+def approve_rule(rule_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Phê duyệt quy tắc tự sinh để chính thức áp dụng vào prompt."""
+    from src.database.models import SystemRule
+    rule = db.query(SystemRule).filter(SystemRule.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Quy tắc không tồn tại.")
+
+    # Xác thực quyền sở hữu khóa học của quy tắc đó
+    course = db.query(Course).filter(Course.id == rule.course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền quản lý quy tắc của khóa học này.")
+
+    rule.status = "approved"
+    db.commit()
+    return {"success": True, "message": "Đã phê duyệt quy tắc thành công."}
+
+
+@router.post("/rules/{rule_id}/reject")
+def reject_rule(rule_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Từ chối và loại bỏ quy tắc tự sinh."""
+    from src.database.models import SystemRule
+    rule = db.query(SystemRule).filter(SystemRule.id == rule_id).first()
+    if not rule:
+        raise HTTPException(status_code=404, detail="Quy tắc không tồn tại.")
+
+    course = db.query(Course).filter(Course.id == rule.course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền quản lý quy tắc của khóa học này.")
+
+    db.delete(rule)
+    db.commit()
+    return {"success": True, "message": "Đã từ chối và xóa quy tắc thành công."}
+
+
+@router.post("/courses/{course_id}/reflect")
+async def trigger_reflection(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Chạy thủ công chu kỳ phản tư tự rút kinh nghiệm (Reflection) cho môn học."""
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Môn học không tồn tại hoặc bạn không sở hữu.")
+
+    from src.services.reflection_agent import run_reflection_cycle
+    res = await run_reflection_cycle(course_id=course_id, db=db)
+    return res
+
+
+@router.post("/sessions/{session_id}/consolidate")
+async def trigger_session_consolidation(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Chạy thủ công tiến trình hợp nhất và dọn dẹp (Consolidation) cho phiên chat."""
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Phiên trò chuyện không tồn tại.")
+
+    if session.course_id:
+        course = db.query(Course).filter(Course.id == session.course_id, Course.user_id == current_user.id).first()
+        if not course:
+            raise HTTPException(status_code=403, detail="Không có quyền truy cập phiên chat này.")
+
+    from src.services.consolidation_worker import consolidate_session
+    res = await consolidate_session(session_id=session_id, db=db)
+    return res
+
+

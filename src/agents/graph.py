@@ -604,6 +604,74 @@ async def guardrail_output_node(state: AgentState) -> dict[str, Any]:
     return {}
 
 
+async def summarize_history_node(state: AgentState) -> dict[str, Any]:
+    messages = state.get("messages", [])
+    if not messages:
+        return {}
+
+    # Ước lượng số lượng tokens: 1 từ ~ 1.3 tokens hoặc len(str(messages)) // 4
+    estimated_tokens = len(str(messages)) // 4
+
+    # Chỉ tóm tắt hội thoại khi tổng tokens vượt quá 8.000
+    if estimated_tokens <= 8000:
+        return {}
+
+    system_messages = [m for m in messages if m["role"] == "system"]
+    non_system_messages = [m for m in messages if m["role"] != "system"]
+
+    if len(non_system_messages) <= 2:
+        return {}
+
+    to_summarize = non_system_messages[:-2]
+    to_keep = non_system_messages[-2:]
+
+    # Lấy ứng cử viên model
+    candidate_models = get_candidate_models()
+    if not candidate_models:
+        return {}
+
+    model_info = candidate_models[0]
+    client = model_info["client"]
+    model_name = model_info["model"]
+    headers = model_info.get("extra_headers", {})
+
+    summary_prompt = [
+        {
+            "role": "system",
+            "content": "Bạn là trợ lý ảo lưu trữ bộ nhớ sư phạm. Hãy tóm tắt ngắn gọn các tin nhắn hội thoại cũ sau đây thành các ý chính quan trọng (ngôn ngữ giảng dạy, chương học đang làm việc, các chuẩn đầu ra cần tập trung, thói quen thiết kế). Tóm tắt phải cực kỳ ngắn gọn, súc tích và dưới 250 từ."
+        },
+        {"role": "user", "content": json.dumps(to_summarize, ensure_ascii=False)}
+    ]
+
+    try:
+        response = await client.chat.completions.create(
+            model=model_name,
+            messages=summary_prompt,
+            temperature=0.0,
+            extra_headers=headers if headers else None,
+        )
+        summary_text = response.choices[0].message.content or ""
+
+        # Dựng lại lịch sử hội thoại mới:
+        new_messages = []
+        if system_messages:
+            new_messages.extend(system_messages)
+
+        new_messages.append({
+            "role": "system",
+            "content": f"[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n{summary_text}"
+        })
+        new_messages.extend(to_keep)
+
+        return {
+            "messages": new_messages,
+            "summary_history": summary_text
+        }
+    except Exception as e:
+        print(f"[SUMMARIZE HISTORY NODE ERROR] Failed to summarize: {e}")
+        return {}
+
+
 # --- ROUTING CONDITION ---
 
 def chatbot_routing_condition(state: AgentState) -> str:
@@ -634,6 +702,7 @@ def build_graph() -> StateGraph:
 
     # Đăng ký nodes
     graph.add_node("guardrail_input", guardrail_input_node)
+    graph.add_node("summarize_history", summarize_history_node)
     graph.add_node("llm_router", llm_router_node)
     graph.add_node("execute_tools", execute_tools_node)
     graph.add_node("guardrail_output", guardrail_output_node)
@@ -642,7 +711,8 @@ def build_graph() -> StateGraph:
     graph.set_entry_point("guardrail_input")
 
     # Đặt các edges chuyển đổi trạng thái
-    graph.add_edge("guardrail_input", "llm_router")
+    graph.add_edge("guardrail_input", "summarize_history")
+    graph.add_edge("summarize_history", "llm_router")
 
     # Rẽ nhánh có điều kiện từ llm_router
     graph.add_conditional_edges(
@@ -655,13 +725,13 @@ def build_graph() -> StateGraph:
         }
     )
 
-    # Edge chuyển tiếp từ execute_tools quay lại llm_router
+    # Edge chuyển tiếp từ execute_tools quay lại summarize_history để kiểm tra tóm tắt
     graph.add_conditional_edges(
         "execute_tools",
-        lambda state: "end" if state.get("status") == "waiting_for_user" else "llm_router",
+        lambda state: "end" if state.get("status") == "waiting_for_user" else "summarize_history",
         {
             "end": END,
-            "llm_router": "llm_router"
+            "summarize_history": "summarize_history"
         }
     )
 
@@ -671,3 +741,4 @@ def build_graph() -> StateGraph:
 
 
 agent = build_graph()
+

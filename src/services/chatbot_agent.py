@@ -374,20 +374,32 @@ async def run_chatbot_agent_loop(
     if course:
         system_prompt += f"\n\nTHÔNG TIN MÔN HỌC HIỆN TẠI ĐANG ĐƯỢC CHỌN:\n- Tên môn học: {course.course_name}\n- Mã môn học: {course.course_code}\n- ID môn học: {course.id}"
 
-    # Giới hạn lấy tối đa 10 tin nhắn gần nhất
+    # Giới hạn lấy tối đa 20 tin nhắn gần nhất để quét được cả tin nhắn hệ thống (tóm tắt)
     recent_messages = (
         db.query(ChatMessage)
-        .filter(ChatMessage.session_id == session_id)
+        .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)
         .order_by(ChatMessage.id.desc())
-        .limit(10)
+        .limit(20)
         .all()
     )
     recent_messages.reverse()
 
     messages = [{"role": "system", "content": system_prompt}]
-    for msg in recent_messages:
-        if msg.role in ["user", "assistant"]:
-            messages.append({"role": msg.role, "content": msg.content})
+    
+    # Tìm tóm tắt lịch sử gần nhất nếu có
+    latest_summary = None
+    for msg in reversed(recent_messages):
+        if msg.role == "system" and msg.content.startswith("[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]"):
+            latest_summary = msg.content
+            break
+
+    if latest_summary:
+        messages.append({"role": "system", "content": latest_summary})
+
+    # Chỉ lấy tối đa 10 tin nhắn gần nhất không phải system
+    non_sys_recent = [msg for msg in recent_messages if msg.role in ["user", "assistant"]][-10:]
+    for msg in non_sys_recent:
+        messages.append({"role": msg.role, "content": msg.content})
 
     messages.append({"role": "user", "content": user_message})
 
@@ -413,6 +425,8 @@ async def run_chatbot_agent_loop(
         "prompt_tokens": 0,
         "completion_tokens": 0,
         "latency_ms": 0.0,
+        "summary_history": "",
+        "task_steps": [],
     }
 
     final_state = await agent.ainvoke(initial_state)
@@ -448,11 +462,31 @@ async def run_chatbot_agent_loop(
         db.commit()
         db.refresh(db_user)
 
+    summary_text = final_state.get("summary_history", "")
+    ai_parent_id = db_user.id
+
+    if summary_text:
+        db_summary = ChatMessage(
+            session_id=session_id,
+            role="system",
+            content=f"[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n{summary_text}",
+            parent_id=db_user.id,
+            prompt_tokens=0,
+            completion_tokens=0,
+            total_tokens=0,
+            latency_ms=0.0,
+            trace_id=trace.id if trace else None,
+        )
+        db.add(db_summary)
+        db.commit()
+        db.refresh(db_summary)
+        ai_parent_id = db_summary.id
+
     db_ai = ChatMessage(
         session_id=session_id,
         role="assistant",
         content=final_text,
-        parent_id=db_user.id,
+        parent_id=ai_parent_id,
         tool_calls=json.dumps([r.get("tool_calls") for r in rounds if r.get("tool_calls")]),
         tool_results=json.dumps([r.get("tool_results") for r in rounds if r.get("tool_results")]),
         prompt_tokens=0,

@@ -28,6 +28,8 @@ class AgentState(TypedDict, total=False):
     prompt_tokens: int
     completion_tokens: int
     latency_ms: float
+    summary_history: str
+    task_steps: list[str]
 
 
 

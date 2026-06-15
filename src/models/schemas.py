@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+# --- CHATBOT SCHEMAS ---
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000, description="Tin nhắn từ user")
@@ -8,3 +9,206 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str = Field(..., description="Phản hồi từ agent")
     analysis: str = Field(default="", description="Phân tích nội bộ")
+
+
+# --- AUTH SCHEMAS ---
+
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: dict
+
+
+# --- COURSE & CLO SCHEMAS ---
+
+class CourseCreate(BaseModel):
+    course_code: str = Field(..., json_schema_extra={"example": "COMP2010"})
+    course_name: str = Field(..., json_schema_extra={"example": "Cấu trúc dữ liệu và Giải thuật"})
+
+
+class CourseUpdate(BaseModel):
+    course_code: str = Field(..., json_schema_extra={"example": "COMP2010"})
+    course_name: str = Field(..., json_schema_extra={"example": "Cấu trúc dữ liệu và Giải thuật"})
+    required_textbooks: str | None = None
+    recommended_readings: str | None = None
+
+
+class CourseResponse(BaseModel):
+    id: int
+    course_code: str
+    course_name: str
+    required_textbooks: str | None = None
+    recommended_readings: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CLOCreate(BaseModel):
+    clo_code: str = Field(..., json_schema_extra={"example": "CLO1"})
+    description: str = Field(..., json_schema_extra={"example": "Giải thích được cơ chế hoạt động của cây BST."})
+    bloom_level: int = Field(..., ge=1, le=6, json_schema_extra={"example": 2})
+
+
+class CLOResponse(BaseModel):
+    id: int
+    course_id: int
+    clo_code: str
+    description: str
+    bloom_level: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentMetadataUpdate(BaseModel):
+    category: str | None = None
+    tags: str | None = None
+    chapter_id: int | None = None
+
+
+# --- OUTLINE/CHAPTER SCHEMAS ---
+
+class ChapterCreate(BaseModel):
+    title: str = Field(..., json_schema_extra={"example": "Chương 1: Tổng quan về Cây BST"})
+    description: str = Field(..., json_schema_extra={"example": "Giới thiệu cấu trúc cây, định nghĩa và tính chất của cây nhị phân tìm kiếm."})
+    sort_order: int = Field(..., json_schema_extra={"example": 1})
+
+
+class ChapterResponse(BaseModel):
+    id: int
+    course_id: int
+    sort_order: int
+    title: str
+    description: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- MATERIALS SCHEMAS ---
+
+class MaterialSave(BaseModel):
+    slide_content: str = Field(..., description="Slide outline dạng Markdown")
+    active_learning_script: str = Field(..., description="Kịch bản hoạt động active learning")
+
+
+class MaterialResponse(BaseModel):
+    id: int
+    chapter_id: int
+    slide_content: str | None
+    active_learning_script: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class MaterialGenerateRequest(BaseModel):
+    class_size: int = Field(40, description="Sĩ số lớp học để thiết kế nhóm")
+    has_wifi: bool = Field(True, description="Wifi lớp học có khả dụng không")
+    furniture_type: str = Field("movable", description="Bàn ghế: 'movable' (di chuyển) hoặc 'fixed' (cố định)")
+    language: str = Field(
+        "vi", description="Ngôn ngữ bài giảng: 'vi' (Tiếng Việt) hoặc 'en' (Tiếng Anh) hoặc 'bilingual' (Song ngữ)"
+    )
+    session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
+    pedagogical_style: str = Field("interactive", description="Phong cách giảng dạy")
+    learner_level: str = Field("intermediate", description="Trình độ người học")
+    selected_clos: list[str] = Field([], description="Mã CLO trọng tâm")
+
+
+class ReconcileActiveLearningRequest(BaseModel):
+    slide_content: str = Field(..., description="Nội dung slide mới đã chỉnh sửa")
+    class_size: int = Field(40, description="Sĩ số lớp")
+    has_wifi: bool = Field(True, description="Có wifi không")
+    furniture_type: str = Field("movable", description="Kiểu bàn ghế")
+    language: str = Field("vi", description="Ngôn ngữ kịch bản")
+
+
+class StoryboardSlide(BaseModel):
+    slide_index: int
+    title: str
+    purpose: str
+    target_clo: str
+    bloom_level: int
+
+
+class MaterialGenerateFromStoryboardRequest(BaseModel):
+    class_size: int = Field(40, description="Sĩ số lớp học để thiết kế nhóm")
+    has_wifi: bool = Field(True, description="Wifi lớp học có khả dụng không")
+    furniture_type: str = Field("movable", description="Bàn ghế: 'movable' (di chuyển) hoặc 'fixed' (cố định)")
+    language: str = Field(
+        "vi", description="Ngôn ngữ bài giảng: 'vi' (Tiếng Việt) hoặc 'en' (Tiếng Anh) hoặc 'bilingual' (Song ngữ)"
+    )
+    session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
+    storyboard: list[StoryboardSlide]
+    pedagogical_style: str = Field("interactive", description="Phong cách giảng dạy")
+    learner_level: str = Field("intermediate", description="Trình độ người học")
+    selected_clos: list[str] = Field([], description="Mã CLO trọng tâm")
+
+
+class AppendSlideRequest(BaseModel):
+    clo_id: int = Field(..., description="ID của CLO mục tiêu")
+    bloom_level: int = Field(..., ge=1, le=6, description="Mức Bloom")
+
+
+class RevisionRequest(BaseModel):
+    prompt: str = Field(..., description="Yêu cầu chỉnh sửa của giảng viên")
+
+
+class SingleSlideRevisionRequest(BaseModel):
+    current_slide_content: str = Field(..., description="Nội dung Markdown thô của slide hiện tại cần sửa")
+    prompt: str = Field(..., description="Yêu cầu chỉnh sửa của giảng viên")
+
+
+# --- QUESTIONS SCHEMAS ---
+
+class QuestionGenerateRequest(BaseModel):
+    clo_id: int | None = Field(None, description="ID của CLO mục tiêu")
+    chapter_id: int | None = Field(None, description="ID của chương học")
+    bloom_level: int = Field(3, ge=1, le=6, description="Mức độ Bloom từ 1 đến 6")
+    count: int = Field(5, ge=1, le=10, description="Số lượng câu hỏi cần sinh")
+    fast_mode: bool = Field(False, description="Nếu True, bỏ qua bước Self-Correction để sinh câu hỏi nhanh chóng")
+
+
+class QuestionCreateRequest(BaseModel):
+    chapter_id: int | None = Field(None, description="ID của chương học")
+    question_text: str = Field(..., description="Nội dung câu hỏi")
+    options_json: str = Field(..., description="Mảng các lựa chọn dưới dạng JSON string")
+    correct_answer: str = Field(..., description="Đáp án đúng")
+    bloom_level: int = Field(..., ge=1, le=6, description="Mức Bloom")
+    clo_id: int | None = Field(None, description="ID CLO liên kết")
+
+
+class QuestionUpdateRequest(BaseModel):
+    question_text: str = Field(..., description="Nội dung câu hỏi")
+    options_json: str = Field(..., description="Mảng các lựa chọn dưới dạng JSON string")
+    correct_answer: str = Field(..., description="Đáp án đúng")
+    bloom_level: int = Field(..., ge=1, le=6, description="Mức Bloom")
+    clo_id: int | None = Field(None, description="ID CLO liên kết")
+
+
+class QuestionResponse(BaseModel):
+    id: int
+    course_id: int
+    chapter_id: int | None
+    question_text: str
+    question_type: str
+    options_json: str | None
+    correct_answer: str
+    bloom_level: int
+    clo_id: int | None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SearchTestRequest(BaseModel):
+    query: str
+    top_k: int = 5

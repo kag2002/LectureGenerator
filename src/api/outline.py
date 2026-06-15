@@ -1,31 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, Course, User
 from src.database.session import get_db
+from src.models.schemas import ChapterCreate, ChapterResponse
 from src.utils.llm_client import call_llm_json, langfuse
 
 router = APIRouter(prefix="/api/courses", tags=["outline"])
-
-
-# Pydantic schemas
-class ChapterCreate(BaseModel):
-    title: str = Field(..., example="Chương 1: Tổng quan về Cây BST")
-    description: str = Field(..., example="Giới thiệu cấu trúc cây, định nghĩa và tính chất của cây nhị phân tìm kiếm.")
-    sort_order: int = Field(..., example=1)
-
-
-class ChapterResponse(BaseModel):
-    id: int
-    course_id: int
-    sort_order: int
-    title: str
-    description: str | None
-
-    class Config:
-        from_attributes = True
 
 
 # --- API CHAPTERS (OUTLINE) ---

@@ -1,59 +1,27 @@
-import json
 import os
 import shutil
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
 from src.database.models import CLO, Course, RAGDocument, User
-from src.database.session import SessionLocal, get_db
+from src.database.session import get_db
+from src.models.schemas import (
+    CLOCreate,
+    CLOResponse,
+    CourseCreate,
+    CourseResponse,
+    CourseUpdate,
+    DocumentMetadataUpdate,
+    SearchTestRequest,
+)
+from src.services.document_service import process_document_background
+from src.services.syllabus_service import generate_syllabus_parse_events
 from src.utils.parser import safe_parse_bloom_level
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
-
-
-# Pydantic schemas
-class CourseCreate(BaseModel):
-    course_code: str = Field(..., example="COMP2010")
-    course_name: str = Field(..., example="Cấu trúc dữ liệu và Giải thuật")
-
-
-class CourseUpdate(BaseModel):
-    course_code: str = Field(..., example="COMP2010")
-    course_name: str = Field(..., example="Cấu trúc dữ liệu và Giải thuật")
-    required_textbooks: str | None = None
-    recommended_readings: str | None = None
-
-
-class CourseResponse(BaseModel):
-    id: int
-    course_code: str
-    course_name: str
-    required_textbooks: str | None = None
-    recommended_readings: str | None = None
-
-    class Config:
-        from_attributes = True
-
-
-class CLOCreate(BaseModel):
-    clo_code: str = Field(..., example="CLO1")
-    description: str = Field(..., example="Giải thích được cơ chế hoạt động của cây BST.")
-    bloom_level: int = Field(..., ge=1, le=6, example=2)
-
-
-class CLOResponse(BaseModel):
-    id: int
-    course_id: int
-    clo_code: str
-    description: str
-    bloom_level: int
-
-    class Config:
-        from_attributes = True
 
 
 # --- API MÔN HỌC (COURSES) ---
@@ -316,192 +284,11 @@ def upload_and_parse_syllabus_stream(
     with open(temp_file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    def event_stream():
-        def send(event: str, data: dict):
-            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-        new_db = SessionLocal()
-        try:
-            # Stage 1: Đọc tài liệu
-            yield send("stage", {"stage": 1, "message": "📄 Đang trích xuất văn bản từ tài liệu đề cương..."})
-
-            from src.services.syllabus_analyser import analyse_syllabus
-            from src.utils.parser import parse_document
-
-            text_content = parse_document(temp_file_path)
-            if not text_content:
-                yield send("error", {"message": "Không thể đọc nội dung văn bản từ tài liệu tải lên."})
-                return
-
-            # Stage 2: AI phân tích
-            yield send(
-                "stage", {"stage": 2, "message": "🤖 AI đang bóc tách cấu trúc và chuẩn hóa các chuẩn đầu ra CLO..."}
-            )
-            analysis_result = analyse_syllabus(text_content)
-
-            # Stage 3: Phân cấp mức Bloom
-            yield send("stage", {"stage": 3, "message": "📊 Đang chuẩn hóa động từ hành động và phân cấp mức Bloom..."})
-
-            # Khôi phục môn học trong session mới
-            new_course = new_db.query(Course).filter(Course.id == course_id).first()
-            if "course_code" in analysis_result and analysis_result["course_code"]:
-                new_course.course_code = analysis_result["course_code"]
-            if "course_name" in analysis_result and analysis_result["course_name"]:
-                new_course.course_name = analysis_result["course_name"]
-            if "required_textbooks" in analysis_result:
-                books = analysis_result["required_textbooks"]
-                new_course.required_textbooks = "\n".join(books) if isinstance(books, list) else str(books)
-            if "recommended_readings" in analysis_result:
-                readings = analysis_result["recommended_readings"]
-                new_course.recommended_readings = "\n".join(readings) if isinstance(readings, list) else str(readings)
-
-            # Stage 4: Lưu trữ vào DB
-            yield send("stage", {"stage": 4, "message": "💾 Đang lưu trữ và đồng bộ hóa danh sách CLOs..."})
-
-            # Xóa các CLOs cũ của môn này
-            new_db.query(CLO).filter(CLO.course_id == course_id).delete()
-            new_db.commit()
-
-            raw_clos = analysis_result.get("clos", [])
-            created_clos = []
-
-            for idx, clo_item in enumerate(raw_clos):
-                new_clo = CLO(
-                    course_id=course_id,
-                    clo_code=clo_item.get("clo_code", f"CLO{idx + 1}"),
-                    description=clo_item.get("description", ""),
-                    bloom_level=safe_parse_bloom_level(clo_item.get("bloom_level", 2), 2),
-                )
-                new_db.add(new_clo)
-                new_db.commit()
-                new_db.refresh(new_clo)
-                created_clos.append(new_clo)
-
-                # Gửi từng CLO vừa lưu xong về client
-                yield send(
-                    "clo",
-                    {
-                        "index": idx + 1,
-                        "total": len(raw_clos),
-                        "clo": {
-                            "id": new_clo.id,
-                            "course_id": new_clo.course_id,
-                            "clo_code": new_clo.clo_code,
-                            "description": new_clo.description,
-                            "bloom_level": new_clo.bloom_level,
-                        },
-                    },
-                )
-
-            yield send(
-                "done",
-                {
-                    "message": "✅ Đã phân tích và chuẩn hóa CLOs thành công!",
-                    "course": {
-                        "id": new_course.id,
-                        "course_code": new_course.course_code,
-                        "course_name": new_course.course_name,
-                        "required_textbooks": new_course.required_textbooks,
-                        "recommended_readings": new_course.recommended_readings,
-                    },
-                    "clos": [
-                        {
-                            "id": c.id,
-                            "course_id": c.course_id,
-                            "clo_code": c.clo_code,
-                            "description": c.description,
-                            "bloom_level": c.bloom_level,
-                        }
-                        for c in created_clos
-                    ],
-                },
-            )
-
-        except Exception as e:
-            new_db.rollback()
-            yield send("error", {"message": f"Lỗi hệ thống khi phân tích Syllabus: {str(e)}"})
-        finally:
-            new_db.close()
-            # Xóa file tạm
-            if os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                except Exception:
-                    pass
-
     return StreamingResponse(
-        event_stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        generate_syllabus_parse_events(temp_file_path=temp_file_path, course_id=course_id),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-
-class DocumentMetadataUpdate(BaseModel):
-    category: str | None = None
-    tags: str | None = None
-    chapter_id: int | None = None
-
-
-def process_document_background(
-    temp_file_path: str,
-    file_name: str,
-    user_id: int,
-    course_id: int,
-    category: str | None,
-    tags: str | None,
-    chapter_id: int | None,
-    document_id: int
-):
-    from src.database.models import RAGDocument
-    from src.database.session import SessionLocal
-    from src.database.vector_db import add_document_vector
-    from src.utils.parser import parse_document
-
-    db = SessionLocal()
-    try:
-        text_by_pages = []
-        _, ext = os.path.splitext(file_name.lower())
-        if ext == ".pdf":
-            import pdfplumber
-            with pdfplumber.open(temp_file_path) as pdf:
-                for page in pdf.pages:
-                    text_by_pages.append(page.extract_text() or "")
-        else:
-            text_content = parse_document(temp_file_path)
-            text_by_pages = [text_content]
-
-        if not text_by_pages or all(not t.strip() for t in text_by_pages):
-            raise ValueError("Tài liệu không chứa nội dung văn bản hợp lệ (Có thể là ảnh quét hoặc tài liệu rỗng). Vui lòng chuyển đổi OCR trước.")
-
-        add_document_vector(
-            file_name,
-            text_by_pages,
-            user_id=user_id,
-            course_id=course_id,
-            category=category,
-            tags=tags,
-            chapter_id=chapter_id
-        )
-
-        # Update status to ready
-        doc = db.query(RAGDocument).filter(RAGDocument.id == document_id).first()
-        if doc:
-            doc.status = "ready"
-            db.commit()
-
-    except Exception as e:
-        print(f"[BACKGROUND ERROR] Loi khi xử lý file {file_name}: {e}")
-        doc = db.query(RAGDocument).filter(RAGDocument.id == document_id).first()
-        if doc:
-            doc.status = "failed"
-            doc.error_message = str(e)
-            db.commit()
-    finally:
-        db.close()
-        # Xóa file tạm
-        if os.path.exists(temp_file_path):
-            try:
-                os.remove(temp_file_path)
-            except Exception:
-                pass
 
 
 # --- API QUẢN LÝ TÀI LIỆU THAM CHIẾU (RAG DOCUMENTS) ---
@@ -969,9 +756,7 @@ def get_course_document_chunks(
         )
 
 
-class SearchTestRequest(BaseModel):
-    query: str
-    top_k: int = 5
+
 
 
 @router.post("/{course_id}/documents/search-test")

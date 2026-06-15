@@ -51,6 +51,13 @@ try:
         print("[MIGRATION] Adding column 'error_message' to table 'rag_documents'...")
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE rag_documents ADD COLUMN error_message TEXT"))
+
+    # Auto-migration for ChatMessage fields
+    chat_msg_columns = [col["name"] for col in inspector.get_columns("chat_messages")]
+    if "is_archived" not in chat_msg_columns:
+        print("[MIGRATION] Adding column 'is_archived' to table 'chat_messages'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN is_archived BOOLEAN DEFAULT 0"))
 except Exception as e:
     print(f"[MIGRATION WARNING] Failed to migrate SQLite columns: {e}")
 

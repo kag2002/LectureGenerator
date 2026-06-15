@@ -44,6 +44,8 @@ def generate_questions_stream_generator(
         )
 
     def send(event: str, data: dict):
+        if stream_trace:
+            data["trace_id"] = stream_trace.id
         usage = get_token_usage()
         if usage:
             data["usage"] = {
@@ -135,6 +137,8 @@ def generate_questions_stream_generator(
                     {
                         "index": idx + 1,
                         "total": len(raw_questions),
+                        "attempts": 0,
+                        "guardrail_ok": True,
                         "question": {
                             "id": new_q_obj.id,
                             "question_text": new_q_obj.question_text,
@@ -249,6 +253,8 @@ def generate_questions_stream_generator(
                     {
                         "index": idx + 1,
                         "total": len(raw_questions),
+                        "attempts": attempts,
+                        "guardrail_ok": guardrail_ok,
                         "question": {
                             "id": new_q_obj.id,
                             "question_text": new_q_obj.question_text,

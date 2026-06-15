@@ -106,6 +106,31 @@ class MaterialOrchestrator:
             "warnings": [],
         }
 
+        # Tải danh sách các slide mẫu thiết kế cũ (Episodic Memory) một lần duy nhất
+        self.episodes = []
+        if user_id and course_id:
+            try:
+                from src.services.memory_service import retrieve_episodes
+                self.episodes = retrieve_episodes(user_id=user_id, course_id=course_id, query="", limit=10)
+                print(f"[EPISODIC MEMORY] Loaded {len(self.episodes)} custom templates for user {user_id}.")
+            except Exception as e:
+                print(f"[WARNING] Failed to load episodic memory: {e}")
+
+            # Tải danh sách các quy tắc đã phê duyệt (Meta-Memory / Reflection)
+            try:
+                from src.database.session import SessionLocal
+                from src.services.reflection_agent import get_approved_rules_context
+                db_temp = SessionLocal()
+                try:
+                    rules_context = get_approved_rules_context(course_id, db_temp, category="slide_style")
+                    if rules_context:
+                        self.state["clos_context"] += f"\n\n{rules_context}"
+                        print(f"[META-MEMORY] Loaded approved system rules context.")
+                finally:
+                    db_temp.close()
+            except Exception as e:
+                print(f"[WARNING] Failed to load system rules in orchestrator: {e}")
+
     def run_storyboard_architect(self, trace_or_span=None) -> list[dict]:
         """Bước 1: Storyboard Architect Agent lập đề cương cấu trúc bài giảng."""
         sys_prompt = build_storyboard_architect_system_prompt(
@@ -226,6 +251,24 @@ class MaterialOrchestrator:
                 }
                 slide_rag_context += f"[RAG-Ref: {idx}]: {hit['text']}\n\n"
 
+        # Lọc các episodes trùng layout để làm few-shot
+        few_shot_context = ""
+        if hasattr(self, "episodes") and self.episodes:
+            matching_episodes = [ep for ep in self.episodes if ep.get("layout") == suggested_layout]
+            if not matching_episodes:
+                matching_episodes = self.episodes[:2]
+            else:
+                matching_episodes = matching_episodes[:2]
+
+            if matching_episodes:
+                few_shot_context = "\nDƯỚI ĐÂY LÀ CÁC MẪU THIẾT KẾ SLIDE TRONG QUÁ KHỨ BẠN NÊN HỌC THEO (FEW-SHOT STYLES):\n"
+                for ep_idx, ep in enumerate(matching_episodes, 1):
+                    few_shot_context += f"Mẫu {ep_idx} (Layout: {ep['layout']}):\n```markdown\n{ep['content']}\n```\n\n"
+
+        allocated_text_with_few_shot = allocated_text
+        if few_shot_context:
+            allocated_text_with_few_shot += f"\n\n{few_shot_context}"
+
         sys_prompt = build_slide_writer_system_prompt(
             slide_index=slide_index,
             title=title,
@@ -233,7 +276,7 @@ class MaterialOrchestrator:
             target_clo=target_clo,
             bloom_level=bloom_level,
             suggested_layout=suggested_layout,
-            allocated_text=allocated_text,
+            allocated_text=allocated_text_with_few_shot,
             target_lang=self.state["target_lang"],
             previous_slides_markdown=previous_slides_markdown,
             slide_rag_context=slide_rag_context,
@@ -553,6 +596,24 @@ Nội dung slide hiện tại để sửa đổi:
                 }
                 slide_rag_context += f"[RAG-Ref: {idx}]: {hit['text']}\n\n"
 
+        # Lọc các episodes trùng layout để làm few-shot
+        few_shot_context = ""
+        if hasattr(self, "episodes") and self.episodes:
+            matching_episodes = [ep for ep in self.episodes if ep.get("layout") == suggested_layout]
+            if not matching_episodes:
+                matching_episodes = self.episodes[:2]
+            else:
+                matching_episodes = matching_episodes[:2]
+
+            if matching_episodes:
+                few_shot_context = "\nDƯỚI ĐÂY LÀ CÁC MẪU THIẾT KẾ SLIDE TRONG QUÁ KHỨ BẠN NÊN HỌC THEO (FEW-SHOT STYLES):\n"
+                for ep_idx, ep in enumerate(matching_episodes, 1):
+                    few_shot_context += f"Mẫu {ep_idx} (Layout: {ep['layout']}):\n```markdown\n{ep['content']}\n```\n\n"
+
+        allocated_text_with_few_shot = allocated_text
+        if few_shot_context:
+            allocated_text_with_few_shot += f"\n\n{few_shot_context}"
+
         sys_prompt = build_slide_writer_system_prompt(
             slide_index=slide_index,
             title=title,
@@ -560,7 +621,7 @@ Nội dung slide hiện tại để sửa đổi:
             target_clo=target_clo,
             bloom_level=bloom_level,
             suggested_layout=suggested_layout,
-            allocated_text=allocated_text,
+            allocated_text=allocated_text_with_few_shot,
             target_lang=self.state["target_lang"],
             previous_slides_markdown=previous_slides_markdown,
             slide_rag_context=slide_rag_context,

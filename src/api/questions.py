@@ -2,13 +2,18 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
 from src.database.session import get_db
 from src.database.vector_db import search_rag_isolated
+from src.models.schemas import (
+    QuestionCreateRequest,
+    QuestionGenerateRequest,
+    QuestionResponse,
+    QuestionUpdateRequest,
+)
 from src.prompts.questions import (
     SOLVER_SYSTEM_PROMPT,
     build_correction_prompt,
@@ -20,48 +25,6 @@ from src.utils.llm_client import call_llm_json, get_token_usage, init_token_trac
 from src.utils.parser import safe_parse_bloom_level
 
 router = APIRouter(prefix="/api/courses", tags=["questions"])
-
-
-# Pydantic Schemas
-class QuestionGenerateRequest(BaseModel):
-    clo_id: int | None = Field(None, description="ID của CLO mục tiêu")
-    chapter_id: int | None = Field(None, description="ID của chương học")
-    bloom_level: int = Field(3, ge=1, le=6, description="Mức độ Bloom từ 1 đến 6")
-    count: int = Field(5, ge=1, le=10, description="Số lượng câu hỏi cần sinh")
-    fast_mode: bool = Field(False, description="Nếu True, bỏ qua bước Self-Correction để sinh câu hỏi nhanh chóng")
-
-
-class QuestionCreateRequest(BaseModel):
-    chapter_id: int | None = Field(None, description="ID của chương học")
-    question_text: str = Field(..., description="Nội dung câu hỏi")
-    options_json: str = Field(..., description="Mảng các lựa chọn dưới dạng JSON string")
-    correct_answer: str = Field(..., description="Đáp án đúng")
-    bloom_level: int = Field(..., ge=1, le=6, description="Mức Bloom")
-    clo_id: int | None = Field(None, description="ID CLO liên kết")
-
-
-class QuestionUpdateRequest(BaseModel):
-    question_text: str = Field(..., description="Nội dung câu hỏi")
-    options_json: str = Field(..., description="Mảng các lựa chọn dưới dạng JSON string")
-    correct_answer: str = Field(..., description="Đáp án đúng")
-    bloom_level: int = Field(..., ge=1, le=6, description="Mức Bloom")
-    clo_id: int | None = Field(None, description="ID CLO liên kết")
-
-
-class QuestionResponse(BaseModel):
-    id: int
-    course_id: int
-    chapter_id: int | None
-    question_text: str
-    question_type: str
-    options_json: str | None
-    correct_answer: str
-    bloom_level: int
-    clo_id: int | None
-    is_active: bool
-
-    class Config:
-        from_attributes = True
 
 
 # --- API CRUD QUESTIONS ---

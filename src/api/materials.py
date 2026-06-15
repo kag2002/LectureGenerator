@@ -2,13 +2,22 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, MaterialRevision, User
 from src.database.session import get_db
 from src.database.vector_db import search_rag_isolated
+from src.models.schemas import (
+    AppendSlideRequest,
+    MaterialGenerateFromStoryboardRequest,
+    MaterialGenerateRequest,
+    MaterialResponse,
+    MaterialSave,
+    ReconcileActiveLearningRequest,
+    RevisionRequest,
+    SingleSlideRevisionRequest,
+)
 from src.prompts.materials import (
     LANGUAGE_MAP,
     build_consistency_checker_system_prompt,
@@ -22,44 +31,6 @@ from src.utils.llm_client import call_llm_json, get_token_usage, init_token_trac
 from src.utils.task_manager import task_manager
 
 router = APIRouter(prefix="/api/courses", tags=["materials"])
-
-
-# Pydantic schemas
-class MaterialSave(BaseModel):
-    slide_content: str = Field(..., description="Slide outline dạng Markdown")
-    active_learning_script: str = Field(..., description="Kịch bản hoạt động active learning")
-
-
-class MaterialResponse(BaseModel):
-    id: int
-    chapter_id: int
-    slide_content: str | None
-    active_learning_script: str | None
-
-    class Config:
-        from_attributes = True
-
-
-class MaterialGenerateRequest(BaseModel):
-    class_size: int = Field(40, description="Sĩ số lớp học để thiết kế nhóm")
-    has_wifi: bool = Field(True, description="Wifi lớp học có khả dụng không")
-    furniture_type: str = Field("movable", description="Bàn ghế: 'movable' (di chuyển) hoặc 'fixed' (cố định)")
-    language: str = Field(
-        "vi", description="Ngôn ngữ bài giảng: 'vi' (Tiếng Việt) hoặc 'en' (Tiếng Anh) hoặc 'bilingual' (Song ngữ)"
-    )
-    session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
-    pedagogical_style: str = Field("interactive", description="Phong cách giảng dạy")
-    learner_level: str = Field("intermediate", description="Trình độ người học")
-    selected_clos: list[str] = Field([], description="Mã CLO trọng tâm")
-
-
-
-class ReconcileActiveLearningRequest(BaseModel):
-    slide_content: str = Field(..., description="Nội dung slide mới đã chỉnh sửa")
-    class_size: int = Field(40, description="Sĩ số lớp")
-    has_wifi: bool = Field(True, description="Có wifi không")
-    furniture_type: str = Field("movable", description="Kiểu bàn ghế")
-    language: str = Field("vi", description="Ngôn ngữ kịch bản")
 
 
 # --- API CHAPTER MATERIALS ---
@@ -262,26 +233,7 @@ async def generate_chapter_materials_stream(
     )
 
 
-class StoryboardSlide(BaseModel):
-    slide_index: int
-    title: str
-    purpose: str
-    target_clo: str
-    bloom_level: int
 
-
-class MaterialGenerateFromStoryboardRequest(BaseModel):
-    class_size: int = Field(40, description="Sĩ số lớp học để thiết kế nhóm")
-    has_wifi: bool = Field(True, description="Wifi lớp học có khả dụng không")
-    furniture_type: str = Field("movable", description="Bàn ghế: 'movable' (di chuyển) hoặc 'fixed' (cố định)")
-    language: str = Field(
-        "vi", description="Ngôn ngữ bài giảng: 'vi' (Tiếng Việt) hoặc 'en' (Tiếng Anh) hoặc 'bilingual' (Song ngữ)"
-    )
-    session_duration: int = Field(90, description="Tổng thời lượng tiết học (phút)")
-    storyboard: list[StoryboardSlide]
-    pedagogical_style: str = Field("interactive", description="Phong cách giảng dạy")
-    learner_level: str = Field("intermediate", description="Trình độ người học")
-    selected_clos: list[str] = Field([], description="Mã CLO trọng tâm")
 
 
 
@@ -442,9 +394,7 @@ def delete_chapter_materials(
     return {"message": "Đã reset/xóa học liệu chương thành công."}
 
 
-class AppendSlideRequest(BaseModel):
-    clo_id: int = Field(..., description="ID của CLO mục tiêu")
-    bloom_level: int = Field(..., ge=1, le=6, description="Mức Bloom")
+
 
 
 @router.post("/chapters/{chapter_id}/append-slide-for-clo")
@@ -582,13 +532,7 @@ def append_slide_for_clo_stream(
 # --- API TIỂU HỢP PHÂN RÃ AGENT & REVISION ---
 
 
-class RevisionRequest(BaseModel):
-    prompt: str = Field(..., description="Yêu cầu chỉnh sửa của giảng viên")
 
-
-class SingleSlideRevisionRequest(BaseModel):
-    current_slide_content: str = Field(..., description="Nội dung Markdown thô của slide hiện tại cần sửa")
-    prompt: str = Field(..., description="Yêu cầu chỉnh sửa của giảng viên")
 
 
 
@@ -735,6 +679,30 @@ def revise_slides(
         db.commit()
         db.refresh(material)
 
+        # Lưu vào bộ nhớ trải nghiệm (Episodic Memory)
+        try:
+            from src.services.memory_service import store_episodic_revision
+            def extract_layout(text: str) -> str:
+                if not text:
+                    return "standard_list"
+                for lay in ["card_grid", "two_column_comparison", "standard_list", "table", "visual_highlight"]:
+                    if lay in text.lower():
+                        return lay
+                return "standard_list"
+
+            store_episodic_revision(
+                user_id=current_user.id,
+                course_id=chapter.course_id,
+                chapter_id=chapter_id,
+                prompt=req.prompt,
+                content_before=new_rev.content_before,
+                content_after=new_rev.content_after,
+                layout_before=extract_layout(new_rev.content_before),
+                layout_after=extract_layout(new_rev.content_after)
+            )
+        except Exception as mem_err:
+            print(f"[WARNING] Episodic memory store failed in revise_slides: {mem_err}")
+
         usage = get_token_usage()
         return {
             "slide_content": material.slide_content,
@@ -877,6 +845,22 @@ def revise_active_learning(
         material.active_learning_script = revised_content
         db.commit()
         db.refresh(material)
+
+        # Lưu vào bộ nhớ trải nghiệm (Episodic Memory)
+        try:
+            from src.services.memory_service import store_episodic_revision
+            store_episodic_revision(
+                user_id=current_user.id,
+                course_id=chapter.course_id,
+                chapter_id=chapter_id,
+                prompt=req.prompt,
+                content_before=new_rev.content_before,
+                content_after=new_rev.content_after,
+                layout_before="active_learning",
+                layout_after="active_learning"
+            )
+        except Exception as mem_err:
+            print(f"[WARNING] Episodic memory store failed in revise_active_learning: {mem_err}")
 
         usage = get_token_usage()
         return {

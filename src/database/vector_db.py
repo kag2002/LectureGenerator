@@ -42,6 +42,9 @@ class LazySentenceTransformerEmbeddingFunction(chromadb.EmbeddingFunction):
                 print("[INFO] Testing mode detected: Using Mock Embedding Function.")
 
                 class MockEmbeddingFunction(chromadb.EmbeddingFunction):
+                    def __init__(self):
+                        pass
+
                     def __call__(self, input: chromadb.Documents) -> chromadb.Embeddings:
                         return [[0.1] * 384 for _ in input]
 
@@ -111,6 +114,9 @@ class LazySentenceTransformerEmbeddingFunction(chromadb.EmbeddingFunction):
                         )
 
                         class MockEmbeddingFunction(chromadb.EmbeddingFunction):
+                            def __init__(self):
+                                pass
+
                             def __call__(self, input: chromadb.Documents) -> chromadb.Embeddings:
                                 return [[0.1] * 384 for _ in input]
 
@@ -125,6 +131,155 @@ collection = chroma_client.get_or_create_collection(
     embedding_function=embedding_func,
     metadata={"hnsw:space": "cosine"}
 )
+
+
+from src.database.session import engine, is_sqlite
+from sqlalchemy import text
+
+# Khởi tạo bảng ảo FTS5 trong SQLite nếu đang dùng SQLite làm cơ sở dữ liệu
+if is_sqlite:
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS fts_document_chunks USING fts5(
+                    id,
+                    user_id,
+                    course_id,
+                    chapter_id,
+                    file_name,
+                    page_number,
+                    text
+                )
+            """))
+            print("[SUCCESS] Da khoi tao virtual table FTS5 cho tai lieu trong SQLite.")
+    except Exception as e:
+        print(f"[WARNING] Khong the khoi tao virtual table FTS5: {e}")
+
+
+def index_fts_chunks(user_id: int, course_id: int, file_name: str, chunks: list[dict], ids: list[str]):
+    if not is_sqlite:
+        return
+    try:
+        with engine.begin() as conn:
+            # Delete old chunks for this file
+            conn.execute(text("""
+                DELETE FROM fts_document_chunks 
+                WHERE user_id = :user_id AND course_id = :course_id AND file_name = :file_name
+            """), {"user_id": user_id, "course_id": course_id, "file_name": file_name})
+            
+            # Insert new chunks
+            for idx, c in enumerate(chunks):
+                conn.execute(text("""
+                    INSERT INTO fts_document_chunks (id, user_id, course_id, chapter_id, file_name, page_number, text)
+                    VALUES (:id, :user_id, :course_id, :chapter_id, :file_name, :page_number, :text)
+                """), {
+                    "id": ids[idx],
+                    "user_id": user_id,
+                    "course_id": course_id,
+                    "chapter_id": c.get("chapter_id", 0) or 0,
+                    "file_name": file_name,
+                    "page_number": c["page_number"],
+                    "text": c["text"]
+                })
+    except Exception as e:
+        print(f"[WARNING] Loi khi dong bo SQLite FTS5: {e}")
+
+
+def delete_fts_chunks(user_id: int, course_id: int, file_name: str = None):
+    if not is_sqlite:
+        return
+    try:
+        with engine.begin() as conn:
+            if file_name:
+                conn.execute(text("""
+                    DELETE FROM fts_document_chunks 
+                    WHERE user_id = :user_id AND course_id = :course_id AND file_name = :file_name
+                """), {"user_id": user_id, "course_id": course_id, "file_name": file_name})
+            else:
+                conn.execute(text("""
+                    DELETE FROM fts_document_chunks 
+                    WHERE user_id = :user_id AND course_id = :course_id
+                """), {"user_id": user_id, "course_id": course_id})
+    except Exception as e:
+        print(f"[WARNING] Loi khi xoa SQLite FTS5: {e}")
+
+
+def search_fts_chunks(query: str, user_id: int, course_id: int, top_k: int = 5, chapter_id: int | None = None) -> list[dict]:
+    if not is_sqlite:
+        return []
+    try:
+        cleaned_q = re.sub(r'[^\w\s]', ' ', query)
+        words = [w.strip() for w in cleaned_q.split() if w.strip()]
+        if not words:
+            return []
+        
+        fts_query = " OR ".join(words)
+        
+        sql_str = """
+            SELECT id, text, file_name, page_number, chapter_id
+            FROM fts_document_chunks
+            WHERE fts_document_chunks MATCH :match_q
+              AND user_id = :user_id
+              AND course_id = :course_id
+        """
+        params = {
+            "match_q": f"text : ({fts_query})",
+            "user_id": user_id,
+            "course_id": course_id
+        }
+        
+        if chapter_id is not None:
+            sql_str += " AND chapter_id IN (0, :chapter_id)"
+            params["chapter_id"] = int(chapter_id)
+            
+        sql_str += " LIMIT 20"
+        
+        results = []
+        with engine.connect() as conn:
+            res = conn.execute(text(sql_str), params)
+            for row in res:
+                results.append({
+                    "id": row[0],
+                    "text": row[1],
+                    "file_name": row[2],
+                    "page_number": row[3],
+                    "chapter_id": row[4],
+                    "score": 0.0
+                })
+        return results
+    except Exception as e:
+        print(f"[WARNING] Loi khi search SQLite FTS5: {e}")
+        return []
+
+
+def reciprocal_rank_fusion(dense_results: list[dict], sparse_results: list[dict], top_k: int = 4) -> list[dict]:
+    rrf_scores = {}
+    constant = 60
+    
+    def get_key(hit):
+        return f"{hit['file_name']}_p{hit['page_number']}_{hash(hit['text'][:100])}"
+
+    for rank, hit in enumerate(dense_results, 1):
+        key = get_key(hit)
+        if key not in rrf_scores:
+            rrf_scores[key] = {"hit": hit, "score": 0.0}
+        rrf_scores[key]["score"] += 1.0 / (constant + rank)
+
+    for rank, hit in enumerate(sparse_results, 1):
+        key = get_key(hit)
+        if key not in rrf_scores:
+            rrf_scores[key] = {"hit": hit, "score": 0.0}
+        rrf_scores[key]["score"] += 1.0 / (constant + rank)
+
+    merged_results = []
+    for key, data in rrf_scores.items():
+        hit = data["hit"]
+        hit["score"] = round(data["score"], 4)
+        merged_results.append(hit)
+        
+    merged_results.sort(key=lambda x: x["score"], reverse=True)
+    return merged_results[:top_k]
+
 
 
 def chunk_text_by_page(text: str, page_number: int, chunk_size: int = 800, overlap: int = 150) -> list[dict]:
@@ -333,6 +488,7 @@ def add_document_vector(
                 ]
             }
         )
+        delete_fts_chunks(user_id, course_id, file_name)
     except Exception as e:
         print(f"[WARNING] Loi khi xoa vector cu de chong va cham ID: {e}")
 
@@ -383,6 +539,14 @@ def add_document_vector(
     # 4. Nạp vào ChromaDB
     collection.add(documents=documents, metadatas=metadatas, ids=ids)
     print(f"[INFO] Da nap thanh cong {len(all_chunks)} vector chunks tu file '{file_name}' (Course: {course_id}) kem metadata category={category}, tags={tags}, chapter_id={chapter_id}.")
+
+    # Đồng bộ hóa sang SQLite FTS5
+    try:
+        for idx, c in enumerate(all_chunks):
+            c["chapter_id"] = chapter_id
+        index_fts_chunks(user_id, course_id, file_name, all_chunks, ids)
+    except Exception as fts_err:
+        print(f"[WARNING] Failed to index FTS5: {fts_err}")
 
 
 def migrate_vector_db_metadata():
@@ -558,8 +722,13 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
         # Sắp xếp lại kết quả theo điểm số cuối cùng sau khi Rerank
         formatted_results.sort(key=lambda x: x["score"], reverse=True)
 
-        # Trả về đúng top_k kết quả có điểm cao nhất
-        return formatted_results[:top_k]
+        # Thực hiện tìm kiếm Sparse qua SQLite FTS5
+        sparse_results = search_fts_chunks(query, user_id, course_id, top_k=top_k * 2, chapter_id=chapter_id)
+
+        # Trộn kết quả Dense và Sparse bằng RRF (Reciprocal Rank Fusion)
+        hybrid_results = reciprocal_rank_fusion(formatted_results, sparse_results, top_k=top_k)
+
+        return hybrid_results
     except Exception as e:
         print(f"[ERROR] Loi truy van RAG ChromaDB: {e}")
         return []
@@ -570,5 +739,6 @@ def delete_course_documents(user_id: int, course_id: int):
     try:
         collection.delete(where={"$and": [{"user_id": {"$eq": user_id}}, {"course_id": {"$eq": course_id}}]})
         print(f"[INFO] Da xoa toan bo tai lieu cua Course {course_id} thuoc User {user_id} khoi ChromaDB.")
+        delete_fts_chunks(user_id, course_id)
     except Exception as e:
         print(f"Loi khi xoa tai lieu ChromaDB: {e}")

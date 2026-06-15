@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/courses", tags=["web_search"])
 
 # Pydantic Schemas
 class WebSearchRequest(BaseModel):
-    query: str = Field(..., example="Cây nhị phân AVL tự cân bằng")
+    query: str = Field(..., json_schema_extra={"example": "Cây nhị phân AVL tự cân bằng"})
     max_results: int | None = 10
     threshold: float | None = 0.7
     chapter_id: int | None = None
@@ -265,9 +265,9 @@ def web_search_and_ingest(
 
 
 class ForceIngestRequest(BaseModel):
-    url: str = Field(..., example="https://example.com/article")
-    title: str = Field(..., example="Article Title")
-    content: str = Field(default="", example="Nội dung đã tải về từ tìm kiếm trước đó.")
+    url: str = Field(..., json_schema_extra={"example": "https://example.com/article"})
+    title: str = Field(..., json_schema_extra={"example": "Article Title"})
+    content: str = Field(default="", json_schema_extra={"example": "Nội dung đã tải về từ tìm kiếm trước đó."})
     chapter_id: int | None = None
 
 
