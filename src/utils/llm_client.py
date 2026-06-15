@@ -332,11 +332,11 @@ def format_gemini_contents(prompt):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# PUBLIC API — Fallback Chain Orchestration
+# PUBLIC API — Fallback Chain Orchestration with Mocking & Caching
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def call_llm_json(
+def _execute_call_llm_json(
     prompt,
     system_instruction: str = None,
     temperature: float = 0.2,
@@ -345,10 +345,6 @@ def call_llm_json(
     prompt_version: str = None,
     metadata: dict = None,
 ) -> dict:
-    """Gọi LLM hỗ trợ định dạng JSON trả về, ghi nhận telemetry qua Langfuse.
-
-    Fallback chain: Local → Gemini → OpenAI → OpenRouter → Mock
-    """
     from .llm_mock import get_mock_json_response
     from .llm_providers import (
         call_gemini_json,
@@ -409,7 +405,80 @@ def call_llm_json(
     return mock_res
 
 
-def call_llm_stream(
+def call_llm_json(
+    prompt,
+    system_instruction: str = None,
+    temperature: float = 0.2,
+    trace_or_span=None,
+    prompt_name: str = None,
+    prompt_version: str = None,
+    metadata: dict = None,
+) -> dict:
+    """Gọi LLM hỗ trợ định dạng JSON trả về, tích hợp Mock Mode và Prompt Caching."""
+    cache_enabled = os.environ.get("LLM_CACHE_ENABLED", "true") == "true"
+    cache_key = None
+    if cache_enabled:
+        from .llm_cache import get_cache_key, get_cached_json
+        cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain")
+        cached_res = get_cached_json(cache_key)
+        if cached_res is not None:
+            print(f"--- [Cache Hit] Returning cached JSON for: {cache_key} ---")
+            start_time = datetime.datetime.now(datetime.UTC)
+            end_time = datetime.datetime.now(datetime.UTC)
+            log_generation_to_langfuse(
+                model_name="cached-response",
+                prompt=prompt,
+                system_instruction=system_instruction,
+                output=json.dumps(cached_res, ensure_ascii=False),
+                usage_data={"input_tokens": 0, "output_tokens": 0},
+                start_time=start_time,
+                end_time=end_time,
+                trace_or_span=trace_or_span,
+                prompt_name=prompt_name,
+                prompt_version=prompt_version,
+                metadata={**(metadata or {}), "cache_hit": True},
+                temperature=temperature,
+            )
+            return cached_res
+
+    if os.environ.get("LLM_MOCK_MODE") == "true":
+        from .llm_mock import get_mock_json_response
+        print("[INFO] LLM Mock Mode is ENABLED. Returning mock JSON response.")
+        start_time = datetime.datetime.now(datetime.UTC)
+        mock_res = get_mock_json_response(prompt, system_instruction)
+        end_time = datetime.datetime.now(datetime.UTC)
+        mock_out = json.dumps(mock_res, ensure_ascii=False)
+        log_generation_to_langfuse(
+            model_name="mock-fallback",
+            prompt=prompt,
+            system_instruction=system_instruction,
+            output=mock_out,
+            usage_data={"input_tokens": 0, "output_tokens": 0},
+            start_time=start_time,
+            end_time=end_time,
+            trace_or_span=trace_or_span,
+            prompt_name=prompt_name,
+            prompt_version=prompt_version,
+            metadata={**(metadata or {}), "mock_mode": True},
+            temperature=temperature,
+        )
+        if cache_enabled and cache_key:
+            from .llm_cache import save_cached_json
+            save_cached_json(cache_key, mock_res)
+        return mock_res
+
+    res = _execute_call_llm_json(
+        prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
+    )
+
+    if cache_enabled and cache_key:
+        from .llm_cache import save_cached_json
+        save_cached_json(cache_key, res)
+
+    return res
+
+
+def _execute_call_llm_stream(
     prompt,
     system_instruction: str = None,
     temperature: float = 0.2,
@@ -418,10 +487,6 @@ def call_llm_stream(
     prompt_version: str = None,
     metadata: dict = None,
 ):
-    """Gọi LLM và yield từng token, ghi nhận telemetry qua Langfuse.
-
-    Fallback chain: Local → Gemini → OpenAI → OpenRouter → Mock
-    """
     from .llm_mock import get_mock_stream_content, stream_mock_chunks
     from .llm_providers import (
         call_gemini_stream,
@@ -485,7 +550,89 @@ def call_llm_stream(
     )
 
 
-async def async_call_llm_json(
+def call_llm_stream(
+    prompt,
+    system_instruction: str = None,
+    temperature: float = 0.2,
+    trace_or_span=None,
+    prompt_name: str = None,
+    prompt_version: str = None,
+    metadata: dict = None,
+):
+    """Gọi LLM và yield từng token, hỗ trợ Mock Mode và Caching."""
+    cache_enabled = os.environ.get("LLM_CACHE_ENABLED", "true") == "true"
+    cache_key = None
+    if cache_enabled:
+        from .llm_cache import get_cache_key, get_cached_stream
+        cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain-stream")
+        from pathlib import Path
+        cache_dir = Path(os.environ.get("LLM_CACHE_DIR", ".llm_cache"))
+        if (cache_dir / f"{cache_key}.stream.jsonl").exists():
+            print(f"--- [Cache Hit] Returning cached stream for: {cache_key} ---")
+            start_time = datetime.datetime.now(datetime.UTC)
+            chunks = []
+            for chunk in get_cached_stream(cache_key):
+                chunks.append(chunk)
+                yield chunk
+            end_time = datetime.datetime.now(datetime.UTC)
+            log_generation_to_langfuse(
+                model_name="cached-response-stream",
+                prompt=prompt,
+                system_instruction=system_instruction,
+                output="".join(chunks),
+                usage_data={"input_tokens": 0, "output_tokens": 0},
+                start_time=start_time,
+                end_time=end_time,
+                trace_or_span=trace_or_span,
+                prompt_name=prompt_name,
+                prompt_version=prompt_version,
+                metadata={**(metadata or {}), "cache_hit": True},
+                temperature=temperature,
+            )
+            return
+
+    if os.environ.get("LLM_MOCK_MODE") == "true":
+        from .llm_mock import get_mock_stream_content, stream_mock_chunks
+        print("[INFO] LLM Mock Mode is ENABLED. Returning mock stream.")
+        start_time = datetime.datetime.now(datetime.UTC)
+        combined_mock = get_mock_stream_content()
+        chunks = []
+        for chunk in stream_mock_chunks(combined_mock):
+            chunks.append(chunk)
+            yield chunk
+        end_time = datetime.datetime.now(datetime.UTC)
+        log_generation_to_langfuse(
+            model_name="mock-fallback-stream",
+            prompt=prompt,
+            system_instruction=system_instruction,
+            output=combined_mock,
+            usage_data={"input_tokens": 0, "output_tokens": 0},
+            start_time=start_time,
+            end_time=end_time,
+            trace_or_span=trace_or_span,
+            prompt_name=prompt_name,
+            prompt_version=prompt_version,
+            metadata={**(metadata or {}), "mock_mode": True},
+            temperature=temperature,
+        )
+        if cache_enabled and cache_key and chunks:
+            from .llm_cache import save_cached_stream
+            save_cached_stream(cache_key, chunks)
+        return
+
+    chunks = []
+    for chunk in _execute_call_llm_stream(
+        prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
+    ):
+        chunks.append(chunk)
+        yield chunk
+
+    if cache_enabled and cache_key and chunks:
+        from .llm_cache import save_cached_stream
+        save_cached_stream(cache_key, chunks)
+
+
+async def _execute_async_call_llm_json(
     prompt,
     system_instruction: str = None,
     temperature: float = 0.2,
@@ -494,10 +641,6 @@ async def async_call_llm_json(
     prompt_version: str = None,
     metadata: dict = None,
 ) -> dict:
-    """Gọi LLM bất đồng bộ hỗ trợ định dạng JSON trả về, ghi nhận telemetry qua Langfuse.
-
-    Fallback chain: Local → Gemini → OpenAI → OpenRouter → Mock (sync fallback)
-    """
     from .llm_providers import (
         async_call_gemini_json,
         async_call_local_json,
@@ -539,7 +682,80 @@ async def async_call_llm_json(
     return call_llm_json(prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata)
 
 
-async def async_call_llm_stream(
+async def async_call_llm_json(
+    prompt,
+    system_instruction: str = None,
+    temperature: float = 0.2,
+    trace_or_span=None,
+    prompt_name: str = None,
+    prompt_version: str = None,
+    metadata: dict = None,
+) -> dict:
+    """Gọi LLM bất đồng bộ hỗ trợ định dạng JSON trả về, tích hợp Mock Mode và Caching."""
+    cache_enabled = os.environ.get("LLM_CACHE_ENABLED", "true") == "true"
+    cache_key = None
+    if cache_enabled:
+        from .llm_cache import get_cache_key, get_cached_json
+        cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain-async")
+        cached_res = get_cached_json(cache_key)
+        if cached_res is not None:
+            print(f"--- [Cache Hit] Returning cached async JSON for: {cache_key} ---")
+            start_time = datetime.datetime.now(datetime.UTC)
+            end_time = datetime.datetime.now(datetime.UTC)
+            log_generation_to_langfuse(
+                model_name="cached-response-async",
+                prompt=prompt,
+                system_instruction=system_instruction,
+                output=json.dumps(cached_res, ensure_ascii=False),
+                usage_data={"input_tokens": 0, "output_tokens": 0},
+                start_time=start_time,
+                end_time=end_time,
+                trace_or_span=trace_or_span,
+                prompt_name=prompt_name,
+                prompt_version=prompt_version,
+                metadata={**(metadata or {}), "cache_hit": True},
+                temperature=temperature,
+            )
+            return cached_res
+
+    if os.environ.get("LLM_MOCK_MODE") == "true":
+        from .llm_mock import get_mock_json_response
+        print("[INFO] LLM Mock Mode is ENABLED. Returning mock JSON.")
+        start_time = datetime.datetime.now(datetime.UTC)
+        mock_res = get_mock_json_response(prompt, system_instruction)
+        end_time = datetime.datetime.now(datetime.UTC)
+        mock_out = json.dumps(mock_res, ensure_ascii=False)
+        log_generation_to_langfuse(
+            model_name="mock-fallback",
+            prompt=prompt,
+            system_instruction=system_instruction,
+            output=mock_out,
+            usage_data={"input_tokens": 0, "output_tokens": 0},
+            start_time=start_time,
+            end_time=end_time,
+            trace_or_span=trace_or_span,
+            prompt_name=prompt_name,
+            prompt_version=prompt_version,
+            metadata={**(metadata or {}), "mock_mode": True},
+            temperature=temperature,
+        )
+        if cache_enabled and cache_key:
+            from .llm_cache import save_cached_json
+            save_cached_json(cache_key, mock_res)
+        return mock_res
+
+    res = await _execute_async_call_llm_json(
+        prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
+    )
+
+    if cache_enabled and cache_key:
+        from .llm_cache import save_cached_json
+        save_cached_json(cache_key, res)
+
+    return res
+
+
+async def _execute_async_call_llm_stream(
     prompt,
     system_instruction: str = None,
     temperature: float = 0.2,
@@ -548,10 +764,6 @@ async def async_call_llm_stream(
     prompt_version: str = None,
     metadata: dict = None,
 ):
-    """Gọi LLM bất đồng bộ và yield từng token, ghi nhận telemetry qua Langfuse.
-
-    Fallback chain: Local → Gemini → OpenAI → OpenRouter → Mock (sync fallback)
-    """
     from .llm_providers import (
         async_call_gemini_stream,
         async_call_local_stream,
@@ -602,3 +814,86 @@ async def async_call_llm_stream(
         prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
     ):
         yield token
+
+
+async def async_call_llm_stream(
+    prompt,
+    system_instruction: str = None,
+    temperature: float = 0.2,
+    trace_or_span=None,
+    prompt_name: str = None,
+    prompt_version: str = None,
+    metadata: dict = None,
+):
+    """Gọi LLM bất đồng bộ và yield từng token, hỗ trợ Mock Mode và Caching."""
+    cache_enabled = os.environ.get("LLM_CACHE_ENABLED", "true") == "true"
+    cache_key = None
+    if cache_enabled:
+        from .llm_cache import get_cache_key, async_get_cached_stream
+        cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain-async-stream")
+        from pathlib import Path
+        cache_dir = Path(os.environ.get("LLM_CACHE_DIR", ".llm_cache"))
+        if (cache_dir / f"{cache_key}.stream.jsonl").exists():
+            print(f"--- [Cache Hit] Returning cached async stream for: {cache_key} ---")
+            start_time = datetime.datetime.now(datetime.UTC)
+            chunks = []
+            async for chunk in async_get_cached_stream(cache_key):
+                chunks.append(chunk)
+                yield chunk
+            end_time = datetime.datetime.now(datetime.UTC)
+            log_generation_to_langfuse(
+                model_name="cached-response-async-stream",
+                prompt=prompt,
+                system_instruction=system_instruction,
+                output="".join(chunks),
+                usage_data={"input_tokens": 0, "output_tokens": 0},
+                start_time=start_time,
+                end_time=end_time,
+                trace_or_span=trace_or_span,
+                prompt_name=prompt_name,
+                prompt_version=prompt_version,
+                metadata={**(metadata or {}), "cache_hit": True},
+                temperature=temperature,
+            )
+            return
+
+    if os.environ.get("LLM_MOCK_MODE") == "true":
+        from .llm_mock import get_mock_stream_content, stream_mock_chunks
+        print("[INFO] LLM Mock Mode is ENABLED. Returning async mock stream.")
+        start_time = datetime.datetime.now(datetime.UTC)
+        combined_mock = get_mock_stream_content()
+        chunks = []
+        for chunk in stream_mock_chunks(combined_mock):
+            chunks.append(chunk)
+            yield chunk
+        end_time = datetime.datetime.now(datetime.UTC)
+        log_generation_to_langfuse(
+            model_name="mock-fallback-stream",
+            prompt=prompt,
+            system_instruction=system_instruction,
+            output=combined_mock,
+            usage_data={"input_tokens": 0, "output_tokens": 0},
+            start_time=start_time,
+            end_time=end_time,
+            trace_or_span=trace_or_span,
+            prompt_name=prompt_name,
+            prompt_version=prompt_version,
+            metadata={**(metadata or {}), "mock_mode": True},
+            temperature=temperature,
+        )
+        if cache_enabled and cache_key and chunks:
+            from .llm_cache import save_cached_stream
+            save_cached_stream(cache_key, chunks)
+        return
+
+    chunks = []
+    async for chunk in _execute_async_call_llm_stream(
+        prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
+    ):
+        chunks.append(chunk)
+        yield chunk
+
+    if cache_enabled and cache_key and chunks:
+        from .llm_cache import save_cached_stream
+        save_cached_stream(cache_key, chunks)
+

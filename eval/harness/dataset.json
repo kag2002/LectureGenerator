@@ -1,0 +1,20 @@
+[
+  {
+    "id": "storyboard_dsa",
+    "type": "storyboard",
+    "prompt": "Generate a storyboard outline for a lecture on Binary Search Tree (BST) operations including search, insertion, and deletion.",
+    "system_instruction": "You are a curriculum designer. Respond only in valid JSON matching the storyboard schema."
+  },
+  {
+    "id": "syllabus_python",
+    "type": "syllabus",
+    "prompt": "Create a course syllabus for a 4-week introduction to Python programming loops and conditional structures.",
+    "system_instruction": "Generate a course syllabus structure. Respond in JSON."
+  },
+  {
+    "id": "mcq_oop",
+    "type": "mcq",
+    "prompt": "Generate 2 multiple-choice questions on Object-Oriented Programming (OOP) concepts like polymorphism and inheritance.",
+    "system_instruction": "You are an automated quiz generator. Return the questions in JSON."
+  }
+]
