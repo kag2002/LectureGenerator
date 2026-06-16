@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Login from './views/Login';
+import Landing from './views/Landing';
 import Dashboard from './views/Dashboard';
 import CourseRoadmap from './views/CourseRoadmap';
 import CourseConfig from './views/CourseConfig';
@@ -14,16 +15,26 @@ import MonitorDashboard from './views/MonitorDashboard';
 import AppShell from './components/AppShell';
 import { User, Course, QueueItem } from '@/types';
 import { Zap, X, Play, Pause, Check, Loader2, Maximize2, Minimize2, Cpu } from 'lucide-react';
+import MascotCompanion from './components/MascotCompanion';
+
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<string>('login'); // 'login' | 'dashboard' | 'course_roadmap' | 'course_config' | 'lesson_planner' | 'question_bank' | 'matrix_dashboard' | 'knowledge_base' | 'chatbot'
+  const [activeView, setActiveView] = useState<string>('landing'); // 'landing' | 'login' | 'dashboard' | 'course_roadmap' | 'course_config' | 'lesson_planner' | 'question_bank' | 'matrix_dashboard' | 'knowledge_base' | 'chatbot'
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
   const [activeCloId, setActiveCloId] = useState<number | null>(null);
   const [activeCloCode, setActiveCloCode] = useState<string | null>(null);
   const [activeBloomLevel, setActiveBloomLevel] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [forceOpenPedagogicalModal, setForceOpenPedagogicalModal] = useState<boolean>(false);
+  const [pendingAction, setPendingAction] = useState<{
+    view: string;
+    action: string;
+    params: any;
+    message?: string;
+  } | null>(null);
+  const [showActionModal, setShowActionModal] = useState<boolean>(false);
 
   // --- States cho Giám sát AI và Trạng thái AI toàn cục ---
   const [monitorStats, setMonitorStats] = useState(() => {
@@ -203,7 +214,7 @@ export default function App() {
         if (mode === 'questions') {
           // Sinh câu hỏi qua SSE Stream
           const response = await fetch(
-            `http://localhost:8000/api/courses/${courseId}/questions/generate-stream`,
+            `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${courseId}/questions/generate-stream`,
             {
               method: 'POST',
               headers: {
@@ -268,7 +279,7 @@ export default function App() {
           }
 
           const response = await fetch(
-            `http://localhost:8000/api/courses/chapters/${chId}/append-slide-for-clo-stream`,
+            `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${chId}/append-slide-for-clo-stream`,
             {
               method: 'POST',
               headers: {
@@ -363,6 +374,9 @@ export default function App() {
   };
 
   const handleNavigate = (view: string, extra: any = null) => {
+    if (view === 'chatbot' && process.env.NEXT_PUBLIC_HIDE_CHAT === 'true') {
+      view = 'course_roadmap';
+    }
     if (extra !== null) {
       if (typeof extra === 'object') {
         if (extra.chapterId !== undefined) setActiveChapterId(extra.chapterId);
@@ -427,17 +441,111 @@ export default function App() {
           setActiveView('dashboard');
         }
       } else {
-        if (savedView && savedView !== 'login') {
-          setActiveView(savedView);
-        } else {
-          setActiveView('dashboard');
-        }
+        setActiveView('dashboard');
       }
     } else {
-      setActiveView('login');
+      setActiveView('landing');
     }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    (window as any).hasPendingAction = showActionModal;
+  }, [showActionModal]);
+
+  useEffect(() => {
+    const handleGlobalSyllabusUpload = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const file = customEvent.detail.file;
+      if (file && selectedCourse) {
+        handleNavigate('course_config');
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('trigger-syllabus-parse', { detail: { file } }));
+        }, 150);
+      }
+    };
+    window.addEventListener('global-syllabus-upload', handleGlobalSyllabusUpload);
+    return () => {
+      window.removeEventListener('global-syllabus-upload', handleGlobalSyllabusUpload);
+    };
+  }, [selectedCourse]);
+
+  useEffect(() => {
+    const handleChatbotDispatch = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const detail = customEvent.detail;
+      if (detail && detail.view) {
+        setPendingAction({
+          view: detail.view,
+          action: detail.action,
+          params: detail.params,
+          message: detail.message
+        });
+        
+        // Bắt sự kiện mở bubble mascot nếu người dùng không ở trang chatbot
+        if (activeView !== 'chatbot') {
+          window.dispatchEvent(new CustomEvent('open-mascot-bubble'));
+        }
+      }
+    };
+    const handleGlobalConfirm = () => {
+      handleConfirmAction();
+    };
+    const handleGlobalCancel = () => {
+      handleCancelAction();
+    };
+
+    window.addEventListener('chatbot-dispatch-action', handleChatbotDispatch);
+    window.addEventListener('confirm-chatbot-action', handleGlobalConfirm);
+    window.addEventListener('cancel-chatbot-action', handleGlobalCancel);
+
+    return () => {
+      window.removeEventListener('chatbot-dispatch-action', handleChatbotDispatch);
+      window.removeEventListener('confirm-chatbot-action', handleGlobalConfirm);
+      window.removeEventListener('cancel-chatbot-action', handleGlobalCancel);
+    };
+  }, [pendingAction, selectedCourse, activeView]);
+
+  const handleConfirmAction = () => {
+    if (!pendingAction) return;
+
+    const { view, action, params } = pendingAction;
+
+    // 1. Navigate to the view and pass parameters
+    const extra: any = {};
+    if (params?.chapter_id) extra.chapterId = params.chapter_id;
+    if (params?.clo_id) extra.cloId = params.clo_id;
+    if (params?.clo_code) extra.cloCode = params.clo_code;
+    if (params?.bloom_level) extra.bloomLevel = params.bloom_level;
+
+    // Navigate to the correct page context
+    handleNavigate(view, extra);
+
+    // Dispatch a CustomEvent to the window after a short delay to allow mounting
+    setTimeout(() => {
+      let eventName = '';
+      if (view === 'lesson_planner') {
+        eventName = 'lesson-planner-programmatic-trigger';
+      } else if (view === 'question_bank') {
+        eventName = 'question-bank-programmatic-trigger';
+      }
+
+      if (eventName) {
+        window.dispatchEvent(new CustomEvent(eventName, { 
+          detail: { action, params } 
+        }));
+      }
+    }, 250);
+
+    // Close the modal
+    setShowActionModal(false);
+    setPendingAction(null);
+  };
+
+  const handleCancelAction = () => {
+    setShowActionModal(false);
+    setPendingAction(null);
+  };
 
   const handleLoginSuccess = (loggedInUser: User) => {
     setUser(loggedInUser);
@@ -474,8 +582,11 @@ export default function App() {
 
   return (
     <>
+      {activeView === 'landing' && (
+        <Landing user={user} onNavigate={handleNavigate} />
+      )}
       {activeView === 'login' && (
-        <Login onLoginSuccess={handleLoginSuccess} />
+        <Login onLoginSuccess={handleLoginSuccess} onBackToLanding={() => handleNavigate('landing')} />
       )}
       {activeView === 'dashboard' && (
         <Dashboard
@@ -533,6 +644,8 @@ export default function App() {
               onRecordAIUsage={onRecordAIUsage}
               setAIProcessingStatus={setAIProcessingStatus}
               isActive={activeView === 'lesson_planner'}
+              forceOpenPedagogicalModal={forceOpenPedagogicalModal}
+              clearForceOpenPedagogicalModal={() => setForceOpenPedagogicalModal(false)}
             />
           </div>
           <div style={{ display: activeView === 'question_bank' ? 'block' : 'none' }}>
@@ -936,7 +1049,7 @@ export default function App() {
       {globalAIStatus.isProcessing && (
         <div style={{
           position: 'fixed',
-          bottom: '24px',
+          bottom: '115px',
           right: '24px',
           zIndex: 10000,
           background: 'var(--glass-bg)',
@@ -997,6 +1110,198 @@ export default function App() {
           >
             <X size={14} aria-hidden="true" />
           </button>
+        </div>
+      )}
+      {user && selectedCourse && (
+        <MascotCompanion
+          selectedCourse={selectedCourse}
+          onNavigate={handleNavigate}
+          onTriggerPedagogicalConfig={() => setForceOpenPedagogicalModal(true)}
+        />
+      )}
+
+      {showActionModal && pendingAction && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(9, 13, 26, 0.75)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 11000,
+          fontFamily: '"Outfit", "Inter", sans-serif',
+        }}>
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            borderRadius: '16px',
+            width: '460px',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, var(--vinuni-navy-dark) 0%, var(--vinuni-navy) 100%)',
+              padding: '20px 24px',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: 'rgba(212, 163, 89, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--vinuni-gold)'
+              }}>
+                <Cpu size={18} />
+              </div>
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: 'var(--vinuni-gold)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Xác nhận hành động AI
+                </h3>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Falcon AI đề xuất điều phối quy trình</span>
+              </div>
+              <button 
+                onClick={handleCancelAction}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+              <p style={{ margin: 0, fontSize: '13.5px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                {pendingAction.message || 'Mascot AI đề xuất thực hiện hành động tự động trên giao diện này.'}
+              </p>
+
+              {/* Param Box */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.45)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: '10px',
+                padding: '14px',
+                fontSize: '12.5px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Chức năng:</span>
+                  <strong style={{ color: 'var(--vinuni-gold)' }}>
+                    {pendingAction.action === 'generate_outline' && 'Thiết kế cấu trúc Outline môn học'}
+                    {pendingAction.action === 'generate_storyboard' && 'Thiết kế dàn ý (Storyboard)'}
+                    {pendingAction.action === 'generate_materials' && 'Tạo slide bài giảng & giáo án'}
+                    {pendingAction.action === 'generate_questions' && 'Tạo câu hỏi trắc nghiệm MCQ'}
+                  </strong>
+                </div>
+
+                {pendingAction.params?.chapter_title && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#94a3b8' }}>Chương học:</span>
+                    <span style={{ color: '#cbd5e1', fontWeight: '600' }}>
+                      {pendingAction.params.chapter_title}
+                    </span>
+                  </div>
+                )}
+
+                {pendingAction.params?.clo_code && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#94a3b8' }}>Chuẩn đầu ra (CLO):</span>
+                    <span style={{ color: '#cbd5e1', fontWeight: '600' }}>
+                      {pendingAction.params.clo_code}
+                    </span>
+                  </div>
+                )}
+
+                {pendingAction.params?.bloom_level && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#94a3b8' }}>Mức Bloom:</span>
+                    <span style={{
+                      color: 'var(--vinuni-gold)',
+                      fontWeight: '700',
+                      background: 'rgba(212, 163, 89, 0.15)',
+                      padding: '1px 6px',
+                      borderRadius: '4px'
+                    }}>
+                      Bậc B{pendingAction.params.bloom_level}
+                    </span>
+                  </div>
+                )}
+
+                {pendingAction.params?.count && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#94a3b8' }}>Số lượng câu hỏi:</span>
+                    <span style={{ color: '#cbd5e1', fontWeight: '600' }}>{pendingAction.params.count} câu</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(15, 23, 42, 0.2)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px'
+            }}>
+              <button
+                onClick={handleCancelAction}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#cbd5e1',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={handleConfirmAction}
+                style={{
+                  background: 'linear-gradient(135deg, var(--vinuni-gold) 0%, #b8860b 100%)',
+                  color: 'var(--vinuni-navy)',
+                  border: 'none',
+                  padding: '8px 20px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(212, 163, 89, 0.2)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Đồng ý & Thực hiện
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>

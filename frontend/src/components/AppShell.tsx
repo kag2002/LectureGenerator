@@ -103,9 +103,9 @@ export default function AppShell({
     { view: 'question_bank', label: 'Ngân hàng Đề thi', icon: <HelpCircle size={18} /> },
     { view: 'matrix_dashboard', label: 'Ma trận CLO-Bloom', icon: <BarChart2 size={18} /> },
     { view: 'knowledge_base', label: 'Thư viện RAG', icon: <Library size={18} /> },
-    { view: 'chatbot', label: 'Trợ lý AI Support', icon: <MessageSquare size={18} /> },
+    process.env.NEXT_PUBLIC_HIDE_CHAT !== 'true' && { view: 'chatbot', label: 'Trợ lý AI Support', icon: <MessageSquare size={18} /> },
     { view: 'ai_monitor', label: 'Giám sát AI', icon: <Activity size={18} /> },
-  ];
+  ].filter(Boolean) as { view: string; label: string; icon: React.ReactNode }[];
 
   return (
     <div className="app-shell">
