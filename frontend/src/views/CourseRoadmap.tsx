@@ -89,7 +89,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `http://localhost:8000/api/courses/chapters/${chapterId}/export-pptx?theme=warm_academic&engine=ppt_master`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${chapterId}/export-pptx?theme=warm_academic&engine=ppt_master`,
         {
           method: 'GET',
           headers: {
@@ -124,17 +124,17 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
 
   const handleExportLessonPlan = (chapterId: number) => {
     const token = localStorage.getItem('token');
-    window.open(`http://localhost:8000/api/courses/chapters/${chapterId}/export-lesson-plan?token=${token}`, '_blank');
+    window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${chapterId}/export-lesson-plan?token=${token}`, '_blank');
   };
 
   const handleExportCourseLessonPlan = () => {
     const token = localStorage.getItem('token');
-    window.open(`http://localhost:8000/api/courses/${course.id}/export-materials?token=${token}`, '_blank');
+    window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/export-materials?token=${token}`, '_blank');
   };
 
   const handleExportCourseQuestions = () => {
     const token = localStorage.getItem('token');
-    window.open(`http://localhost:8000/api/courses/${course.id}/export-questions?token=${token}`, '_blank');
+    window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/export-questions?token=${token}`, '_blank');
   };
 
   const handleExportZIPPackage = async () => {
@@ -142,7 +142,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `http://localhost:8000/api/courses/${course.id}/export-zip?organization_style=by_chapter&theme=warm_academic`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/export-zip?organization_style=by_chapter&theme=warm_academic`,
         {
           method: 'GET',
           headers: {

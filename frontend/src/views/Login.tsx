@@ -6,9 +6,10 @@ import '../styles/Login.css';
 
 export interface LoginProps {
   onLoginSuccess: (user: User) => void;
+  onBackToLanding?: () => void;
 }
 
-export default function Login({ onLoginSuccess }: LoginProps) {
+export default function Login({ onLoginSuccess, onBackToLanding }: LoginProps) {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('prof.khatkhe@vinuni.edu.vn');
   const [password, setPassword] = useState('VinUni2026!#');
@@ -146,6 +147,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               {isRegister ? 'Đăng nhập ngay' : 'Đăng ký tại đây'}
             </button>
           </p>
+          {onBackToLanding && (
+            <div style={{ marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={onBackToLanding}
+                className="login-switch-btn"
+                style={{ fontSize: '13px', opacity: 0.8 }}
+              >
+                ← Trở về trang giới thiệu
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

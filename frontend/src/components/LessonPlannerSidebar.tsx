@@ -149,6 +149,7 @@ export default function LessonPlannerSidebar({
             <div className="planner-outline-actions">
               <button 
                 onClick={handleGenerateOutline} 
+                id="lp-generate-outline-btn"
                 className="planner-ai-outline-btn"
                 disabled={loading}
               >

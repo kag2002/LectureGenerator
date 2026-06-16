@@ -107,7 +107,14 @@ export function useRoadmapData(course: Course) {
     }
 
     fetchAll();
-    return () => { cancelled = true; };
+    const handleDbChanged = () => {
+      fetchAll();
+    };
+    window.addEventListener('db-state-changed', handleDbChanged);
+    return () => { 
+      cancelled = true; 
+      window.removeEventListener('db-state-changed', handleDbChanged);
+    };
   }, [course]);
 
   // ─── Drag and drop event handlers ──────────────────────────────

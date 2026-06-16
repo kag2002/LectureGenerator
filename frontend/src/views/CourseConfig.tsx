@@ -72,14 +72,33 @@ export default function CourseConfig({
     fetchClos();
   }, [course.id]);
 
-  // Xử lý upload file Syllabus và gửi API parse bằng Stream SSE
-  const handleFileUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file && !useTextarea) {
-      setError('Vui lòng chọn file Syllabus hoặc nhập văn bản thô.');
-      return;
-    }
+  useEffect(() => {
+    const handleDbChanged = () => {
+      fetchClos();
+    };
+    window.addEventListener('db-state-changed', handleDbChanged);
+    return () => {
+      window.removeEventListener('db-state-changed', handleDbChanged);
+    };
+  }, [course.id]);
 
+  useEffect(() => {
+    const handleTriggerParse = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const file = customEvent.detail.file;
+      if (file) {
+        setFile(file);
+        setUseTextarea(false);
+        startParsing(file);
+      }
+    };
+    window.addEventListener('trigger-syllabus-parse', handleTriggerParse);
+    return () => {
+      window.removeEventListener('trigger-syllabus-parse', handleTriggerParse);
+    };
+  }, [course.id]);
+
+  const startParsing = async (finalFile: File) => {
     setError('');
     setMessage('');
     setLoading(true);
@@ -92,19 +111,11 @@ export default function CourseConfig({
     setAIProcessingStatus(true, 'AI đang chuẩn bị phân tích Syllabus...');
 
     try {
-      let finalFile: File;
-      if (useTextarea) {
-        const blob = new Blob([rawText], { type: 'text/plain' });
-        finalFile = new File([blob], 'syllabus_pasted.txt', { type: 'text/plain' });
-      } else {
-        finalFile = file!;
-      }
-
       const formData = new FormData();
       formData.append('file', finalFile);
 
       const response = await fetch(
-        `http://localhost:8000/api/courses/${course.id}/parse-syllabus-stream`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/parse-syllabus-stream`,
         {
           method: 'POST',
           headers: {
@@ -162,9 +173,45 @@ export default function CourseConfig({
                 setStreamLog('');
                 setStreamStage(0);
                 setAIProcessingStatus(false);
+
+                // Đồng bộ tin nhắn chatbot
+                try {
+                  let sessionId = null;
+                  const sessionsRes = await client.get(`/api/chatbot/sessions?course_id=${course.id}`);
+                  if (sessionsRes.data && sessionsRes.data.length > 0) {
+                    sessionId = sessionsRes.data[0].id;
+                  } else {
+                    const createRes = await client.post('/api/chatbot/sessions', {
+                      course_id: course.id,
+                      title: "Trò chuyện với Falcon Companion"
+                    });
+                    sessionId = createRes.data.id;
+                  }
+
+                  const closList = data.clos || [];
+                  let closMarkdown = `Dạ, em đã nạp thành công file đề cương **${finalFile.name}** và tự động trích xuất được **${closList.length} Chuẩn đầu ra (CLOs)** cho môn học **${course.course_name}**:\n\n`;
+                  closList.forEach((c: any) => {
+                    closMarkdown += `* **${c.clo_code}**: ${c.description} (Mức Bloom: Bậc B${c.bloom_level})\n`;
+                  });
+
+                  await client.post(`/api/chatbot/sessions/${sessionId}/messages`, {
+                    role: 'user',
+                    content: `[Tải lên đề cương syllabus: ${finalFile.name}]`
+                  });
+
+                  await client.post(`/api/chatbot/sessions/${sessionId}/messages`, {
+                    role: 'assistant',
+                    content: closMarkdown
+                  });
+
+                  window.dispatchEvent(new CustomEvent('db-state-changed'));
+                } catch (chatErr) {
+                  console.error("Lỗi đồng bộ tin nhắn chatbot:", chatErr);
+                }
+
                 const opLatency = (Date.now() - opStartTime) / 1000;
                 onRecordAIUsage({
-                  operation: `Phân tích Syllabus - ${file ? file.name : 'Dán trực tiếp'}`,
+                  operation: `Phân tích Syllabus - ${finalFile.name}`,
                   latency: Number(opLatency.toFixed(1)),
                   cost: 0.05,
                   status: 'success'
@@ -177,7 +224,7 @@ export default function CourseConfig({
                 setAIProcessingStatus(false);
                 const opLatency = (Date.now() - opStartTime) / 1000;
                 onRecordAIUsage({
-                  operation: `Phân tích Syllabus - ${file ? file.name : 'Dán trực tiếp'}`,
+                  operation: `Phân tích Syllabus - ${finalFile.name}`,
                   latency: Number(opLatency.toFixed(1)),
                   cost: 0,
                   status: 'error'
@@ -198,12 +245,31 @@ export default function CourseConfig({
       setAIProcessingStatus(false);
       const opLatency = (Date.now() - opStartTime) / 1000;
       onRecordAIUsage({
-        operation: `Phân tích Syllabus - ${file ? file.name : 'Dán trực tiếp'}`,
+        operation: `Phân tích Syllabus - ${finalFile.name}`,
         latency: Number(opLatency.toFixed(1)),
         cost: 0,
         status: 'error'
       });
     }
+  };
+
+  // Xử lý upload file Syllabus và gửi API parse bằng Stream SSE
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file && !useTextarea) {
+      setError('Vui lòng chọn file Syllabus hoặc nhập văn bản thô.');
+      return;
+    }
+
+    let finalFile: File;
+    if (useTextarea) {
+      const blob = new Blob([rawText], { type: 'text/plain' });
+      finalFile = new File([blob], 'syllabus_pasted.txt', { type: 'text/plain' });
+    } else {
+      finalFile = file!;
+    }
+
+    startParsing(finalFile);
   };
 
   // Thêm một dòng CLO trống

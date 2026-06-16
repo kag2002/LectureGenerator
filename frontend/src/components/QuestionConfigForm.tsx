@@ -207,7 +207,7 @@ export default function QuestionConfigForm({
             </label>
           </div>
 
-          <button type="submit" disabled={generating || loading} className="qb-submit-btn">
+          <button type="submit" id="qb-generate-btn" disabled={generating || loading} className="qb-submit-btn">
             {generating ? 'AI Đang tạo câu hỏi…' : 'Bắt đầu tạo câu hỏi'}
           </button>
 

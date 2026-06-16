@@ -11,8 +11,7 @@ import {
   BarChart2, 
   Check, 
   X, 
-  ShieldAlert, 
-  Cpu,
+  ShieldAlert, Cpu, Zap,
   Edit3,
   ChevronDown,
   ChevronRight,
@@ -21,7 +20,9 @@ import {
   Target,
   Layers,
   HelpCircle,
-  BookOpen
+  BookOpen,
+  Paperclip,
+  Upload
 } from 'lucide-react';
 import { Course } from '@/types';
 import '../styles/ChatBot.css';
@@ -290,7 +291,7 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
       } 
       else if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         parsedElements.push(
-          <li key={i} style={{ marginLeft: '16px', listStyleType: 'disc', margin: '4px 0', textAlign: 'left' }}>
+          <li key={i} style={{ listStyleType: 'disc', margin: '4px 0 4px 24px', textAlign: 'left' }}>
             {parseInline(line.trim().slice(2))}
           </li>
         );
@@ -298,7 +299,7 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
       else if (/^\d+\.\s/.test(line.trim())) {
         const dotIdx = line.trim().indexOf('.');
         parsedElements.push(
-          <li key={i} style={{ marginLeft: '16px', listStyleType: 'decimal', margin: '4px 0', textAlign: 'left' }}>
+          <li key={i} style={{ listStyleType: 'decimal', margin: '4px 0 4px 28px', textAlign: 'left' }}>
             {parseInline(line.trim().slice(dotIdx + 1).trim())}
           </li>
         );
@@ -398,6 +399,84 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
   const prevMessagesLength = useRef(0);
   const prevStagesLength = useRef(0);
   const prevSessionId = useRef<number | null>(null);
+
+  const [pendingAction, setPendingAction] = useState<any | null>(null);
+
+  // Drag & Drop / Syllabus Upload States in Chat
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
+  const [uploadingFile, setUploadingFile] = useState<string | null>(null);
+  const [uploadStage, setUploadStage] = useState(0); // 0 -> 4
+  const [uploadLog, setUploadLog] = useState('');
+  const [extractedClos, setExtractedClos] = useState<any[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+    if (!['.pdf', '.docx', '.txt'].includes(ext)) {
+      alert(`Định dạng tệp '${ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt.`);
+      return;
+    }
+
+    // Gửi sự kiện nạp đề cương toàn cục để chuyển hướng và xử lý ở trang thiết lập chính
+    window.dispatchEvent(new CustomEvent('global-syllabus-upload', { detail: { file } }));
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current++;
+    if (dragCounter.current === 1) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current--;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      handleFileUpload(file);
+    }
+  };
+
+  useEffect(() => {
+    const handleDispatchAction = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setPendingAction(customEvent.detail);
+    };
+    const handleClearAction = () => {
+      setPendingAction(null);
+    };
+    window.addEventListener('chatbot-dispatch-action', handleDispatchAction);
+    window.addEventListener('confirm-chatbot-action', handleClearAction);
+    window.addEventListener('cancel-chatbot-action', handleClearAction);
+    return () => {
+      window.removeEventListener('chatbot-dispatch-action', handleDispatchAction);
+      window.removeEventListener('confirm-chatbot-action', handleClearAction);
+      window.removeEventListener('cancel-chatbot-action', handleClearAction);
+    };
+  }, []);
 
   // Lấy các phiên trò chuyện
   const fetchSessions = async () => {
@@ -534,6 +613,32 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
     const userText = inputText;
     setInputText('');
+
+    if ((window as any).hasPendingAction) {
+      const lowerText = userText.trim().toLowerCase();
+      if (['ok', 'cho phép', 'cho phep', 'đồng ý', 'dong y', 'xác nhận', 'xac nhan', 'yes', 'confirm', 'allow'].includes(lowerText)) {
+        window.dispatchEvent(new CustomEvent('confirm-chatbot-action'));
+        const tempUserMsg: Message = { id: Date.now(), role: 'user', content: userText };
+        const aiMsg: Message = {
+          id: Date.now() + 1,
+          role: 'assistant',
+          content: 'Dạ, em đang thực hiện hành động theo yêu cầu của Thầy/Cô ạ!'
+        };
+        setMessages(prev => [...prev, tempUserMsg, aiMsg]);
+        return;
+      } else if (['hủy', 'huy', 'không', 'khong', 'hủy bỏ', 'huy bo', 'no', 'cancel'].includes(lowerText)) {
+        window.dispatchEvent(new CustomEvent('cancel-chatbot-action'));
+        const tempUserMsg: Message = { id: Date.now(), role: 'user', content: userText };
+        const aiMsg: Message = {
+          id: Date.now() + 1,
+          role: 'assistant',
+          content: 'Em đã hủy lệnh theo yêu cầu của Thầy/Cô.'
+        };
+        setMessages(prev => [...prev, tempUserMsg, aiMsg]);
+        return;
+      }
+    }
+
     setLoading(true);
     resetTelemetry();
 
@@ -593,6 +698,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
           if (event === 'stage') {
             setStages(prev => [...prev, data]);
+          } else if (event === 'dispatch_action') {
+            window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', { detail: data }));
           } else if (event === 'tool_call') {
             setCurrentRound(data.round);
             tempToolCalls = [...tempToolCalls, ...data.tool_calls];
@@ -759,6 +866,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
           if (event === 'stage') {
             setStages(prev => [...prev, data]);
+          } else if (event === 'dispatch_action') {
+            window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', { detail: data }));
           } else if (event === 'tool_call') {
             setCurrentRound(data.round);
             tempToolCalls = [...tempToolCalls, ...data.tool_calls];
@@ -884,7 +993,22 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
         </aside>
 
         {/* Cột 2: Chat View */}
-        <section className="chatbot-chat-container">
+        <section 
+          className="chatbot-chat-container"
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div className="chatbot-drag-overlay">
+              <div className="chatbot-drag-overlay-icon">
+                <Upload size={32} />
+              </div>
+              <h4 className="chatbot-drag-overlay-title">Thả tệp đề cương vào đây</h4>
+              <p className="chatbot-drag-overlay-desc">Chấp nhận file .pdf, .docx, .txt để trích xuất CLOs tự động</p>
+            </div>
+          )}
           <div ref={chatHistoryRef} className="chatbot-chat-history">
             {messages.length === 0 ? (
               <div className="chatbot-empty-chat">
@@ -893,6 +1017,18 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                 </div>
                 <h4>Em có thể giúp gì cho Thầy/Cô hôm nay?</h4>
                 <p>Thầy/Cô có thể yêu cầu soạn bài giảng, tra cứu tài liệu RAG, hoặc xem ma trận CLO chuẩn Bloom của môn học.</p>
+                
+                <div 
+                  className="chatbot-empty-dropzone"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Nhấn để chọn file đề cương Syllabus (.pdf, .docx, .txt)"
+                >
+                  <div className="chatbot-empty-dropzone-icon-wrapper">
+                    <Upload size={24} />
+                  </div>
+                  <span className="chatbot-empty-dropzone-title">Nạp nhanh đề cương Syllabus</span>
+                  <span className="chatbot-empty-dropzone-desc">Kéo thả tệp đề cương vào đây hoặc click để tải lên (.pdf, .docx, .txt)</span>
+                </div>
               </div>
             ) : (
               <>
@@ -951,19 +1087,19 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                                   <div className="chatbot-version-selector">
                                     <button 
                                       type="button" 
-                                      disabled={m.versions.indexOf(m.id) === 0 || loading} 
-                                      onClick={() => handleSwitchBranch(m.versions[m.versions.indexOf(m.id) - 1])}
+                                      disabled={m.versions!.indexOf(m.id) === 0 || loading} 
+                                      onClick={() => handleSwitchBranch(m.versions![m.versions!.indexOf(m.id) - 1])}
                                       className="chatbot-version-btn"
                                     >
                                       &lt;
                                     </button>
                                     <span className="chatbot-version-text">
-                                      v{m.versions.indexOf(m.id) + 1}/{m.versions.length}
+                                      v{m.versions!.indexOf(m.id) + 1}/{m.versions!.length}
                                     </span>
                                     <button 
                                       type="button" 
-                                      disabled={m.versions.indexOf(m.id) === m.versions.length - 1 || loading} 
-                                      onClick={() => handleSwitchBranch(m.versions[m.versions.indexOf(m.id) + 1])}
+                                      disabled={m.versions!.indexOf(m.id) === m.versions!.length - 1 || loading} 
+                                      onClick={() => handleSwitchBranch(m.versions![m.versions!.indexOf(m.id) + 1])}
                                       className="chatbot-version-btn"
                                     >
                                       &gt;
@@ -1052,6 +1188,139 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                   </div>
                 )}
 
+                {pendingAction && (
+                  <div className="chatbot-message-row chatbot-bot-row animate-fade-in" style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+                    <div className="chatbot-avatar-container">
+                      <div className="chatbot-bot-avatar">
+                        <Cpu size={16} style={{ color: 'var(--vinuni-gold)' }} />
+                      </div>
+                    </div>
+                    <div className="chatbot-message-bubble chatbot-bot-bubble" style={{ border: '1px solid rgba(212, 163, 89, 0.3)', background: 'rgba(212, 163, 89, 0.05)', borderRadius: '12px', padding: '16px', maxWidth: '80%', width: '100%', minWidth: '320px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--vinuni-gold)', fontWeight: 600 }}>
+                        <Zap size={14} className="animate-pulse" />
+                        <span>Đề xuất tự động từ trợ lý Falcon AI</span>
+                      </div>
+                      <p style={{ margin: '0 0 12px 0', fontSize: '13.5px', color: 'var(--text-primary)', lineHeight: '1.5', textAlign: 'left' }}>
+                        {pendingAction.message || 'Mascot AI đề xuất thực hiện hành động tự động trên giao diện này.'}
+                      </p>
+                      
+                      {pendingAction.params && (
+                        <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                          {pendingAction.params.chapter_title && <div><strong>Chương học:</strong> <span style={{ color: 'var(--text-primary)' }}>{pendingAction.params.chapter_title}</span></div>}
+                          {pendingAction.params.clo_code && <div><strong>Chuẩn đầu ra:</strong> <span style={{ color: 'var(--text-primary)' }}>{pendingAction.params.clo_code}</span></div>}
+                          {pendingAction.params.bloom_level && <div><strong>Mức độ Bloom:</strong> <span style={{ color: 'var(--vinuni-gold)' }}>Bậc B{pendingAction.params.bloom_level}</span></div>}
+                          {pendingAction.params.count && <div><strong>Số lượng:</strong> <span style={{ color: 'var(--text-primary)' }}>{pendingAction.params.count} câu</span></div>}
+                        </div>
+                      )}
+                      
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('confirm-chatbot-action'));
+                            setPendingAction(null);
+                          }}
+                          className="planner-modal-confirm-btn"
+                          style={{
+                            background: 'var(--vinuni-gold)',
+                            color: '#000000',
+                            border: 'none',
+                            padding: '6px 14px',
+                            borderRadius: '6px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: '12.5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            height: '32px'
+                          }}
+                        >
+                          <Check size={14} /> Xác nhận thực hiện
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent('cancel-chatbot-action'));
+                            setPendingAction(null);
+                          }}
+                          className="planner-modal-cancel-btn"
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            padding: '6px 14px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '12.5px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            height: '32px'
+                          }}
+                        >
+                          <X size={14} /> Hủy bỏ
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {uploadingFile && (
+                  <div className="chatbot-message-row chatbot-message-row-bot">
+                    <div className="chatbot-message-wrapper" style={{ width: '100%' }}>
+                      <div className="chatbot-bot-avatar">AI</div>
+                      <div className="chatbot-upload-progress-card">
+                        <div className="chatbot-upload-progress-header">
+                          <span>Phân tích đề cương Syllabus</span>
+                          <span className="chatbot-upload-progress-filename">{uploadingFile}</span>
+                        </div>
+                        <div className="chatbot-upload-progress-body">
+                          <div className="chatbot-upload-progressbar-container">
+                            <div 
+                              className={`chatbot-upload-progressbar ${uploadStage === 4 ? 'chatbot-upload-progressbar--success' : ''}`}
+                              style={{ width: `${(uploadStage / 4) * 100}%` }}
+                            />
+                          </div>
+                          <div className="chatbot-upload-progress-steps">
+                            <div className={`chatbot-upload-progress-step ${uploadStage === 1 ? 'active' : ''} ${uploadStage > 1 ? 'completed' : ''}`}>
+                              <span className="chatbot-inline-icon-prefix">📄</span> 1. Đọc và trích xuất tài liệu
+                            </div>
+                            <div className={`chatbot-upload-progress-step ${uploadStage === 2 ? 'active' : ''} ${uploadStage > 2 ? 'completed' : ''}`}>
+                              <span className="chatbot-inline-icon-prefix">🤖</span> 2. AI phân tích cấu trúc CLOs
+                            </div>
+                            <div className={`chatbot-upload-progress-step ${uploadStage === 3 ? 'active' : ''} ${uploadStage > 3 ? 'completed' : ''}`}>
+                              <span className="chatbot-inline-icon-prefix">📊</span> 3. Ánh xạ Bloom mức nhận thức
+                            </div>
+                            <div className={`chatbot-upload-progress-step ${uploadStage === 4 ? 'active' : ''} ${uploadStage > 4 ? 'completed' : ''}`}>
+                              <span className="chatbot-inline-icon-prefix">💾</span> 4. Lưu trữ và đồng bộ hóa
+                            </div>
+                          </div>
+                          
+                          {uploadLog && (
+                            <div className="chatbot-stream-log-text" style={{ fontSize: '12px', marginTop: '6px', color: 'var(--vinuni-gold)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span className="chatbot-pulse-dot" style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--vinuni-gold)', animation: 'pulse 1s infinite' }} />
+                              {uploadLog}
+                            </div>
+                          )}
+
+                          {extractedClos.length > 0 && (
+                            <div className="chatbot-upload-clos-preview">
+                              <div className="chatbot-upload-clos-title">CLOs trích xuất nháp ({extractedClos.length})</div>
+                              <div className="chatbot-upload-clos-list">
+                                {extractedClos.map((c, idx) => (
+                                  <div key={idx} className="chatbot-upload-clo-item">
+                                    <span className="chatbot-upload-clo-code">{c.clo_code}</span>
+                                    <span className="chatbot-upload-clo-desc" title={c.description}>{c.description}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div ref={messagesEndRef} />
               </>
             )}
@@ -1059,6 +1328,26 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
           {/* Form Input */}
           <form onSubmit={handleSendMessage} className="chatbot-chat-form">
+            <input 
+              type="file"
+              ref={fileInputRef}
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleFileUpload(e.target.files[0]);
+                }
+              }}
+              accept=".pdf,.docx,.txt"
+              style={{ display: 'none' }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="chatbot-attach-btn"
+              disabled={loading || !currentSessionId}
+              title="Đính kèm file đề cương Syllabus (.pdf, .docx, .txt)"
+            >
+              <Paperclip size={18} />
+            </button>
             <textarea
               placeholder="Nhập yêu cầu giảng dạy (ví dụ: Soạn slide Chương 1 hoặc xem CLOs)..."
               value={inputText}
@@ -1275,7 +1564,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
         </section>
       </div>
 
-      {conflictModalOpen && (
+      {conflictModalOpen && typeof document !== 'undefined' && createPortal(
         <div className="chatbot-modal-overlay">
           <div className="chatbot-modal-content">
             <h3 className="chatbot-modal-title">
@@ -1330,9 +1619,10 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
-      {selectedCitation && (
+      {selectedCitation && typeof document !== 'undefined' && createPortal(
         <div className="chatbot-modal-overlay" style={{ zIndex: 1000 }}>
           <div className="chatbot-modal-content" style={{ maxWidth: '600px', width: '90%' }}>
             <h3 className="chatbot-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1375,7 +1665,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

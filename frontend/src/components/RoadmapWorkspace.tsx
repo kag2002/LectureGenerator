@@ -557,7 +557,7 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
                   type="file"
                   className="workspace-file-input"
                   onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
-                  accept=".pdf,.docx,.doc,.txt"
+                  accept=".pdf,.docx,.txt"
                 />
                 
                 {uploadFile && (

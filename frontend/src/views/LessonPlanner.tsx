@@ -40,6 +40,8 @@ export interface LessonPlannerProps {
   }) => void;
   setAIProcessingStatus: (isProcessing: boolean, message?: string) => void;
   isActive?: boolean;
+  forceOpenPedagogicalModal?: boolean;
+  clearForceOpenPedagogicalModal?: () => void;
 }
 
 export default function LessonPlanner({
@@ -54,7 +56,9 @@ export default function LessonPlanner({
   onGoToQuestionBank,
   onRecordAIUsage,
   setAIProcessingStatus,
-  isActive
+  isActive,
+  forceOpenPedagogicalModal,
+  clearForceOpenPedagogicalModal
 }: LessonPlannerProps) {
   const {
     chapters,
@@ -171,6 +175,15 @@ export default function LessonPlanner({
   useEffect(() => {
     setPortalTarget(document.getElementById('app-header-portal-slot'));
   }, []);
+
+  useEffect(() => {
+    if (forceOpenPedagogicalModal) {
+      setShowConfigModal(true);
+      if (clearForceOpenPedagogicalModal) {
+        clearForceOpenPedagogicalModal();
+      }
+    }
+  }, [forceOpenPedagogicalModal, setShowConfigModal, clearForceOpenPedagogicalModal]);
 
   const handleRevert = async (revId: number) => {
     if (!selectedChapter?.id) return;
@@ -715,7 +728,7 @@ export default function LessonPlanner({
       />
       {renderCitationDrawer()}
 
-      {showRevisionModal && (
+      {showRevisionModal && typeof document !== 'undefined' && createPortal(
         <div className="history-modal-overlay">
           <div className="history-modal-card">
             <h3 className="history-modal-title"><History size={18} /> Lịch sử chỉnh sửa chương học</h3>
@@ -767,7 +780,8 @@ export default function LessonPlanner({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Floating side handles when collapsed */}

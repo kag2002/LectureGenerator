@@ -88,6 +88,17 @@ export default function MatrixDashboard({
   }, [course.id]);
 
   useEffect(() => {
+    const handleDbChanged = () => {
+      fetchMatrixSilent();
+      fetchChapters();
+    };
+    window.addEventListener('db-state-changed', handleDbChanged);
+    return () => {
+      window.removeEventListener('db-state-changed', handleDbChanged);
+    };
+  }, [course.id]);
+
+  useEffect(() => {
     if (queue && queue.length > 0) {
       const successCount = queue.filter(q => q.status === 'success').length;
       if (successCount !== prevSuccessCount.current) {

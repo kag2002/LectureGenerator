@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Check, Settings, Info, BookOpen, Laptop, MessageSquare, Users, Award,
   GraduationCap, School, Sparkles, Wifi, WifiOff, Move, Lock, Clock, User, ArrowRight
@@ -98,7 +99,7 @@ export default function PedagogicalConfigModal({
     setShowConfigModal(false);
   };
 
-  return (
+  const modalContent = (
     <div className="planner-modal-overlay">
       <div className="planner-modal-card" style={{ maxWidth: '840px', width: '95%', maxHeight: '92vh', overflowY: 'auto', padding: '28px', borderRadius: '16px' }}>
         
@@ -545,6 +546,7 @@ export default function PedagogicalConfigModal({
           <button onClick={() => setShowConfigModal(false)} className="planner-modal-cancel-btn">Hủy</button>
           <button 
             onClick={handleConfirm} 
+            id="lp-pedagogical-confirm-btn"
             className="planner-modal-confirm-btn"
             style={{
               display: 'inline-flex',
@@ -562,4 +564,9 @@ export default function PedagogicalConfigModal({
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalContent, document.body);
+  }
+  return modalContent;
 }

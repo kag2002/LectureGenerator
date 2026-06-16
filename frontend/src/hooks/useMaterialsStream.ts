@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import client from '../api/client';
 import { Chapter } from '@/types';
 
@@ -223,7 +224,7 @@ export function useMaterialsStream({
         status: 'success'
       });
     } catch (err: any) {
-      if (err.name === 'CanceledError' || err.name === 'AbortError' || client.isCancel?.(err)) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError' || axios.isCancel(err)) {
         console.log('Storyboard generation aborted on frontend');
         return;
       }
@@ -298,7 +299,7 @@ export function useMaterialsStream({
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/courses/chapters/${targetChapterId}/generate-materials-from-storyboard-stream`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${targetChapterId}/generate-materials-from-storyboard-stream`,
         {
           method: 'POST',
           headers: {

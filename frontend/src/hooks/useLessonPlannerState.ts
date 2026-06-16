@@ -365,7 +365,7 @@ export function useLessonPlannerState({
         const hasChanges = sCont !== savedSCont || aScript !== savedSc;
         if (hasChanges) {
           const token = localStorage.getItem('token');
-          fetch(`http://localhost:8000/api/courses/chapters/${ch.id}/materials`, {
+          fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${ch.id}/materials`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -558,8 +558,8 @@ export function useLessonPlannerState({
   };
 
   // AI sinh cấu trúc Outline chương học từ CLOs
-  const handleGenerateOutline = async () => {
-    if (!window.confirm('AI sẽ sinh lại toàn bộ dàn ý chương học dựa trên CLOs. Các chương học cũ sẽ bị ghi đè. Bạn có chắc chắn không?')) return;
+  const handleGenerateOutline = async (bypassConfirm = false) => {
+    if (!bypassConfirm && !window.confirm('AI sẽ sinh lại toàn bộ dàn ý chương học dựa trên CLOs. Các chương học cũ sẽ bị ghi đè. Bạn có chắc chắn không?')) return;
     setLoading(true);
     setError('');
     setMessage('');
@@ -691,7 +691,7 @@ export function useLessonPlannerState({
   const handleExportLessonPlan = () => {
     if (!selectedChapter) return;
     const token = localStorage.getItem('token');
-    window.open(`http://localhost:8000/api/courses/chapters/${selectedChapter.id}/export-lesson-plan?token=${token}`, '_blank');
+    window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${selectedChapter.id}/export-lesson-plan?token=${token}`, '_blank');
   };
 
   const handleAutoSplitSlide = (slideIndex: number) => {
@@ -769,7 +769,7 @@ export function useLessonPlannerState({
       
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `http://localhost:8000/api/courses/chapters/${selectedChapter.id}/export-pptx-canvas`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${selectedChapter.id}/export-pptx-canvas`,
         {
           method: 'POST',
           headers: {
@@ -924,6 +924,97 @@ export function useLessonPlannerState({
     const regex = new RegExp(`\\[CLO\\s*:?\\s*${escapedCode}\\s*\\]`, 'i');
     return regex.test(slideContent) || regex.test(stream.aiSlideProposal);
   };
+
+  useEffect(() => {
+    const handleDbChanged = () => {
+      loadInitialData();
+    };
+    window.addEventListener('db-state-changed', handleDbChanged);
+    return () => window.removeEventListener('db-state-changed', handleDbChanged);
+  }, [course.id]);
+
+  useEffect(() => {
+    const handleProgrammaticTrigger = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { action, params } = customEvent.detail || {};
+      
+      if (action === 'generate_outline') {
+        const btn = document.getElementById('lp-generate-outline-btn');
+        if (btn) {
+          btn.classList.add('programmatic-click');
+          setTimeout(() => {
+            btn.classList.remove('programmatic-click');
+            handleGenerateOutline(true);
+          }, 1000);
+        } else {
+          handleGenerateOutline(true);
+        }
+      } else if (action === 'generate_storyboard') {
+        const btn = document.getElementById('lp-generate-materials-btn');
+        if (btn) {
+          btn.classList.add('programmatic-click');
+          setTimeout(() => {
+            btn.classList.remove('programmatic-click');
+            btn.click();
+            
+            setTimeout(() => {
+              const modalBtn = document.getElementById('lp-pedagogical-confirm-btn');
+              if (modalBtn) {
+                modalBtn.classList.add('programmatic-click');
+                setTimeout(() => {
+                  modalBtn.classList.remove('programmatic-click');
+                  modalBtn.click();
+                }, 1000);
+              } else {
+                stream.handleGenerateStoryboard();
+              }
+            }, 500);
+          }, 1000);
+        } else {
+          stream.handleGenerateStoryboard();
+        }
+      } else if (action === 'generate_materials') {
+        if (params?.storyboard) {
+          const btn = document.getElementById('ai-generate-materials-confirm-btn');
+          if (btn) {
+            btn.classList.add('programmatic-click');
+            setTimeout(() => {
+              btn.classList.remove('programmatic-click');
+              stream.handleGenerateMaterialsFromStoryboard(params.storyboard);
+            }, 1000);
+          } else {
+            stream.handleGenerateMaterialsFromStoryboard(params.storyboard);
+          }
+        } else {
+          const btn = document.getElementById('lp-generate-materials-btn');
+          if (btn) {
+            btn.classList.add('programmatic-click');
+            setTimeout(() => {
+              btn.classList.remove('programmatic-click');
+              btn.click();
+              
+              setTimeout(() => {
+                const modalBtn = document.getElementById('lp-pedagogical-confirm-btn');
+                if (modalBtn) {
+                  modalBtn.classList.add('programmatic-click');
+                  setTimeout(() => {
+                    modalBtn.classList.remove('programmatic-click');
+                    modalBtn.click();
+                  }, 1000);
+                } else {
+                  stream.handleGenerateStoryboard();
+                }
+              }, 500);
+            }, 1000);
+          } else {
+            stream.handleGenerateStoryboard();
+          }
+        }
+      }
+    };
+    window.addEventListener('lesson-planner-programmatic-trigger', handleProgrammaticTrigger);
+    return () => window.removeEventListener('lesson-planner-programmatic-trigger', handleProgrammaticTrigger);
+  }, [selectedChapter, stream, clos]);
 
   return {
     chapters,

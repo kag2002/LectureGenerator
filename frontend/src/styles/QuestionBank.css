@@ -1121,5 +1121,26 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+@keyframes programmaticClickGlow {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(212, 163, 89, 0.8);
+  }
+  50% {
+    transform: scale(0.93);
+    box-shadow: 0 0 0 20px rgba(212, 163, 89, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(212, 163, 89, 0);
+  }
+}
+
+.programmatic-click {
+  animation: programmaticClickGlow 0.9s cubic-bezier(0.25, 0.8, 0.25, 1) 1 !important;
+  position: relative !important;
+  z-index: 10 !important;
+}
+
 
 

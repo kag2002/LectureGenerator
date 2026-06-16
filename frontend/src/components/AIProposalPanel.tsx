@@ -500,7 +500,7 @@ export default function AIProposalPanel({
         <h3 className="planner-section-title">AI Đề xuất nội dung</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {selectedChapter && (
-            <button onClick={() => setShowConfigModal(true)} className="planner-generate-btn">
+            <button onClick={() => setShowConfigModal(true)} id="lp-generate-materials-btn" className="planner-generate-btn">
               <Sparkles size={14} /> {aiSlideProposal ? 'Tạo lại Bài giảng' : 'Tạo Bài giảng'}
             </button>
           )}
@@ -628,6 +628,7 @@ export default function AIProposalPanel({
                     type="button"
                     disabled={apiStatus === 'generating'}
                     onClick={() => handleGenerateMaterialsFromStoryboard(storyboardDraft)}
+                    id="ai-generate-materials-confirm-btn"
                     className="planner-storyboard-footer-btn planner-storyboard-footer-btn-confirm"
                     style={{ flex: 2, minHeight: '38px', height: '38px', padding: '6px 12px', fontSize: '12.5px', borderRadius: '8px', boxShadow: 'none' }}
                   >

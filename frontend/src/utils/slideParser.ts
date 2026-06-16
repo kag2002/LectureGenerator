@@ -12,6 +12,7 @@ export interface Slide {
   layout: string | null;
   svgContent: string | null;
   rawMarkdown: string;
+  notes?: string;
 }
 
 export interface ThemeColors {

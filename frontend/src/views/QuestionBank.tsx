@@ -179,7 +179,7 @@ export default function QuestionBank({
 
     try {
       const response = await fetch(
-        `http://localhost:8000/api/courses/${course.id}/questions/generate-stream`,
+        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/questions/generate-stream`,
         {
           method: 'POST',
           headers: {
@@ -363,6 +363,43 @@ export default function QuestionBank({
       }));
     }
   };
+
+  useEffect(() => {
+    const handleDbChanged = () => {
+      fetchData();
+    };
+    window.addEventListener('db-state-changed', handleDbChanged);
+    return () => window.removeEventListener('db-state-changed', handleDbChanged);
+  }, [course.id]);
+
+  useEffect(() => {
+    const handleProgrammaticTrigger = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { action, params } = customEvent.detail || {};
+      if (action === 'generate_questions') {
+        if (params?.clo_id) setSelectedClo(params.clo_id);
+        if (params?.chapter_id) setSelectedChapter(params.chapter_id);
+        if (params?.bloom_level) setBloomLevel(params.bloom_level);
+        if (params?.count) setCount(params.count);
+        if (params?.fast_mode !== undefined) setIsFastMode(params.fast_mode);
+        
+        setTimeout(() => {
+          const btn = document.getElementById('qb-generate-btn');
+          if (btn) {
+            btn.classList.add('programmatic-click');
+            setTimeout(() => {
+              btn.classList.remove('programmatic-click');
+              handleGenerateQuestions({ preventDefault: () => {} } as any);
+            }, 1000);
+          } else {
+            handleGenerateQuestions({ preventDefault: () => {} } as any);
+          }
+        }, 150);
+      }
+    };
+    window.addEventListener('question-bank-programmatic-trigger', handleProgrammaticTrigger);
+    return () => window.removeEventListener('question-bank-programmatic-trigger', handleProgrammaticTrigger);
+  }, [clos, chapters, selectedClo, selectedChapter, bloomLevel, count, isFastMode, handleGenerateQuestions]);
 
   // Sinh câu hỏi isomorphic
   const handleGenerateIsomorphic = async (qId: number) => {

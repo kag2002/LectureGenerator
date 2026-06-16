@@ -1325,7 +1325,7 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
       </div>
       
       {/* MODAL XEM NỘI DUNG TÀI LIỆU RAG */}
-      {viewingDocName && (
+      {viewingDocName && typeof document !== 'undefined' && createPortal(
         <div className="doc-viewer-overlay">
           <div className="doc-viewer-modal">
             <div className="doc-viewer-header">
@@ -1373,11 +1373,12 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL VECTOR DB INSPECTOR */}
-      {inspectDocName && (
+      {inspectDocName && typeof document !== 'undefined' && createPortal(
         <div className="doc-viewer-overlay">
           <div className="doc-viewer-modal" style={{ maxWidth: '900px', height: '85%' }}>
             <div className="doc-viewer-header">
@@ -1524,7 +1525,8 @@ export default function KnowledgeBase({ course, onBack, onLogout, onNavigate, ac
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
