@@ -606,8 +606,8 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
                     if exp not in queries:
                         queries.append(exp)
 
-        # B. Mở rộng bằng LLM (chỉ chạy khi không ở chế độ test và có key)
-        if os.environ.get("TESTING") != "1":
+        # B. Mở rộng bằng LLM (chỉ chạy khi không ở chế độ test, có key và không bị tắt bởi config)
+        if os.environ.get("TESTING") != "1" and os.environ.get("DISABLE_QUERY_EXPANSION") != "true":
             try:
                 from src.utils.llm_client import call_llm_json
                 expansion_prompt = (
@@ -635,13 +635,11 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
         fetch_k = max(top_k * 2, 8)
 
         # Gọi ChromaDB query cho danh sách các truy vấn (batch query)
-        print(f"[DEBUG] queries: {queries}, where_cond: {where_cond}")
         results = collection.query(
             query_texts=queries,
             n_results=fetch_k,
             where=where_cond,
         )
-        print(f"[DEBUG] collection query results: {results}")
 
         # 3. Gom nhóm và khử trùng lặp kết quả (Deduplication)
         unique_chunks = {}

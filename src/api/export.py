@@ -10,12 +10,13 @@ import zipfile
 from io import BytesIO
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.util import Inches, Pt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from docx.oxml import parse_xml
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
@@ -635,6 +636,184 @@ def export_chapter_pptx_canvas(
     )
 
 
+GREEK_SYMBOLS = {
+    r'\alpha': 'α', r'\beta': 'β', r'\gamma': 'γ', r'\delta': 'δ', r'\epsilon': 'ε',
+    r'\zeta': 'ζ', r'\eta': 'η', r'\theta': 'θ', r'\iota': 'ι', r'\kappa': 'κ',
+    r'\lambda': 'λ', r'\mu': 'μ', r'\nu': 'ν', r'\xi': 'ξ', r'\omicron': 'o',
+    r'\pi': 'π', r'\rho': 'ρ', r'\sigma': 'σ', r'\tau': 'τ', r'\upsilon': 'υ',
+    r'\phi': 'φ', r'\chi': 'χ', r'\psi': 'ψ', r'\omega': 'ω',
+    r'\Delta': 'Δ', r'\Gamma': 'Γ', r'\Theta': 'Θ', r'\Lambda': 'Λ', r'\Xi': 'Ξ',
+    r'\Pi': 'Π', r'\Sigma': 'Σ', r'\Phi': 'Φ', r'\Psi': 'Ψ', r'\Omega': 'Ω',
+    r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇', r'\pm': '±', r'\times': '×',
+    r'\div': '÷', r'\neq': '≠', r'\approx': '≈', r'\le': '≤', r'\ge': '≥',
+    r'\sum': '∑', r'\prod': '∏', r'\int': '∫', r'\cdot': '·'
+}
+
+def parse_latex(s: str):
+    idx = 0
+    n = len(s)
+    
+    def peek():
+        if idx < n:
+            return s[idx]
+        return None
+        
+    def next_char():
+        nonlocal idx
+        if idx < n:
+            c = s[idx]
+            idx += 1
+            return c
+        return None
+
+    def parse_command():
+        nonlocal idx
+        next_char() # consume '\'
+        cmd = ""
+        while idx < n and peek() and peek().isalpha():
+            cmd += next_char()
+        
+        if cmd == 'frac':
+            num = parse_arg()
+            den = parse_arg()
+            return ('frac', num, den)
+        else:
+            symbol = "\\" + cmd
+            unicode_val = GREEK_SYMBOLS.get(symbol, symbol)
+            return ('text', unicode_val)
+
+    def parse_arg():
+        c = peek()
+        if c == '{':
+            next_char()
+            return parse_group()
+        elif c == '\\':
+            return parse_command()
+        elif c:
+            return parse_char()
+        return ('text', '')
+
+    def parse_group():
+        nodes = parse_sequence(is_group=True)
+        if len(nodes) == 1:
+            return nodes[0]
+        return ('group', nodes)
+
+    def parse_char():
+        c = next_char()
+        return ('text', c)
+
+    def parse_sequence(is_group=False):
+        nodes = []
+        while idx < n:
+            c = peek()
+            if is_group and c == '}':
+                next_char()
+                break
+            elif c == '{':
+                next_char()
+                nodes.append(parse_group())
+            elif c == '\\':
+                nodes.append(parse_command())
+            elif c == '^':
+                next_char()
+                sup = parse_arg()
+                if nodes:
+                    base = nodes.pop()
+                    nodes.append(('sup', base, sup))
+                else:
+                    nodes.append(('sup', ('text', ''), sup))
+            elif c == '_':
+                next_char()
+                sub = parse_arg()
+                if nodes:
+                    base = nodes.pop()
+                    nodes.append(('sub', base, sub))
+                else:
+                    nodes.append(('sub', ('text', ''), sub))
+            else:
+                nodes.append(parse_char())
+        return nodes
+
+    return parse_sequence()
+
+def optimize_nodes(nodes):
+    optimized = []
+    current_text = ""
+    for node in nodes:
+        if node[0] == 'text':
+            current_text += node[1]
+        else:
+            if current_text:
+                optimized.append(('text', current_text))
+                current_text = ""
+            if node[0] == 'group':
+                optimized.append(('group', optimize_nodes(node[1])))
+            elif node[0] == 'frac':
+                optimized.append(('frac', optimize_node(node[1]), optimize_node(node[2])))
+            elif node[0] == 'sup':
+                optimized.append(('sup', optimize_node(node[1]), optimize_node(node[2])))
+            elif node[0] == 'sub':
+                optimized.append(('sub', optimize_node(node[1]), optimize_node(node[2])))
+    if current_text:
+        optimized.append(('text', current_text))
+    return optimized
+
+def optimize_node(node):
+    if not node:
+        return node
+    if node[0] == 'group':
+        return ('group', optimize_nodes(node[1]))
+    elif node[0] == 'frac':
+        return ('frac', optimize_node(node[1]), optimize_node(node[2]))
+    elif node[0] == 'sup':
+        return ('sup', optimize_node(node[1]), optimize_node(node[2]))
+    elif node[0] == 'sub':
+        return ('sub', optimize_node(node[1]), optimize_node(node[2]))
+    return node
+
+def render_node_to_omml(node) -> str:
+    if not node:
+        return ""
+    ntype = node[0]
+    if ntype == 'text':
+        val = node[1]
+        val = val.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        return f'<m:r><m:t>{val}</m:t></m:r>'
+    elif ntype == 'group':
+        return "".join(render_node_to_omml(c) for c in node[1])
+    elif ntype == 'frac':
+        num_xml = render_node_to_omml(node[1])
+        den_xml = render_node_to_omml(node[2])
+        return f'<m:f><m:num>{num_xml}</m:num><m:den>{den_xml}</m:den></m:f>'
+    elif ntype == 'sup':
+        base_xml = render_node_to_omml(node[1])
+        sup_xml = render_node_to_omml(node[2])
+        return f'<m:sSup><m:e>{base_xml}</m:e><m:sup>{sup_xml}</m:sup></m:sSup>'
+    elif ntype == 'sub':
+        base_xml = render_node_to_omml(node[1])
+        sub_xml = render_node_to_omml(node[2])
+        return f'<m:sSub><m:e>{base_xml}</m:e><m:sub>{sub_xml}</m:sub></m:sSub>'
+    return ""
+
+def latex_to_omml(latex_str: str, is_block: bool = False) -> str:
+    latex_str = latex_str.strip()
+    if latex_str.startswith('$$') and latex_str.endswith('$$'):
+        latex_str = latex_str[2:-2].strip()
+    elif latex_str.startswith('$') and latex_str.endswith('$'):
+        latex_str = latex_str[1:-1].strip()
+        
+    parsed_nodes = parse_latex(latex_str)
+    optimized = optimize_nodes(parsed_nodes)
+    inner_xml = "".join(render_node_to_omml(n) for n in optimized)
+    
+    ns = 'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"'
+    if is_block:
+        return f'<m:oMathPara {ns}><m:oMath>{inner_xml}</m:oMath></m:oMathPara>'
+    else:
+        return f'<m:oMath {ns}>{inner_xml}</m:oMath>'
+
+
 # --- API EXPORT ZIP COURSE PACKAGE ---
 
 
@@ -710,112 +889,101 @@ def export_course_zip(
     questions = db.query(Question).filter(Question.course_id == course_id, Question.is_active).all()
     clos = db.query(CLO).filter(CLO.course_id == course_id).all()
 
-    # 3. Tạo thư mục tạm để đóng gói
-    temp_dir = tempfile.mkdtemp(prefix=f"course_export_{course_id}_")
-
     try:
-        # A. Đề cương Syllabus.md
-        syllabus_path = os.path.join(temp_dir, "Syllabus.md")
-        with open(syllabus_path, "w", encoding="utf-8") as f:
-            f.write(f"# ĐỀ CƯƠNG CHI TIẾT MÔN HỌC: {course.course_name.upper()}\n")
-            f.write(f"Mã môn học: {course.course_code}\n")
-            f.write(f"Giảng viên biên soạn: {current_user.full_name or current_user.email}\n\n")
-            f.write("## 🎯 Chuẩn đầu ra môn học (CLOs)\n")
+        zip_buffer = BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            # A. Đề cương Syllabus.md
+            syllabus_lines = [
+                f"# ĐỀ CƯƠNG CHI TIẾT MÔN HỌC: {course.course_name.upper()}",
+                f"Mã môn học: {course.course_code}",
+                f"Giảng viên biên soạn: {current_user.full_name or current_user.email}\n",
+                "## 🎯 Chuẩn đầu ra môn học (CLOs)"
+            ]
             if not clos:
-                f.write("* Chưa có chuẩn đầu ra nào được cấu hình.\n")
+                syllabus_lines.append("* Chưa có chuẩn đầu ra nào được cấu hình.")
             else:
                 for c in clos:
-                    f.write(f"- **{c.clo_code}** (Mức Bloom {c.bloom_level}): {c.description}\n")
-            f.write("\n## 📚 Giáo trình & Tài liệu tham khảo\n")
-            f.write(f"- Giáo trình bắt buộc: {course.required_textbooks or 'N/A'}\n")
-            f.write(f"- Tài liệu tham khảo: {course.recommended_readings or 'N/A'}\n")
+                    syllabus_lines.append(f"- **{c.clo_code}** (Mức Bloom {c.bloom_level}): {c.description}")
+            syllabus_lines.extend([
+                "\n## 📚 Giáo trình & Tài liệu tham khảo",
+                f"- Giáo trình bắt buộc: {course.required_textbooks or 'N/A'}",
+                f"- Tài liệu tham khảo: {course.recommended_readings or 'N/A'}"
+            ])
+            zip_file.writestr("Syllabus.md", "\n".join(syllabus_lines).encode("utf-8"))
 
-        # B. Báo cáo Ma trận Coverage Bloom x CLO
-        matrix_path = os.path.join(temp_dir, "Matrix_Coverage.md")
-        with open(matrix_path, "w", encoding="utf-8") as f:
-            f.write("# MA TRẬN ĐỘ PHỦ CHẤT LƯỢNG (CLO x BLOOM LEVEL)\n")
-            f.write(f"Môn học: {course.course_name} ({course.course_code})\n\n")
-            f.write("| Chuẩn đầu ra (CLO) | Mức Bloom | Số lượng Câu hỏi | Slide bài giảng | Mô tả CLO |\n")
-            f.write("| :--- | :---: | :---: | :---: | :--- |\n")
-
+            # B. Báo cáo Ma trận Coverage Bloom x CLO
+            matrix_lines = [
+                "# MA TRẬN ĐỘ PHỦ CHẤT LƯỢNG (CLO x BLOOM LEVEL)",
+                f"Môn học: {course.course_name} ({course.course_code})\n",
+                "| Chuẩn đầu ra (CLO) | Mức Bloom | Số lượng Câu hỏi | Slide bài giảng | Mô tả CLO |",
+                "| :--- | :---: | :---: | :---: | :--- |"
+            ]
             for c in clos:
                 q_count = len([q for q in questions if q.clo_id == c.id])
-                # Check how many chapter materials mention this CLO
                 slide_count = 0
                 for ch in chapters:
                     mat = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
                     if mat and mat.slide_content and c.clo_code in mat.slide_content:
                         slide_count += 1
-                f.write(f"| {c.clo_code} | Mức {c.bloom_level} | {q_count} câu | {slide_count} chương | {c.description} |\n")
+                matrix_lines.append(f"| {c.clo_code} | Mức {c.bloom_level} | {q_count} câu | {slide_count} chương | {c.description} |")
+            zip_file.writestr("Matrix_Coverage.md", "\n".join(matrix_lines).encode("utf-8"))
 
-        # C. Đóng gói các chương theo cấu trúc thư mục mong muốn
-        if organization_style == "by_type":
-            # Tạo thư mục phân loại theo loại học liệu
-            storyboard_dir = os.path.join(temp_dir, "Storyboards")
-            slides_dir = os.path.join(temp_dir, "Slides")
-            quizzes_dir = os.path.join(temp_dir, "Quizzes")
-            os.makedirs(storyboard_dir, exist_ok=True)
-            os.makedirs(slides_dir, exist_ok=True)
-            os.makedirs(quizzes_dir, exist_ok=True)
+            # C. Đóng gói các chương
+            for idx, ch in enumerate(chapters):
+                ch_num = idx + 1
+                sanitized_title = sanitize_filename(ch.title)
+                ch_folder_name = f"Chapter_{ch_num:02d}_{sanitized_title}"
 
-        for idx, ch in enumerate(chapters):
-            ch_num = idx + 1
-            sanitized_title = sanitize_filename(ch.title)
-            ch_folder_name = f"Chapter_{ch_num:02d}_{sanitized_title}"
+                # Cấu trúc thư mục tương ứng
+                if organization_style == "by_type":
+                    storyboard_path = f"Storyboards/Chapter_{ch_num:02d}_Storyboard.md"
+                    slides_source_path = f"Slides/Chapter_{ch_num:02d}_Slides_Source.md"
+                    slides_pptx_path = f"Slides/Chapter_{ch_num:02d}_Slide_Presentation.pptx"
+                    quiz_md_path = f"Quizzes/Chapter_{ch_num:02d}_Quiz_Questions.md"
+                    quiz_gift_path = f"Quizzes/Chapter_{ch_num:02d}_Quiz_Questions.gift"
+                    err_path = f"Slides/Chapter_{ch_num:02d}_ERROR_Slides_Generation.txt"
+                else:
+                    storyboard_path = f"Chapters/{ch_folder_name}/Storyboard.md"
+                    slides_source_path = f"Chapters/{ch_folder_name}/Slides_Source.md"
+                    slides_pptx_path = f"Chapters/{ch_folder_name}/Slide_Presentation.pptx"
+                    quiz_md_path = f"Chapters/{ch_folder_name}/Quiz_Questions.md"
+                    quiz_gift_path = f"Chapters/{ch_folder_name}/Quiz_Questions.gift"
+                    err_path = f"Chapters/{ch_folder_name}/ERROR_Slides_Generation.txt"
 
-            # Khởi tạo đường dẫn lưu file của chương này
-            if organization_style == "by_type":
-                storyboard_dest_dir = storyboard_dir
-                slides_dest_dir = slides_dir
-                quizzes_dest_dir = quizzes_dir
-                file_prefix = f"Chapter_{ch_num:02d}_"
-            else: # default: by_chapter
-                ch_path = os.path.join(temp_dir, "Chapters", ch_folder_name)
-                os.makedirs(ch_path, exist_ok=True)
-                storyboard_dest_dir = ch_path
-                slides_dest_dir = ch_path
-                quizzes_dest_dir = ch_path
-                file_prefix = ""
+                material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
 
-            material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
+                # i. Kịch bản Active Learning (Storyboard)
+                if material and material.active_learning_script:
+                    sb_content = f"# GIÁO ÁN ACTIVE LEARNING: {ch.title.upper()}\n\n{material.active_learning_script}"
+                    zip_file.writestr(storyboard_path, sb_content.encode("utf-8"))
 
-            # i. Kịch bản Active Learning (Storyboard)
-            if material and material.active_learning_script:
-                sb_path = os.path.join(storyboard_dest_dir, f"{file_prefix}Storyboard.md")
-                with open(sb_path, "w", encoding="utf-8") as f:
-                    f.write(f"# GIÁO ÁN ACTIVE LEARNING: {ch.title.upper()}\n\n")
-                    f.write(material.active_learning_script)
+                # ii. Slide PPTX (Fault-tolerant)
+                if material and material.slide_content:
+                    zip_file.writestr(slides_source_path, material.slide_content.encode("utf-8"))
+                    try:
+                        output_pptx = export_chapter_pptx(chapter_id=ch.id, theme=theme, current_user=current_user, db=db)
+                        if hasattr(output_pptx, "path") and os.path.exists(output_pptx.path):
+                            with open(output_pptx.path, "rb") as pf:
+                                pptx_data = pf.read()
+                            zip_file.writestr(slides_pptx_path, pptx_data)
+                            
+                            def cleanup_pptx_dir(path_to_clean):
+                                try:
+                                    shutil.rmtree(os.path.dirname(os.path.dirname(path_to_clean)))
+                                except Exception:
+                                    pass
+                            background_tasks.add_task(cleanup_pptx_dir, output_pptx.path)
+                    except Exception as e:
+                        err_content = f"Lỗi sinh PowerPoint cho chương này:\n{str(e)}"
+                        zip_file.writestr(err_path, err_content.encode("utf-8"))
 
-            # ii. Slide PPTX (Fault-tolerant)
-            if material and material.slide_content:
-                # Lưu file slide nguồn Markdown trước làm dự phòng
-                src_slide_path = os.path.join(slides_dest_dir, f"{file_prefix}Slides_Source.md")
-                with open(src_slide_path, "w", encoding="utf-8") as f:
-                    f.write(material.slide_content)
-
-                # Cố gắng xuất slide PPTX
-                try:
-                    # Gọi trực tiếp helper logic của export_chapter_pptx nhưng không trả Response
-                    output_pptx = export_chapter_pptx(chapter_id=ch.id, theme=theme, current_user=current_user, db=db)
-                    # export_chapter_pptx trả về FileResponse, ta có thể lấy path từ nó
-                    if hasattr(output_pptx, "path") and os.path.exists(output_pptx.path):
-                        dest_pptx = os.path.join(slides_dest_dir, f"{file_prefix}Slide_Presentation.pptx")
-                        shutil.copy(output_pptx.path, dest_pptx)
-                except Exception as e:
-                    # Ghi nhận lỗi và tiếp tục đóng gói
-                    err_path = os.path.join(slides_dest_dir, f"{file_prefix}ERROR_Slides_Generation.txt")
-                    with open(err_path, "w", encoding="utf-8") as f:
-                        f.write(f"Lỗi sinh PowerPoint cho chương này:\n{str(e)}")
-
-            # iii. Câu hỏi thi (Quiz - Markdown & GIFT format)
-            ch_questions = [q for q in questions if q.chapter_id == ch.id]
-            if ch_questions:
-                # Markdown format quiz
-                quiz_md_path = os.path.join(quizzes_dest_dir, f"{file_prefix}Quiz_Questions.md")
-                with open(quiz_md_path, "w", encoding="utf-8") as f:
-                    f.write(f"# NGÂN HÀNG CÂU HỎI CHƯƠNG {ch_num}: {ch.title}\n\n")
+                # iii. Câu hỏi thi
+                ch_questions = [q for q in questions if q.chapter_id == ch.id]
+                if ch_questions:
+                    # Markdown
+                    quiz_lines = [f"# NGÂN HÀNG CÂU HỎI CHƯƠNG {ch_num}: {ch.title}\n"]
                     for q_idx, q in enumerate(ch_questions):
-                        f.write(f"Câu {q_idx + 1}: {q.question_text}\n")
+                        quiz_lines.append(f"Câu {q_idx + 1}: {q.question_text}")
                         opts = []
                         try:
                             opts = json.loads(q.options_json) if q.options_json else []
@@ -824,14 +992,13 @@ def export_course_zip(
                         labels = ["A", "B", "C", "D"]
                         for opt_i, opt in enumerate(opts):
                             if opt_i < len(labels):
-                                f.write(f"  {labels[opt_i]}. {opt}\n")
-                        f.write(f"\n  * Đáp án đúng: {q.correct_answer}\n")
-                        f.write(f"  * Cấp độ Bloom: Mức {q.bloom_level}\n\n")
+                                quiz_lines.append(f"  {labels[opt_i]}. {opt}")
+                        quiz_lines.append(f"\n  * Đáp án đúng: {q.correct_answer}")
+                        quiz_lines.append(f"  * Cấp độ Bloom: Mức {q.bloom_level}\n")
+                    zip_file.writestr(quiz_md_path, "\n".join(quiz_lines).encode("utf-8"))
 
-                # GIFT format quiz (for Canvas/Moodle import)
-                quiz_gift_path = os.path.join(quizzes_dest_dir, f"{file_prefix}Quiz_Questions.gift")
-                with open(quiz_gift_path, "w", encoding="utf-8") as f:
-                    f.write(f"// Ngân hàng câu hỏi trắc nghiệm Chương {ch_num}\n\n")
+                    # GIFT
+                    gift_lines = [f"// Ngân hàng câu hỏi trắc nghiệm Chương {ch_num}\n"]
                     for q in ch_questions:
                         opts = []
                         try:
@@ -839,45 +1006,174 @@ def export_course_zip(
                         except Exception:
                             pass
                         gift_str = format_to_gift(q.question_text, opts, q.correct_answer)
-                        f.write(gift_str + "\n\n")
+                        gift_lines.append(gift_str + "\n")
+                    zip_file.writestr(quiz_gift_path, "\n".join(gift_lines).encode("utf-8"))
 
-        # 4. Nén thư mục tạm thành file ZIP
-        zip_temp_dir = tempfile.mkdtemp(prefix="course_zip_")
-        zip_file_path = os.path.join(zip_temp_dir, f"Course_Package_{course.course_code}.zip")
-
-        with zipfile.ZipFile(zip_file_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
-            for root, dirs, files in os.walk(temp_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(file_path, temp_dir)
-                    zip_file.write(file_path, rel_path)
-
-        # 5. Đăng ký background task dọn dẹp các thư mục tạm sau khi truyền file xong
-        def cleanup_temp_directories():
-            try:
-                shutil.rmtree(temp_dir)
-                shutil.rmtree(zip_temp_dir)
-            except Exception as e:
-                print(f"Lỗi khi dọn dẹp thư mục tạm ZIP export: {e}")
-
-        background_tasks.add_task(cleanup_temp_directories)
-
-        # 6. Trả về file ZIP
-        return FileResponse(
-            zip_file_path,
+        zip_buffer.seek(0)
+        return StreamingResponse(
+            zip_buffer,
             media_type="application/zip",
-            filename=f"Course_Package_{course.course_code}.zip"
+            headers={"Content-Disposition": f"attachment; filename=Course_Package_{course.course_code}.zip"}
         )
 
     except Exception as outer_err:
-        # Nếu lỗi trong quá trình xử lý, cố gắng dọn dẹp thư mục tạm
-        try:
-            shutil.rmtree(temp_dir)
-        except Exception:
-            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi đóng gói file ZIP: {str(outer_err)}"
         )
+
+
+@router.get("/chapters/{chapter_id}/export-docx")
+def export_chapter_docx(
+    chapter_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # 1. Xác thực chương học và quyền sở hữu môn học
+    chapter = (
+        db.query(Chapter)
+        .join(Course)
+        .filter(Chapter.id == chapter_id, Course.user_id == current_user.id, Chapter.is_active)
+        .first()
+    )
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    # 2. Lấy học liệu chương học
+    material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
+    active_learning_script = material.active_learning_script if material else ""
+    
+    # 3. Khởi tạo Document
+    from docx import Document
+    doc = Document()
+    
+    # Thiết lập tiêu đề tài liệu
+    title_text = "GIÁO ÁN HOẠT ĐỘNG SƯ PHẠM (LESSON PLAN)"
+    h_doc = doc.add_heading(level=0)
+    h_doc.add_run(title_text)
+    
+    # Thêm Metadata bảng
+    table = doc.add_table(rows=4, cols=2)
+    table.style = 'Table Grid'
+    
+    metadata = [
+        ("Môn học:", chapter.course.course_name),
+        ("Chương học:", chapter.title),
+        ("Giảng viên:", current_user.full_name or current_user.email or "Giảng viên"),
+        ("Thiết kế Sư phạm:", "Tương tác chủ động (Active Learning)")
+    ]
+    for idx, (label, val) in enumerate(metadata):
+        row = table.rows[idx]
+        row.cells[0].text = label
+        row.cells[1].text = val
+        
+    doc.add_paragraph() # Dòng trống
+    
+    # 4. Phân tích active learning script và thêm vào Word
+    if not active_learning_script:
+        doc.add_paragraph("Chưa biên soạn kịch bản active learning cho chương này.")
+    else:
+        # Tách Rationale nếu có
+        marker = "---RATIONALE---"
+        main_script = active_learning_script
+        rationale_text = ""
+        if marker in active_learning_script:
+            parts = active_learning_script.split(marker, 1)
+            main_script = parts[0].strip()
+            rationale_text = parts[1].strip()
+            
+        # Helper chèn đoạn văn bản có chứa inline hoặc block math
+        def add_paragraph_with_math(text_line: str, style_name=None):
+            p = doc.add_paragraph(style=style_name) if style_name else doc.add_paragraph()
+            
+            # Check for block equation
+            if text_line.strip().startswith('$$') and text_line.strip().endswith('$$'):
+                eq_content = text_line.strip()[2:-2].strip()
+                try:
+                    omml_xml = latex_to_omml(eq_content, is_block=True)
+                    omml_el = parse_xml(omml_xml)
+                    p._p.append(omml_el)
+                except Exception:
+                    p.add_run(text_line)
+                return p
+                
+            # Parse inline equation
+            parts = re.split(r'(\$[^\$]+\$)', text_line)
+            for idx, part in enumerate(parts):
+                if not part:
+                    continue
+                if part.startswith('$') and part.endswith('$'):
+                    eq_content = part[1:-1].strip()
+                    try:
+                        omml_xml = latex_to_omml(eq_content, is_block=False)
+                        omml_el = parse_xml(omml_xml)
+                        p._p.append(omml_el)
+                    except Exception:
+                        p.add_run(part)
+                else:
+                    # Clean markdown bold markers
+                    # Simple bold parsing **text**
+                    sub_parts = re.split(r'(\*\*[^\*]+\*\*)', part)
+                    for sp in sub_parts:
+                        if sp.startswith('**') and sp.endswith('**'):
+                            p.add_run(sp[2:-2]).bold = True
+                        else:
+                            p.add_run(sp)
+            return p
+
+        # Duyệt qua các dòng
+        for line in main_script.split('\n'):
+            line_strip = line.strip()
+            if not line_strip:
+                continue
+            
+            # Tiêu đề
+            if line_strip.startswith('# '):
+                doc.add_heading(line_strip[2:], level=1)
+            elif line_strip.startswith('## '):
+                doc.add_heading(line_strip[3:], level=2)
+            elif line_strip.startswith('### '):
+                doc.add_heading(line_strip[4:], level=3)
+            # List
+            elif line_strip.startswith('- ') or line_strip.startswith('* '):
+                add_paragraph_with_math(line_strip[2:], style_name='List Bullet')
+            elif re.match(r'^\d+\.\s', line_strip):
+                match = re.match(r'^\d+\.\s(.*)$', line_strip)
+                add_paragraph_with_math(match.group(1), style_name='List Number')
+            # Paragraph
+            else:
+                add_paragraph_with_math(line)
+                
+        # Rationale
+        if rationale_text:
+            h_rat = doc.add_heading(level=2)
+            h_rat.add_run("💡 GIẢI TRÌNH SƯ PHẠM (PEDAGOGICAL RATIONALE)")
+            
+            # Render rationale
+            for line in rationale_text.split('\n'):
+                line_strip = line.strip()
+                if not line_strip:
+                    continue
+                if line_strip.startswith('- ') or line_strip.startswith('* '):
+                    add_paragraph_with_math(line_strip[2:], style_name='List Bullet')
+                else:
+                    add_paragraph_with_math(line)
+
+    # 5. Lưu ra BytesIO và trả về StreamingResponse
+    doc_io = BytesIO()
+    doc.save(doc_io)
+    doc_io.seek(0)
+    
+    headers = {
+        "Content-Disposition": f"attachment; filename=Giao_an_Chuong_{chapter_id}.docx"
+    }
+    return StreamingResponse(
+        doc_io,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=headers
+    )
+
 
 

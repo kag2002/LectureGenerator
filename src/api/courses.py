@@ -177,6 +177,14 @@ def upload_and_parse_syllabus(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    # 1b. Validate định dạng file đề cương
+    _, ext = os.path.splitext(file.filename.lower())
+    if ext not in [".pdf", ".docx", ".txt"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt."
+        )
+
     # 2. Tạo thư mục tạm lưu file
     temp_dir = "./temp"
     os.makedirs(temp_dir, exist_ok=True)
@@ -274,6 +282,14 @@ def upload_and_parse_syllabus_stream(
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    # 1b. Validate định dạng file đề cương
+    _, ext = os.path.splitext(file.filename.lower())
+    if ext not in [".pdf", ".docx", ".txt"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt."
         )
 
     # 2. Tạo thư mục tạm lưu file
@@ -440,6 +456,77 @@ def upload_course_document(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tải tài liệu lên RAG: {str(e)}"
         )
+
+
+import asyncio
+
+@router.get("/{course_id}/documents/{file_name}/progress")
+async def get_document_progress(
+    course_id: int,
+    file_name: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Theo dõi và stream tiến độ nạp tài liệu vào RAG bằng Server-Sent Events (SSE).
+    """
+    # Kiểm tra quyền sở hữu môn học
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    async def progress_generator():
+        yield "event: stage\ndata: {\"message\": \"Đang bắt đầu đọc tài liệu...\", \"status\": \"processing\"}\n\n"
+        
+        for i in range(120): # Timeout sau 2 phút
+            await asyncio.sleep(1.0)
+            
+            # Sử dụng session mới để tránh caching đối tượng ORM của SQLAlchemy
+            from src.database.session import SessionLocal
+            session = SessionLocal()
+            try:
+                doc = session.query(RAGDocument).filter(
+                    RAGDocument.course_id == course_id,
+                    RAGDocument.user_id == current_user.id,
+                    RAGDocument.file_name == file_name
+                ).first()
+                
+                if not doc:
+                    yield "event: error\ndata: {\"message\": \"Tài liệu không tồn tại.\"}\n\n"
+                    break
+                
+                if doc.status == "ready":
+                    yield "event: stage\ndata: {\"message\": \"Đã phân tích cấu trúc và băm vector thành công!\", \"status\": \"ready\"}\n\n"
+                    yield "event: done\ndata: {\"status\": \"ready\"}\n\n"
+                    break
+                elif doc.status == "failed":
+                    err_msg = doc.error_message or "Lỗi không xác định khi bóc tách văn bản."
+                    yield f"event: error\ndata: {{\"message\": \"{err_msg}\"}}\n\n"
+                    break
+                else:
+                    # Stream các micro-copy khác nhau dựa trên thời gian trôi qua để làm UI sinh động
+                    if i < 4:
+                        msg = "Đang trích xuất nội dung văn bản từ các trang..."
+                    elif i < 9:
+                        msg = "Đang thực hiện làm sạch dữ liệu nhiễu và loại bỏ References..."
+                    else:
+                        msg = "Đang băm nhỏ văn bản (sliding window) và lập chỉ mục ChromaDB..."
+                    yield f"event: stage\ndata: {{\"message\": \"{msg}\", \"status\": \"processing\"}}\n\n"
+            except Exception as e:
+                yield f"event: error\ndata: {{\"message\": \"Lỗi truy xuất trạng thái: {str(e)}\"}}\n\n"
+                break
+            finally:
+                session.close()
+        else:
+            yield "event: error\ndata: {\"message\": \"Quá thời gian xử lý tài liệu.\"}\n\n"
+
+    return StreamingResponse(
+        progress_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/{course_id}/documents")

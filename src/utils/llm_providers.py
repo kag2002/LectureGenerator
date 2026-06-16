@@ -28,6 +28,21 @@ from .llm_client import (
     robust_parse_json,
 )
 
+def _get_gemini_api_keys() -> list[str]:
+    keys_str = os.environ.get("GEMINI_API_KEYS", "")
+    keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+    single_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if single_key and single_key not in keys:
+        keys.insert(0, single_key)
+    return keys
+
+def _get_local_llm_timeout() -> float:
+    try:
+        return float(os.environ.get("LLM_LOCAL_TIMEOUT", "30.0"))
+    except ValueError:
+        return 30.0
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Common helper: extract usage from OpenAI-compatible response
 # ═══════════════════════════════════════════════════════════════════════
@@ -105,11 +120,12 @@ def call_local_json(
         raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
+    local_timeout = _get_local_llm_timeout()
 
     for base_url in local_urls:
         try:
             print(f"[INFO] Dang thu goi Local/Tunnel LLM: {base_url} voi model {local_model}...")
-            client = OpenAI(base_url=base_url, api_key=local_api_key, timeout=15.0)
+            client = OpenAI(base_url=base_url, api_key=local_api_key, timeout=local_timeout)
             start_time = datetime.datetime.now(datetime.UTC)
 
             try:
@@ -118,7 +134,7 @@ def call_local_json(
                     messages=messages,
                     response_format={"type": "json_object"},
                     temperature=temperature,
-                    timeout=15.0,
+                    timeout=local_timeout,
                 )
             except Exception as format_err:
                 fmt_msg = str(format_err).lower()
@@ -134,7 +150,7 @@ def call_local_json(
                         model=local_model,
                         messages=retry_messages,
                         temperature=temperature,
-                        timeout=15.0,
+                        timeout=local_timeout,
                     )
                 else:
                     raise format_err
@@ -168,63 +184,75 @@ def call_local_json(
 def call_gemini_json(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ) -> dict:
-    """Call Google Gemini API with automatic model rotation fallback to bypass free tier daily limits."""
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("No Gemini API key available")
+    """Call Google Gemini API with automatic model rotation and API key pool fallback to bypass daily limits."""
+    api_keys = _get_gemini_api_keys()
+    if not api_keys:
+        raise RuntimeError("No Gemini API keys available")
 
-    print("[INFO] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(response_mime_type="application/json", temperature=temperature)
     if system_instruction:
         config.system_instruction = system_instruction
 
     gemini_contents = format_gemini_contents(prompt)
-    start_time = datetime.datetime.now(datetime.UTC)
 
     models_to_try = [
-        "gemini-3-flash-preview",
-        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-2.5-flash"
+        "gemini-3.1-flash-lite",
+        "gemini-3-flash-preview"
     ]
 
+    import time
+    last_err = None
     response = None
     res_dict = None
-    last_err = None
     chosen_model = None
+    chosen_key = None
+    start_time = None
 
-    import time
-    for model_name in models_to_try:
-        chosen_model = model_name
-        for attempt in range(2):
-            try:
-                response = client.models.generate_content(model=model_name, contents=gemini_contents, config=config)
-                res_dict = robust_parse_json(response.text)
+    for api_key in api_keys:
+        masked_key = api_key[:6] + "..." + api_key[-4:] if len(api_key) > 10 else "..."
+        print(f"[INFO] Dang thu goi Gemini API voi key {masked_key}...")
+        client = genai.Client(api_key=api_key)
+
+        for model_name in models_to_try:
+            chosen_model = model_name
+            chosen_key = api_key
+            success = False
+            for attempt in range(2):
+                try:
+                    start_time = datetime.datetime.now(datetime.UTC)
+                    response = client.models.generate_content(model=model_name, contents=gemini_contents, config=config)
+                    res_dict = robust_parse_json(response.text)
+                    success = True
+                    break
+                except Exception as e:
+                    last_err = e
+                    err_msg = str(e)
+                    is_quota = "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg
+                    is_json_err = isinstance(e, ValueError) and "parse json" in err_msg.lower()
+
+                    if is_quota:
+                        print(f"[WARNING] Key {masked_key} bi het quota hoac rate limit. Dang xoay key tiep theo...")
+                        break
+
+                    if "not found" in err_msg.lower() or "404" in err_msg:
+                        print(f"[WARNING] Model {model_name} khong kha dung cho key {masked_key}. Chuyen model tiep theo...")
+                        break
+
+                    if attempt < 1 and is_json_err:
+                        print(f"[WARNING] Model {model_name} tra ve JSON loi (attempt {attempt+1}): {e}. Thu lai sau 2s...")
+                        time.sleep(2.0)
+                        continue
+                    else:
+                        break
+            if success:
                 break
-            except Exception as e:
-                last_err = e
-                err_msg = str(e)
-                is_quota = "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg
-                is_json_err = isinstance(e, ValueError) and "parse json" in err_msg.lower()
-
-                # If daily limit reached or model not found/available, fall back immediately
-                is_daily_limit = is_quota and ("limit: 20" in err_msg or "limit: 0" in err_msg or "limit: 5" not in err_msg)
-                if is_daily_limit or "not found" in err_msg.lower() or "404" in err_msg:
-                    print(f"[WARNING] Model {model_name} not available or hit daily quota limit. Falling back to next model...")
-                    break
-
-                if attempt < 1 and (is_quota or is_json_err):
-                    print(f"[WARNING] Model {model_name} failed (attempt {attempt+1}): {e}. Retrying in 3s...")
-                    time.sleep(3.0)
-                    continue
-                else:
-                    break
         if res_dict is not None:
             break
 
     if res_dict is None:
-        raise last_err or RuntimeError("All Gemini models failed")
+        raise last_err or RuntimeError("All Gemini API keys and models failed")
 
     end_time = datetime.datetime.now(datetime.UTC)
     usage = _extract_gemini_usage(response, prompt)
@@ -241,6 +269,7 @@ def call_gemini_json(
         prompt_version,
         metadata,
         temperature,
+        extra_meta={"gemini_key_used": chosen_key[:6] + "..."}
     )
     return res_dict
 
@@ -421,18 +450,19 @@ def call_local_stream(prompt, system_instruction, temperature, trace_or_span, pr
         raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
+    local_timeout = _get_local_llm_timeout()
 
     for base_url in local_urls:
         try:
             print(f"[INFO] [Stream] Dang thu goi Local/Tunnel LLM: {base_url}...")
-            client = OpenAI(base_url=base_url, api_key=local_api_key, timeout=15.0)
+            client = OpenAI(base_url=base_url, api_key=local_api_key, timeout=local_timeout)
             start_time = datetime.datetime.now(datetime.UTC)
             response = client.chat.completions.create(
                 model=local_model,
                 messages=messages,
                 stream=True,
                 temperature=temperature,
-                timeout=15.0,
+                timeout=local_timeout,
             )
 
             accumulated_text = ""
@@ -467,31 +497,70 @@ def call_local_stream(prompt, system_instruction, temperature, trace_or_span, pr
 
 
 def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata):
-    """Call Google Gemini API and yield tokens."""
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("No Gemini API key available")
+    """Call Google Gemini API and yield tokens with key rotation."""
+    api_keys = _get_gemini_api_keys()
+    if not api_keys:
+        raise RuntimeError("No Gemini API keys available")
 
-    print("[INFO] [Stream] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(temperature=temperature)
     if system_instruction:
         config.system_instruction = system_instruction
 
     gemini_contents = format_gemini_contents(prompt)
-    start_time = datetime.datetime.now(datetime.UTC)
-    response = client.models.generate_content_stream(model="gemini-3-flash-preview", contents=gemini_contents, config=config)
 
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash-preview"
+    ]
+
+    last_err = None
+    stream_started = False
+    chosen_model = None
+    chosen_key = None
     accumulated_text = ""
-    for chunk in response:
-        if chunk.text:
-            accumulated_text += chunk.text
-            yield chunk.text
+    start_time = None
+
+    for api_key in api_keys:
+        masked_key = api_key[:6] + "..." + api_key[-4:] if len(api_key) > 10 else "..."
+        client = genai.Client(api_key=api_key)
+
+        for model_name in models_to_try:
+            chosen_model = model_name
+            chosen_key = api_key
+            try:
+                print(f"[INFO] [Stream] Dang thu goi Gemini API model {model_name} voi key {masked_key}...")
+                start_time = datetime.datetime.now(datetime.UTC)
+                response = client.models.generate_content_stream(model=model_name, contents=gemini_contents, config=config)
+
+                for chunk in response:
+                    if chunk.text:
+                        accumulated_text += chunk.text
+                        yield chunk.text
+                stream_started = True
+                break
+            except Exception as e:
+                last_err = e
+                err_msg = str(e)
+                is_quota = "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg
+                if is_quota:
+                    print(f"[WARNING] [Stream] Key {masked_key} bi rate limit/het quota. Chuyen key...")
+                    break
+                if "not found" in err_msg.lower() or "404" in err_msg:
+                    print(f"[WARNING] [Stream] Model {model_name} khong kha dung cho key {masked_key}.")
+                    continue
+                print(f"[WARNING] [Stream] Gap loi {e} tren key {masked_key}. Chuyen model/key...")
+                break
+        if stream_started:
+            break
+
+    if not stream_started:
+        raise last_err or RuntimeError("All Gemini stream calls failed")
 
     end_time = datetime.datetime.now(datetime.UTC)
     usage = {"input_tokens": len(str(prompt)) // 4, "output_tokens": len(accumulated_text) // 4}
     _log_and_return(
-        "gemini-3-flash-preview",
+        chosen_model,
         prompt,
         system_instruction,
         accumulated_text,
@@ -503,6 +572,7 @@ def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, p
         prompt_version,
         metadata,
         temperature,
+        extra_meta={"gemini_key_used": chosen_key[:6] + "..."}
     )
 
 
@@ -621,11 +691,12 @@ async def async_call_local_json(
         raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
+    local_timeout = _get_local_llm_timeout()
 
     for base_url in local_urls:
         try:
             print(f"[INFO] [Async] Dang thu goi Local/Tunnel LLM: {base_url} voi model {local_model}...")
-            client = AsyncOpenAI(base_url=base_url, api_key=local_api_key, timeout=600.0)
+            client = AsyncOpenAI(base_url=base_url, api_key=local_api_key, timeout=local_timeout)
             start_time = datetime.datetime.now(datetime.UTC)
 
             try:
@@ -634,7 +705,7 @@ async def async_call_local_json(
                     messages=messages,
                     response_format={"type": "json_object"},
                     temperature=temperature,
-                    timeout=600.0,
+                    timeout=local_timeout,
                 )
             except Exception as format_err:
                 fmt_msg = str(format_err).lower()
@@ -650,7 +721,7 @@ async def async_call_local_json(
                         model=local_model,
                         messages=retry_messages,
                         temperature=temperature,
-                        timeout=600.0,
+                        timeout=local_timeout,
                     )
                 else:
                     raise format_err
@@ -868,18 +939,19 @@ async def async_call_local_stream(
         raise RuntimeError("Local LLM is disabled by configuration")
     local_urls, local_model, local_api_key = get_local_llm_config()
     messages = format_openai_messages(prompt, system_instruction)
+    local_timeout = _get_local_llm_timeout()
 
     for base_url in local_urls:
         try:
             print(f"[INFO] [AsyncStream] Dang thu goi Local/Tunnel LLM: {base_url}...")
-            client = AsyncOpenAI(base_url=base_url, api_key=local_api_key, timeout=600.0)
+            client = AsyncOpenAI(base_url=base_url, api_key=local_api_key, timeout=local_timeout)
             start_time = datetime.datetime.now(datetime.UTC)
             response = await client.chat.completions.create(
                 model=local_model,
                 messages=messages,
                 stream=True,
                 temperature=temperature,
-                timeout=600.0,
+                timeout=local_timeout,
             )
 
             accumulated_text = ""
@@ -916,33 +988,72 @@ async def async_call_local_stream(
 async def async_call_gemini_stream(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
 ):
-    """Async call Google Gemini API and yield tokens."""
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise RuntimeError("No Gemini API key available")
+    """Async call Google Gemini API and yield tokens with key rotation."""
+    api_keys = _get_gemini_api_keys()
+    if not api_keys:
+        raise RuntimeError("No Gemini API keys available")
 
-    print("[INFO] [AsyncStream] Dang thu goi Gemini API truc tiep...")
-    client = genai.Client(api_key=api_key)
     config = types.GenerateContentConfig(temperature=temperature)
     if system_instruction:
         config.system_instruction = system_instruction
 
     gemini_contents = format_gemini_contents(prompt)
-    start_time = datetime.datetime.now(datetime.UTC)
-    response = await client.aio.models.generate_content_stream(
-        model="gemini-3-flash-preview", contents=gemini_contents, config=config
-    )
 
+    models_to_try = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3-flash-preview"
+    ]
+
+    last_err = None
+    stream_started = False
+    chosen_model = None
+    chosen_key = None
     accumulated_text = ""
-    async for chunk in response:
-        if chunk.text:
-            accumulated_text += chunk.text
-            yield chunk.text
+    start_time = None
+
+    for api_key in api_keys:
+        masked_key = api_key[:6] + "..." + api_key[-4:] if len(api_key) > 10 else "..."
+        client = genai.Client(api_key=api_key)
+
+        for model_name in models_to_try:
+            chosen_model = model_name
+            chosen_key = api_key
+            try:
+                print(f"[INFO] [AsyncStream] Dang thu goi Gemini API model {model_name} voi key {masked_key}...")
+                start_time = datetime.datetime.now(datetime.UTC)
+                response = await client.aio.models.generate_content_stream(
+                    model=model_name, contents=gemini_contents, config=config
+                )
+
+                async for chunk in response:
+                    if chunk.text:
+                        accumulated_text += chunk.text
+                        yield chunk.text
+                stream_started = True
+                break
+            except Exception as e:
+                last_err = e
+                err_msg = str(e)
+                is_quota = "RESOURCE_EXHAUSTED" in err_msg or "429" in err_msg
+                if is_quota:
+                    print(f"[WARNING] [AsyncStream] Key {masked_key} bi rate limit/het quota. Chuyen key...")
+                    break
+                if "not found" in err_msg.lower() or "404" in err_msg:
+                    print(f"[WARNING] [AsyncStream] Model {model_name} khong kha dung cho key {masked_key}.")
+                    continue
+                print(f"[WARNING] [AsyncStream] Gap loi {e} tren key {masked_key}. Chuyen model/key...")
+                break
+        if stream_started:
+            break
+
+    if not stream_started:
+        raise last_err or RuntimeError("All async Gemini stream calls failed")
 
     end_time = datetime.datetime.now(datetime.UTC)
     usage = {"input_tokens": len(str(prompt)) // 4, "output_tokens": len(accumulated_text) // 4}
     _log_and_return(
-        "gemini-3-flash-preview",
+        chosen_model,
         prompt,
         system_instruction,
         accumulated_text,
@@ -954,7 +1065,7 @@ async def async_call_gemini_stream(
         prompt_version,
         metadata,
         temperature,
-        extra_meta={"async": True},
+        extra_meta={"gemini_key_used": chosen_key[:6] + "...", "async": True, "stream": True}
     )
 
 

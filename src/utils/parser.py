@@ -50,7 +50,7 @@ def parse_document(file_path: str) -> str:
     _, ext = os.path.splitext(file_path.lower())
     if ext == ".pdf":
         return extract_text_from_pdf(file_path)
-    elif ext in [".docx", ".doc"]:
+    elif ext == ".docx":
         return extract_text_from_docx(file_path)
     elif ext == ".txt":
         try:

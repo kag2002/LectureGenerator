@@ -29,10 +29,17 @@ class ChatRequest(BaseModel):
     parent_message_id: int | None = Field(None, description="ID của tin nhắn cha để rẽ nhánh (nếu có)")
     edit_message_id: int | None = Field(None, description="ID của tin nhắn gốc đang bị sửa đổi (nếu có)")
     reconciliation_action: str | None = Field(None, description="Hành động hòa giải: 'archive' | 'keep' | 'overwrite'")
+    page_context: str | None = Field(None, description="Ngữ cảnh trang hiện tại của người dùng")
 
 
 class SwitchBranchRequest(BaseModel):
     message_id: int = Field(..., description="ID của tin nhắn muốn chuyển nhánh hoạt động tới")
+
+
+class MessageCreateRequest(BaseModel):
+    role: str = Field(..., description="Vai trò của người gửi: 'user' hoặc 'assistant'")
+    content: str = Field(..., description="Nội dung tin nhắn")
+    parent_id: int | None = Field(None, description="ID tin nhắn cha (nếu có)")
 
 
 # --- API QUẢN LÝ PHIÊN CHAT ---
@@ -87,6 +94,49 @@ def get_chat_sessions(
         }
         for s in sessions
     ]
+
+
+@router.put("/sessions/{session_id}")
+def update_chat_session(
+    session_id: int,
+    req: SessionCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cập nhật tiêu đề phiên trò chuyện."""
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Phiên trò chuyện không tồn tại.")
+    if session.course_id:
+        course = db.query(Course).filter(Course.id == session.course_id, Course.user_id == current_user.id).first()
+        if not course:
+            raise HTTPException(status_code=403, detail="Không có quyền truy cập.")
+    if req.title:
+        session.title = req.title
+        db.commit()
+        db.refresh(session)
+    return {"id": session.id, "title": session.title}
+
+
+@router.delete("/sessions/{session_id}")
+def delete_chat_session(
+    session_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Xóa phiên trò chuyện và toàn bộ tin nhắn liên quan."""
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Phiên trò chuyện không tồn tại.")
+    if session.course_id:
+        course = db.query(Course).filter(Course.id == session.course_id, Course.user_id == current_user.id).first()
+        if not course:
+            raise HTTPException(status_code=403, detail="Không có quyền truy cập.")
+    
+    db.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
+    db.delete(session)
+    db.commit()
+    return {"success": True, "message": "Đã xóa phiên trò chuyện thành công."}
 
 
 @router.get("/sessions/{session_id}/messages")
@@ -170,6 +220,48 @@ def get_session_messages(
     return formatted_messages
 
 
+@router.post("/sessions/{session_id}/messages")
+def append_message(
+    session_id: int,
+    req: MessageCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lưu tin nhắn trực tiếp vào phiên chat (thủ công/xác nhận hành động) mà không chạy LLM."""
+    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Phiên trò chuyện không tồn tại.")
+
+    if session.course_id:
+        course = db.query(Course).filter(Course.id == session.course_id, Course.user_id == current_user.id).first()
+        if not course:
+            raise HTTPException(status_code=403, detail="Không có quyền truy cập phiên chat này.")
+
+    parent_id = req.parent_id
+    if parent_id is None:
+        parent_id = session.active_leaf_id
+
+    db_msg = ChatMessage(
+        session_id=session_id,
+        role=req.role,
+        content=req.content,
+        parent_id=parent_id,
+        prompt_tokens=0,
+        completion_tokens=0,
+        total_tokens=0,
+        latency_ms=0.0
+    )
+    db.add(db_msg)
+    db.commit()
+    db.refresh(db_msg)
+
+    # Cập nhật active_leaf_id mới cho Session
+    session.active_leaf_id = db_msg.id
+    db.commit()
+
+    return {"success": True, "message_id": db_msg.id}
+
+
 # --- API STREAM CHATBOT EVENT (SSE) ---
 
 
@@ -243,6 +335,7 @@ def chat_stream(req: ChatRequest, current_user: User = Depends(get_current_user)
                     db=async_db,
                     on_event=on_event,
                     user_message_id=user_message_id,
+                    page_context=req.page_context,
                 )
                 await queue.put(("agent_result", result))
             except asyncio.CancelledError:
@@ -264,6 +357,26 @@ def chat_stream(req: ChatRequest, current_user: User = Depends(get_current_user)
                         yield send(
                             "stage", {"stage": 5, "message": "⚠️ Cảnh báo: Phản hồi bị chặn do vi phạm Guardrails."}
                         )
+
+                    # Check for proposed action in the agent rounds
+                    rounds = result.get("rounds", [])
+                    proposed_action = None
+                    for rnd in rounds:
+                        for tr in rnd.get("tool_results", []):
+                            res = tr.get("result", {})
+                            if isinstance(res, dict) and res.get("status") == "proposed":
+                                proposed_action = {
+                                    "view": res.get("view"),
+                                    "action": res.get("action"),
+                                    "params": res.get("params"),
+                                    "message": res.get("message")
+                                }
+                                break
+                        if proposed_action:
+                            break
+
+                    if proposed_action:
+                        yield send("dispatch_action", proposed_action)
 
                     yield send(
                         "done",

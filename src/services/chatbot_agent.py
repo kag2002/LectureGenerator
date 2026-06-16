@@ -1,5 +1,6 @@
 import json
 import os
+import asyncio
 
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
@@ -163,13 +164,70 @@ CHATBOT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_course_info",
+            "description": "Xem thông tin chung của môn học bao gồm giáo trình bắt buộc (required_textbooks) và tài liệu đọc thêm (recommended_readings).",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_chapter_materials",
+            "description": "Xem nội dung slide bài giảng chi tiết (Markdown) và kịch bản active learning của một chương học đã được soạn thảo trong hệ thống.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chapter_id": {"type": "integer", "description": "ID của chương học cần xem học liệu. Nếu không truyền, hệ thống tự động lấy chương đầu tiên."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_chapter_questions",
+            "description": "Xem danh sách các câu hỏi trắc nghiệm MCQ chi tiết (nội dung câu hỏi, các lựa chọn, đáp án đúng, CLO, Bloom) đã sinh cho một chương học cụ thể hoặc toàn khóa học.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "chapter_id": {"type": "integer", "description": "ID của chương học cần xem câu hỏi. Nếu không truyền, hệ thống sẽ lấy tất cả câu hỏi của môn học."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_uploaded_documents",
+            "description": "Xem danh sách các tài liệu RAG nguồn (giáo án, slide PDF, tài liệu tham khảo) đã được giảng viên tải lên cho môn học này.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_system_rules",
+            "description": "Xem danh sách các quy tắc phản tư sư phạm tự học (System Rules) đã được giảng viên phê duyệt để áp dụng cho môn học này.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Bạn là trợ lý AI thiết kế bài giảng (AI Lecture Assistant), được phát triển bởi VinUni.
 Nhiệm vụ của bạn là hỗ trợ giảng viên soạn giáo án, biên tập slide, thiết kế hoạt động active learning và xây dựng bộ câu hỏi chuẩn chuẩn đầu ra (CLO) & thang đo Bloom.
 
 HƯỚNG DẪN HOẠT ĐỘNG:
-- Bạn có quyền truy cập vào các công cụ: `search_course_knowledge`, `get_course_clos`, `get_matrix_coverage`, `clarify`, `get_course_chapters`, `generate_course_outline_action`, `generate_chapter_storyboard_action`, `generate_chapter_materials_action`, và `generate_chapter_questions_action`.
+- Bạn có quyền truy cập vào các công cụ:
+  * Công cụ tác vụ: `search_course_knowledge`, `get_course_clos`, `get_matrix_coverage`, `clarify`, `get_course_chapters`, `generate_course_outline_action`, `generate_chapter_storyboard_action`, `generate_chapter_materials_action`, và `generate_chapter_questions_action`.
+  * Công cụ đọc dữ liệu thật từ CSDL: `get_course_info`, `get_chapter_materials`, `get_chapter_questions`, `get_uploaded_documents`, `get_system_rules`.
+- Bạn BẮT BUỘC phải sử dụng các công cụ đọc dữ liệu thật từ CSDL để kiểm tra nội dung hiện có trước khi trả lời, tránh đề xuất các nội dung bịa đặt hoặc hardcode:
+  * Khi giảng viên hỏi về thông tin môn học, giáo trình, bài đọc tham khảo: Hãy gọi `get_course_info` hoặc `get_uploaded_documents`.
+  * Khi giảng viên hỏi về slide bài giảng hoặc kịch bản active learning đã được soạn: Hãy gọi `get_chapter_materials`.
+  * Khi giảng viên hỏi về các câu hỏi trắc nghiệm hiện có của chương hoặc môn học: Hãy gọi `get_chapter_questions`.
+  * Khi giảng viên hỏi về các quy chuẩn, quy tắc tự sinh/reflection của môn học: Hãy gọi `get_system_rules`.
 - Hãy gọi các công cụ tương ứng khi giảng viên yêu cầu tự động tạo đề cương, storyboard, soạn slide bài giảng hoặc câu hỏi ôn tập:
   * Khi giảng viên yêu cầu tạo đề cương, dàn ý hoặc chương học cho toàn môn học: Hãy gọi `generate_course_outline_action`.
   * Khi giảng viên yêu cầu tạo storyboard hay khung slide nháp cho một chương học cụ thể: Hãy gọi `generate_chapter_storyboard_action`.
@@ -185,16 +243,15 @@ HƯỚNG DẪN HOẠT ĐỘNG:
   * Tuyệt đối không tự bịa ra thông tin nguồn hoặc trích dẫn nếu không có trong kết quả trả về của công cụ `search_course_knowledge`.
 - Nếu người dùng hỏi các câu hỏi chung chung hoặc ngoài phạm vi giáo dục, hãy từ chối lịch sự và định hướng quay lại chủ đề bài giảng.
 - Trả lời một cách chuyên nghiệp, mang tính học thuật cao.
+- TUYỆT ĐỐI KHÔNG đề cập đến tên các công cụ/hàm kỹ thuật (như `generate_chapter_materials_action`, `generate_chapter_storyboard_action`, v.v.) trong câu trả lời trực tiếp cho người dùng. Hãy sử dụng các cụm từ tiếng Việt tự nhiên và thân thiện (như "sinh bài giảng/học liệu", "lên khung slide nháp", "thiết kế câu hỏi").
 - TUYỆT ĐỐI KHÔNG sử dụng các biểu tượng cảm xúc (emoji) hoặc ký tự icon thô (như ☁️, ⏱️, ⚡, ⚠️, ✅, 🛡️, 🧩, 💾, 📄, ✨, 🎨, 🔍, ✍️) trong câu trả lời.
 """
 
 
 def get_candidate_models() -> list[dict]:
-    """
-    Lấy danh sách các model cấu hình sẵn phục vụ cho chatbot rotation.
-    """
+    if os.environ.get("LLM_MOCK_MODE") == "true":
+        return []
     candidate_models = []
-
     # Ưu tiên 0: Local LLM (Qwen 14B) nếu URL khả dụng
     local_url = os.environ.get("LOCAL_LLM_URL")
     if local_url:
@@ -347,6 +404,7 @@ async def run_chatbot_agent_loop(
     max_rounds: int = 4,
     on_event=None,
     user_message_id: int | None = None,
+    page_context: str | None = None,
 ) -> dict:
     """
     Khởi chạy vòng lặp Agent cho Chatbot thông qua LangGraph.
@@ -368,21 +426,23 @@ async def run_chatbot_agent_loop(
             print(f"[LANGFUSE] Error initializing chatbot trace: {e}")
 
     # 2. Chuẩn bị lịch sử hội thoại từ CSDL làm context cửa sổ trượt
-    course = db.query(Course).filter(Course.id == course_id).first()
+    def load_context():
+        course_obj = db.query(Course).filter(Course.id == course_id).first()
+        msgs = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)
+            .order_by(ChatMessage.id.desc())
+            .limit(20)
+            .all()
+        )
+        msgs.reverse()
+        return course_obj, msgs
+
+    course, recent_messages = await asyncio.to_thread(load_context)
     from src.agents.graph import SYSTEM_PROMPT
     system_prompt = SYSTEM_PROMPT
     if course:
         system_prompt += f"\n\nTHÔNG TIN MÔN HỌC HIỆN TẠI ĐANG ĐƯỢC CHỌN:\n- Tên môn học: {course.course_name}\n- Mã môn học: {course.course_code}\n- ID môn học: {course.id}"
-
-    # Giới hạn lấy tối đa 20 tin nhắn gần nhất để quét được cả tin nhắn hệ thống (tóm tắt)
-    recent_messages = (
-        db.query(ChatMessage)
-        .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)
-        .order_by(ChatMessage.id.desc())
-        .limit(20)
-        .all()
-    )
-    recent_messages.reverse()
 
     messages = [{"role": "system", "content": system_prompt}]
     
@@ -400,6 +460,11 @@ async def run_chatbot_agent_loop(
     non_sys_recent = [msg for msg in recent_messages if msg.role in ["user", "assistant"]][-10:]
     for msg in non_sys_recent:
         messages.append({"role": msg.role, "content": msg.content})
+
+    if page_context:
+        import re
+        clean_context = re.sub(r'<svg[\s\S]*?</svg>', '[Biểu đồ sơ đồ SVG đã được lược bớt để tối ưu]', page_context)
+        messages.append({"role": "system", "content": f"[Ngữ cảnh trang hiện tại của người dùng]\n{clean_context}"})
 
     messages.append({"role": "user", "content": user_message})
 
@@ -439,73 +504,75 @@ async def run_chatbot_agent_loop(
     total_latency_ms = final_state.get("latency_ms", 0.0)
 
     # 4. Lưu toàn bộ cuộc hội thoại và token tiêu thụ vào SQLite
-    db_user = None
-    if user_message_id:
-        db_user = db.query(ChatMessage).filter(ChatMessage.id == user_message_id).first()
+    def save_run():
+        db_user = None
+        if user_message_id:
+            db_user = db.query(ChatMessage).filter(ChatMessage.id == user_message_id).first()
 
-    if db_user:
-        db_user.prompt_tokens = total_prompt_tokens
-        db_user.total_tokens = total_prompt_tokens
-        db_user.trace_id = trace.id if trace else None
-    else:
-        db_user = ChatMessage(
+        if db_user:
+            db_user.prompt_tokens = total_prompt_tokens
+            db_user.total_tokens = total_prompt_tokens
+            db_user.trace_id = trace.id if trace else None
+        else:
+            db_user = ChatMessage(
+                session_id=session_id,
+                role="user",
+                content=user_message,
+                prompt_tokens=total_prompt_tokens,
+                completion_tokens=0,
+                total_tokens=total_prompt_tokens,
+                latency_ms=0.0,
+                trace_id=trace.id if trace else None,
+            )
+            db.add(db_user)
+            db.commit()
+            db.refresh(db_user)
+
+        summary_text = final_state.get("summary_history", "")
+        ai_parent_id = db_user.id
+
+        if summary_text:
+            db_summary = ChatMessage(
+                session_id=session_id,
+                role="system",
+                content=f"[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n{summary_text}",
+                parent_id=db_user.id,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                latency_ms=0.0,
+                trace_id=trace.id if trace else None,
+            )
+            db.add(db_summary)
+            db.commit()
+            db.refresh(db_summary)
+            ai_parent_id = db_summary.id
+
+        db_ai = ChatMessage(
             session_id=session_id,
-            role="user",
-            content=user_message,
-            prompt_tokens=total_prompt_tokens,
-            completion_tokens=0,
-            total_tokens=total_prompt_tokens,
-            latency_ms=0.0,
-            trace_id=trace.id if trace else None,
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-
-    summary_text = final_state.get("summary_history", "")
-    ai_parent_id = db_user.id
-
-    if summary_text:
-        db_summary = ChatMessage(
-            session_id=session_id,
-            role="system",
-            content=f"[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n{summary_text}",
-            parent_id=db_user.id,
+            role="assistant",
+            content=final_text,
+            parent_id=ai_parent_id,
+            tool_calls=json.dumps([r.get("tool_calls") for r in rounds if r.get("tool_calls")]),
+            tool_results=json.dumps([r.get("tool_results") for r in rounds if r.get("tool_results")]),
             prompt_tokens=0,
-            completion_tokens=0,
-            total_tokens=0,
-            latency_ms=0.0,
+            completion_tokens=total_completion_tokens,
+            total_tokens=total_completion_tokens,
+            latency_ms=total_latency_ms,
             trace_id=trace.id if trace else None,
         )
-        db.add(db_summary)
+        db.add(db_ai)
         db.commit()
-        db.refresh(db_summary)
-        ai_parent_id = db_summary.id
+        db.refresh(db_ai)
 
-    db_ai = ChatMessage(
-        session_id=session_id,
-        role="assistant",
-        content=final_text,
-        parent_id=ai_parent_id,
-        tool_calls=json.dumps([r.get("tool_calls") for r in rounds if r.get("tool_calls")]),
-        tool_results=json.dumps([r.get("tool_results") for r in rounds if r.get("tool_results")]),
-        prompt_tokens=0,
-        completion_tokens=total_completion_tokens,
-        total_tokens=total_completion_tokens,
-        latency_ms=total_latency_ms,
-        trace_id=trace.id if trace else None,
-    )
-    db.add(db_ai)
-    db.commit()
-    db.refresh(db_ai)
+        from src.database.models import ChatSession
 
-    # Cập nhật active_leaf_id cho session trò chuyện
-    from src.database.models import ChatSession
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        if session:
+            session.active_leaf_id = db_ai.id
+            db.commit()
 
-    session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
-    if session:
-        session.active_leaf_id = db_ai.id
-        db.commit()
+    await asyncio.to_thread(save_run)
 
     if trace:
         try:

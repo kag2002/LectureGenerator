@@ -6,10 +6,12 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from src.config import get_settings
 from src.database.models import User
 from src.database.session import get_db
 
-SECRET_KEY = "lecture_generator_super_secret_key"
+settings = get_settings()
+SECRET_KEY = settings.jwt_secret_key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 giờ
 

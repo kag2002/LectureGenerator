@@ -59,7 +59,9 @@ if os.path.exists(env_path):
                 continue
             if "=" in line:
                 key, val = line.split("=", 1)
-                os.environ[key.strip()] = val.strip()
+                k = key.strip()
+                if k not in os.environ:
+                    os.environ[k] = val.strip()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -68,7 +70,12 @@ if os.path.exists(env_path):
 
 langfuse = None
 try:
-    if os.environ.get("LANGFUSE_SECRET_KEY") and os.environ.get("LANGFUSE_PUBLIC_KEY"):
+    if (
+        os.environ.get("TESTING") != "1"
+        and os.environ.get("LLM_MOCK_MODE") != "true"
+        and os.environ.get("LANGFUSE_SECRET_KEY")
+        and os.environ.get("LANGFUSE_PUBLIC_KEY")
+    ):
         langfuse = Langfuse(
             public_key=os.environ.get("LANGFUSE_PUBLIC_KEY"),
             secret_key=os.environ.get("LANGFUSE_SECRET_KEY"),

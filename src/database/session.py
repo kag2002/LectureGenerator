@@ -2,9 +2,10 @@ import os
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+from ..config import get_settings
 
-# Lấy DATABASE_URL từ môi trường (ưu tiên PostgreSQL cho production, mặc định SQLite)
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./lecture_generator.db")
+settings = get_settings()
+DATABASE_URL = os.environ.get("DATABASE_URL") or settings.database_url
 
 # Nếu postgresql:// bắt đầu bằng postgres:// (Render/Heroku format), đổi thành postgresql://
 if DATABASE_URL.startswith("postgres://"):
@@ -13,7 +14,13 @@ if DATABASE_URL.startswith("postgres://"):
 is_sqlite = DATABASE_URL.startswith("sqlite")
 
 if is_sqlite:
-    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    from sqlalchemy.pool import NullPool
+    db_timeout = getattr(settings, "database_timeout", 15.0)
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False, "timeout": db_timeout},
+        poolclass=NullPool
+    )
 
     # Kích hoạt chế độ WAL (Write-Ahead Logging) cho SQLite để tránh Write-Locks khi chạy đa luồng
     @event.listens_for(engine, "connect")

@@ -41,12 +41,14 @@ def reconcile_state(db: Session, edit_message_id: int, action: str):
         db.commit()
 
     elif action == "overwrite":
-        # Delete questions
-        db.query(Question).filter(Question.chat_message_id.in_(descendant_ids)).delete(synchronize_session=False)
-        # Delete materials
+        # Soft-archive instead of hard delete to prevent accidental data loss
+        db.query(Chapter).filter(Chapter.chat_message_id.in_(descendant_ids)).update(
+            {"is_active": False}, synchronize_session=False
+        )
         db.query(ChapterMaterial).filter(
             ChapterMaterial.chapter_id.in_(db.query(Chapter.id).filter(Chapter.chat_message_id.in_(descendant_ids)))
-        ).delete(synchronize_session=False)
-        # Delete chapters
-        db.query(Chapter).filter(Chapter.chat_message_id.in_(descendant_ids)).delete(synchronize_session=False)
+        ).update({"is_active": False}, synchronize_session=False)
+        db.query(Question).filter(Question.chat_message_id.in_(descendant_ids)).update(
+            {"is_active": False}, synchronize_session=False
+        )
         db.commit()

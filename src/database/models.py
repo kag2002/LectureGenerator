@@ -21,7 +21,7 @@ class Course(Base):
     __tablename__ = "courses"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     course_code = Column(String(50), nullable=False)
     course_name = Column(String(255), nullable=False)
     required_textbooks = Column(Text, nullable=True)
@@ -39,7 +39,7 @@ class CLO(Base):
     __tablename__ = "clos"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     clo_code = Column(String(20), nullable=False)  # ví dụ: CLO1, CLO2
     description = Column(Text, nullable=False)
     bloom_level = Column(Integer, nullable=False)  # 1 đến 6
@@ -53,12 +53,12 @@ class Chapter(Base):
     __tablename__ = "chapters"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     sort_order = Column(Integer, nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
-    chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
 
     # Quan hệ
@@ -71,7 +71,7 @@ class ChapterMaterial(Base):
     __tablename__ = "chapter_materials"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
     slide_content = Column(Text, nullable=True)  # Markdown text
     active_learning_script = Column(Text, nullable=True)  # Text guide
     is_active = Column(Boolean, default=True)
@@ -85,16 +85,16 @@ class Question(Base):
     __tablename__ = "questions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
-    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
     question_text = Column(Text, nullable=False)
     question_type = Column(String(20), default="MCQ")  # MCQ | Short Answer
     options_json = Column(Text, nullable=True)  # JSON array of options for MCQ
     correct_answer = Column(String(50), nullable=False)
     bloom_level = Column(Integer, nullable=False)
-    clo_id = Column(Integer, ForeignKey("clos.id", ondelete="SET NULL"), nullable=True)
+    clo_id = Column(Integer, ForeignKey("clos.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
-    chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
 
     # Quan hệ
@@ -109,7 +109,7 @@ class MaterialRevision(Base):
     __tablename__ = "material_revisions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
 
     field = Column(String(50), nullable=False)  # "slide_content" hoặc "active_learning_script"
     content_before = Column(Text, nullable=False)
@@ -129,7 +129,7 @@ class ChatSession(Base):
     __tablename__ = "chat_sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=True, index=True)
     title = Column(String(255), default="Cuộc trò chuyện mới")
     active_leaf_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -145,10 +145,10 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String(50), nullable=False)  # "user", "assistant", "system"
     content = Column(Text, nullable=False)
-    parent_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
+    parent_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True)
     tool_calls = Column(Text, nullable=True)  # JSON string của tool calls
     tool_results = Column(Text, nullable=True)  # JSON string của kết quả tool
 
@@ -191,12 +191,12 @@ class RAGDocument(Base):
     __tablename__ = "rag_documents"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     file_name = Column(String(255), nullable=False)
     category = Column(String(100), default="Textbook")
     tags = Column(String(255), nullable=True)
-    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
     status = Column(String(50), default="processing")  # processing | ready | failed
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -213,7 +213,7 @@ class SystemRule(Base):
     __tablename__ = "system_rules"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     rule_text = Column(Text, nullable=False)
     rule_category = Column(String(100), nullable=False)  # ví dụ: "mcq_generation", "slide_style"
     status = Column(String(50), default="pending_approval")  # pending_approval | approved | rejected

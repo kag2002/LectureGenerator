@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cors_origins: str = "http://localhost:3000"
+    jwt_secret_key: str = "lecture_generator_super_secret_key"
+    database_timeout: float = 15.0
+    llm_local_timeout: int = 30
+    gemini_api_keys: str = ""
+    disable_query_expansion: bool = True
 
     # LLM
     openai_api_key: str = ""
