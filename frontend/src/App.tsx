@@ -629,93 +629,107 @@ export default function App() {
           onLogout={handleLogout}
         >
           <div style={{ display: activeView === 'chatbot' ? 'block' : 'none' }}>
-            <ChatBot
-              course={selectedCourse!}
-              onGoBack={() => handleNavigate('course_roadmap')}
-              activeView={activeView}
-              isActive={activeView === 'chatbot'}
-            />
+            {selectedCourse && (
+              <ChatBot
+                course={selectedCourse}
+                onGoBack={() => handleNavigate('course_roadmap')}
+                activeView={activeView}
+                isActive={activeView === 'chatbot'}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'course_roadmap' ? 'block' : 'none' }}>
-            <CourseRoadmap
-              course={selectedCourse!}
-              onBack={() => handleNavigate('dashboard')}
-              onLogout={handleLogout}
-              onNavigate={handleNavigate}
-            />
+            {selectedCourse && (
+              <CourseRoadmap
+                course={selectedCourse}
+                onBack={() => handleNavigate('dashboard')}
+                onLogout={handleLogout}
+                onNavigate={handleNavigate}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'course_config' ? 'block' : 'none' }}>
-            <CourseConfig
-              course={selectedCourse!}
-              onBack={() => handleNavigate('course_roadmap')}
-              onNavigate={handleNavigate}
-              onStartPlanning={() => handleNavigate('lesson_planner')}
-              onRecordAIUsage={onRecordAIUsage}
-              setAIProcessingStatus={setAIProcessingStatus}
-              isActive={activeView === 'course_config'}
-            />
+            {selectedCourse && (
+              <CourseConfig
+                course={selectedCourse}
+                onBack={() => handleNavigate('course_roadmap')}
+                onNavigate={handleNavigate}
+                onStartPlanning={() => handleNavigate('lesson_planner')}
+                onRecordAIUsage={onRecordAIUsage}
+                setAIProcessingStatus={setAIProcessingStatus}
+                isActive={activeView === 'course_config'}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'lesson_planner' ? 'block' : 'none' }}>
-            <LessonPlanner
-              course={selectedCourse!}
-              initialChapterId={activeChapterId}
-              initialCloId={activeCloId}
-              initialCloCode={activeCloCode}
-              initialBloomLevel={activeBloomLevel}
-              onBack={() => handleNavigate('course_roadmap')}
-              onLogout={handleLogout}
-              onNavigate={handleNavigate}
-              onGoToQuestionBank={() => handleNavigate('question_bank')}
-              onRecordAIUsage={onRecordAIUsage}
-              setAIProcessingStatus={setAIProcessingStatus}
-              isActive={activeView === 'lesson_planner'}
-              forceOpenPedagogicalModal={forceOpenPedagogicalModal}
-              clearForceOpenPedagogicalModal={() => setForceOpenPedagogicalModal(false)}
-            />
+            {selectedCourse && (
+              <LessonPlanner
+                course={selectedCourse}
+                initialChapterId={activeChapterId}
+                initialCloId={activeCloId}
+                initialCloCode={activeCloCode}
+                initialBloomLevel={activeBloomLevel}
+                onBack={() => handleNavigate('course_roadmap')}
+                onLogout={handleLogout}
+                onNavigate={handleNavigate}
+                onGoToQuestionBank={() => handleNavigate('question_bank')}
+                onRecordAIUsage={onRecordAIUsage}
+                setAIProcessingStatus={setAIProcessingStatus}
+                isActive={activeView === 'lesson_planner'}
+                forceOpenPedagogicalModal={forceOpenPedagogicalModal}
+                clearForceOpenPedagogicalModal={() => setForceOpenPedagogicalModal(false)}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'question_bank' ? 'block' : 'none' }}>
-            <QuestionBank
-              course={selectedCourse!}
-              initialChapterId={activeChapterId}
-              initialCloId={activeCloId}
-              initialBloomLevel={activeBloomLevel}
-              onBack={() => handleNavigate('course_roadmap')}
-              onGoToLessonPlanner={() => handleNavigate('lesson_planner')}
-              onViewDashboard={() => handleNavigate('matrix_dashboard')}
-              onNavigate={handleNavigate}
-              onRecordAIUsage={onRecordAIUsage}
-              setAIProcessingStatus={setAIProcessingStatus}
-              isActive={activeView === 'question_bank'}
-            />
+            {selectedCourse && (
+              <QuestionBank
+                course={selectedCourse}
+                initialChapterId={activeChapterId}
+                initialCloId={activeCloId}
+                initialBloomLevel={activeBloomLevel}
+                onBack={() => handleNavigate('course_roadmap')}
+                onGoToLessonPlanner={() => handleNavigate('lesson_planner')}
+                onViewDashboard={() => handleNavigate('matrix_dashboard')}
+                onNavigate={handleNavigate}
+                onRecordAIUsage={onRecordAIUsage}
+                setAIProcessingStatus={setAIProcessingStatus}
+                isActive={activeView === 'question_bank'}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'matrix_dashboard' ? 'block' : 'none' }}>
-            <MatrixDashboard
-              course={selectedCourse!}
-              onBack={() => handleNavigate('course_roadmap')}
-              onNavigate={handleNavigate}
-              queue={queue}
-              isQueueRunning={isQueueRunning}
-              showQueuePanel={showQueuePanel}
-              queueProgressMsg={queueProgressMsg}
-              setIsQueueRunning={setIsQueueRunning}
-              setQueue={setQueue}
-              setShowQueuePanel={setShowQueuePanel}
-              setQueueProgressMsg={setQueueProgressMsg}
-              setQueueMode={setQueueMode}
-              cancelRef={cancelRef}
-              runGlobalQueue={runGlobalQueue}
-              isActive={activeView === 'matrix_dashboard'}
-            />
+            {selectedCourse && (
+              <MatrixDashboard
+                course={selectedCourse}
+                onBack={() => handleNavigate('course_roadmap')}
+                onNavigate={handleNavigate}
+                queue={queue}
+                isQueueRunning={isQueueRunning}
+                showQueuePanel={showQueuePanel}
+                queueProgressMsg={queueProgressMsg}
+                setIsQueueRunning={setIsQueueRunning}
+                setQueue={setQueue}
+                setShowQueuePanel={setShowQueuePanel}
+                setQueueProgressMsg={setQueueProgressMsg}
+                setQueueMode={setQueueMode}
+                cancelRef={cancelRef}
+                runGlobalQueue={runGlobalQueue}
+                isActive={activeView === 'matrix_dashboard'}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'knowledge_base' ? 'block' : 'none' }}>
-            <KnowledgeBase
-              course={selectedCourse!}
-              onBack={() => handleNavigate('course_roadmap')}
-              onLogout={handleLogout}
-              onNavigate={(view) => handleNavigate(view)}
-              activeView={activeView}
-              isActive={activeView === 'knowledge_base'}
-            />
+            {selectedCourse && (
+              <KnowledgeBase
+                course={selectedCourse}
+                onBack={() => handleNavigate('course_roadmap')}
+                onLogout={handleLogout}
+                onNavigate={(view) => handleNavigate(view)}
+                activeView={activeView}
+                isActive={activeView === 'knowledge_base'}
+              />
+            )}
           </div>
           <div style={{ display: activeView === 'ai_monitor' ? 'block' : 'none' }}>
             {selectedCourse && activeView === 'ai_monitor' && (
