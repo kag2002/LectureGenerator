@@ -65,5 +65,17 @@ async def test_admin_endpoints_success(client):
         assert response.status_code == 200
         data = response.json()
         assert data["status"] in ["success", "skipped"]
+
+        # 5. Agent memory list
+        response = await client.get("/api/admin/agent/memory")
+        assert response.status_code == 200
+        memories = response.json()
+        assert isinstance(memories, list)
+
+        # 6. Agent memory delete (with dummy ID since it won't crash on delete of non-existent in Chroma)
+        response = await client.delete("/api/admin/agent/memory/dummy_id_123")
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
     finally:
         app.dependency_overrides.clear()
+

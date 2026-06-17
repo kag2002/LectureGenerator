@@ -37,10 +37,12 @@ export default function AdminDashboard({ onBack, isActive }: AdminDashboardProps
   const [loading, setLoading] = useState(true);
   const [optimizing, setOptimizing] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'traffic' | 'ai' | 'pedagogical' | 'alerts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'traffic' | 'ai' | 'pedagogical' | 'alerts' | 'memory'>('overview');
   const [refreshInterval, setRefreshInterval] = useState<number>(10); // seconds
   const [sftData, setSftData] = useState<any>(null);
   const [simulatingAlert, setSimulatingAlert] = useState(false);
+  const [memories, setMemories] = useState<any[]>([]);
+  const [loadingMemories, setLoadingMemories] = useState(false);
 
   // Cấu hình cảnh báo hiển thị trên UI
   const [localAlertConfig, setLocalAlertConfig] = useState({
@@ -66,6 +68,43 @@ export default function AdminDashboard({ onBack, isActive }: AdminDashboardProps
       console.error('Lỗi khi fetch dữ liệu SFT:', err);
     }
   };
+
+  const fetchMemories = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    setLoadingMemories(true);
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_BASE_URL}/api/admin/agent/memory`, { headers });
+      setMemories(res.data);
+    } catch (err: any) {
+      console.error('Lỗi khi fetch dữ liệu bộ nhớ:', err);
+    } finally {
+      setLoadingMemories(false);
+    }
+  };
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bản ghi bộ nhớ này của Agent không? Điều này sẽ ảnh hưởng đến khả năng Reflection / Few-shot học từ quá khứ của User.')) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API_BASE_URL}/api/admin/agent/memory/${memoryId}`, { headers });
+      setMessage({ text: 'Xóa bản ghi bộ nhớ Agent thành công.', type: 'success' });
+      fetchMemories();
+    } catch (err: any) {
+      console.error('Lỗi khi xóa bộ nhớ:', err);
+      setMessage({ 
+        text: err.response?.data?.detail || 'Không thể xóa bản ghi bộ nhớ.', 
+        type: 'error' 
+      });
+    }
+  };
+
 
   const handleSimulateAlert = async () => {
     const token = localStorage.getItem('token');
@@ -288,11 +327,17 @@ export default function AdminDashboard({ onBack, isActive }: AdminDashboardProps
       if (activeTab === 'pedagogical') {
         fetchSftData();
       }
+      if (activeTab === 'memory') {
+        fetchMemories();
+      }
       // Thiết lập tự động làm mới
       const interval = setInterval(() => {
         fetchData();
         if (activeTab === 'pedagogical') {
           fetchSftData();
+        }
+        if (activeTab === 'memory') {
+          fetchMemories();
         }
       }, refreshInterval * 1000);
       return () => clearInterval(interval);
@@ -437,6 +482,7 @@ export default function AdminDashboard({ onBack, isActive }: AdminDashboardProps
           { id: 'traffic', label: 'Lưu lượng API (60p)', icon: <Activity size={16} /> },
           { id: 'ai', label: 'Token & Chi phí AI', icon: <DollarSign size={16} /> },
           { id: 'pedagogical', label: 'Phân tích Sư phạm & SFT', icon: <BarChart2 size={16} /> },
+          { id: 'memory', label: 'Bộ nhớ Agent', icon: <DatabaseZap size={16} /> },
           { id: 'alerts', label: 'Cấu hình Cảnh báo', icon: <Settings size={16} /> }
         ].map(tab => (
           <button
@@ -1120,6 +1166,128 @@ export default function AdminDashboard({ onBack, isActive }: AdminDashboardProps
                 >
                   <RefreshCw size={14} className={simulatingAlert ? 'animate-spin' : ''} /> {simulatingAlert ? 'Đang gửi...' : 'Mô phỏng Cảnh báo (Simulate)'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: AGENT MEMORY */}
+          {activeTab === 'memory' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{
+                background: 'rgba(30, 41, 59, 0.3)',
+                border: '1px solid rgba(255, 255, 255, 0.05)',
+                borderRadius: '12px',
+                padding: '24px',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', color: '#6366f1' }}>
+                    <DatabaseZap size={18} /> Quản lý Bộ nhớ Agent (Episodic Memory)
+                  </h3>
+                  <button 
+                    onClick={fetchMemories}
+                    style={{
+                      background: 'rgba(99, 102, 241, 0.15)',
+                      border: '1px solid rgba(99, 102, 241, 0.3)',
+                      color: '#a5b4fc',
+                      borderRadius: '6px',
+                      padding: '4px 12px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <RefreshCw size={12} className={loadingMemories ? 'animate-spin' : ''} /> Tải lại bộ nhớ
+                  </button>
+                </div>
+
+                <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: 0, marginBottom: '20px' }}>
+                  Hệ thống tự động lưu lại các mẫu slide và kịch bản sư phạm được chỉnh sửa với mức độ Levenshtein &gt; 20% hoặc có đổi Layout từ giảng viên.
+                  Mô hình AI sử dụng các episodic memory này để học hỏi phong cách thiết kế slide cá nhân hóa của từng giảng viên (Few-shot learning).
+                </p>
+
+                {loadingMemories && memories.length === 0 ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '40px', color: '#64748b' }}>
+                    Đang tải dữ liệu bộ nhớ Agent...
+                  </div>
+                ) : memories.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '8px', color: '#64748b' }}>
+                    <DatabaseZap size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                    <p style={{ margin: 0, fontSize: '14px' }}>Chưa ghi nhận episodic memory nào từ các hoạt động của giảng viên.</p>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}>
+                          <th style={{ padding: '12px 8px', fontWeight: 600 }}>Giảng viên</th>
+                          <th style={{ padding: '12px 8px', fontWeight: 600 }}>Yêu cầu (Prompt)</th>
+                          <th style={{ padding: '12px 8px', fontWeight: 600 }}>Layout</th>
+                          <th style={{ padding: '12px 8px', fontWeight: 600 }}>Nội dung học tập (Slide)</th>
+                          <th style={{ padding: '12px 8px', fontWeight: 600, textAlign: 'right' }}>Hành động</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {memories.map((mem) => (
+                          <tr key={mem.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', verticalAlign: 'top' }}>
+                            <td style={{ padding: '12px 8px', whiteSpace: 'nowrap', fontWeight: 500, color: '#f8fafc' }}>
+                              {mem.user_email}
+                            </td>
+                            <td style={{ padding: '12px 8px', color: '#cbd5e1', maxWidth: '200px', wordBreak: 'break-word' }}>
+                              "{mem.prompt}"
+                            </td>
+                            <td style={{ padding: '12px 8px' }}>
+                              <span style={{
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                color: '#a5b4fc',
+                                border: '1px solid rgba(99, 102, 241, 0.3)',
+                                borderRadius: '4px',
+                                padding: '2px 6px',
+                                fontSize: '11px',
+                                fontFamily: 'monospace'
+                              }}>{mem.layout}</span>
+                            </td>
+                            <td style={{ padding: '12px 8px', maxWidth: '350px' }}>
+                              <div style={{
+                                background: 'rgba(15, 23, 42, 0.4)',
+                                border: '1px solid rgba(255,255,255,0.05)',
+                                borderRadius: '6px',
+                                padding: '8px',
+                                fontSize: '11px',
+                                fontFamily: 'monospace',
+                                maxHeight: '100px',
+                                overflowY: 'auto',
+                                color: '#94a3b8',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word'
+                              }}>
+                                {mem.content}
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                              <button
+                                onClick={() => handleDeleteMemory(mem.id)}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  color: '#f87171',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                Xóa
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}

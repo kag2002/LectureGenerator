@@ -594,6 +594,11 @@ export default function App() {
           user={user}
           onLogout={handleLogout}
           onSelectCourse={handleSelectCourse}
+          onEnterAdminDashboard={() => {
+            setSelectedCourse(null);
+            localStorage.removeItem('selected_course');
+            handleNavigate('admin_dashboard');
+          }}
         />
       )}
       {(selectedCourse || activeView === 'admin_dashboard') && ['course_roadmap', 'course_config', 'lesson_planner', 'question_bank', 'matrix_dashboard', 'knowledge_base', 'chatbot', 'ai_monitor', 'admin_dashboard'].includes(activeView) && (

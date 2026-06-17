@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import client from '../api/client';
-import { Plus, Pencil, Trash2, LogOut, ChevronRight, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, LogOut, ChevronRight, BookOpen, Shield } from 'lucide-react';
 import { User, Course } from '@/types';
 import '../styles/Dashboard.css';
 
@@ -8,9 +8,10 @@ export interface DashboardProps {
   user: User | null;
   onLogout: () => void;
   onSelectCourse: (course: Course) => void;
+  onEnterAdminDashboard: () => void;
 }
 
-export default function Dashboard({ user, onLogout, onSelectCourse }: DashboardProps) {
+export default function Dashboard({ user, onLogout, onSelectCourse, onEnterAdminDashboard }: DashboardProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseCode, setCourseCode] = useState('');
   const [courseName, setCourseName] = useState('');
@@ -99,11 +100,51 @@ export default function Dashboard({ user, onLogout, onSelectCourse }: DashboardP
       <header className="dashboard-header">
         <div>
           <h1 className="dashboard-title">LectureGenerator</h1>
-          <p className="dashboard-welcome">Xin chào, <strong>{user?.username || 'Giảng viên'}</strong></p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <p className="dashboard-welcome" style={{ margin: 0 }}>Xin chào, <strong>{user?.username || 'Giảng viên'}</strong></p>
+            {user?.role === 'admin' && (
+              <span className="admin-badge" style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#f87171',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '4px',
+                padding: '1px 6px',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase'
+              }}>Quản trị viên</span>
+            )}
+          </div>
         </div>
-        <button onClick={onLogout} className="dashboard-logout-btn">
-          <LogOut size={15} /> Đăng Xuất
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {user?.role === 'admin' && (
+            <button 
+              onClick={onEnterAdminDashboard} 
+              className="dashboard-admin-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                fontSize: '13px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                transition: 'all 0.2s',
+                fontFamily: 'inherit'
+              }}
+            >
+              <Shield size={14} /> Quản trị Hệ thống
+            </button>
+          )}
+          <button onClick={onLogout} className="dashboard-logout-btn">
+            <LogOut size={15} /> Đăng Xuất
+          </button>
+        </div>
       </header>
 
       {error && <div className="dashboard-error">{error}</div>}

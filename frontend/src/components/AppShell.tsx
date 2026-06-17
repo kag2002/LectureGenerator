@@ -112,9 +112,13 @@ export default function AppShell({
     { view: 'ai_monitor', label: 'Giám sát AI', icon: <Activity size={18} /> },
   ];
 
-  const menuItems = isAdmin 
-    ? [...baseMenuItems, { view: 'admin_dashboard', label: 'Quản trị hệ thống', icon: <Shield size={18} /> }]
-    : baseMenuItems;
+  const menuItems = (isAdmin && (course?.id === 0 || activeView === 'admin_dashboard'))
+    ? [
+        { view: 'admin_dashboard', label: 'Quản trị hệ thống', icon: <Shield size={18} /> }
+      ]
+    : isAdmin 
+      ? [...baseMenuItems, { view: 'admin_dashboard', label: 'Quản trị hệ thống', icon: <Shield size={18} /> }]
+      : baseMenuItems;
 
   return (
     <div className="app-shell">
@@ -155,7 +159,7 @@ export default function AppShell({
         <div className="sidebar-footer">
           <button onClick={() => onNavigate('dashboard')} className="footer-btn" title="Về Dashboard chính">
             <Home size={18} />
-            {!isCollapsed && <span>Môn học khác</span>}
+            {!isCollapsed && <span>{(course?.id === 0 || activeView === 'admin_dashboard') ? 'Danh sách môn học' : 'Môn học khác'}</span>}
           </button>
 
           {/* User Profile, Theme Toggle, & Logout (moved from top header) */}
@@ -219,6 +223,14 @@ export default function AppShell({
               >
                 <ChevronLeft size={14} /> Môn khác
               </button>
+            ) : (activeView === 'admin_dashboard' || course?.id === 0) ? (
+              <button 
+                onClick={() => onNavigate('dashboard')} 
+                className="header-back-btn" 
+                title="Về danh sách chọn môn học"
+              >
+                <ArrowLeft size={14} /> Danh sách môn học
+              </button>
             ) : (
               <button 
                 onClick={() => onNavigate('course_roadmap')} 
@@ -237,19 +249,21 @@ export default function AppShell({
               </div>
             )}
           </div>
-
+ 
           {/* Center Area: Stepper Timeline */}
           <div className="header-center" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <FlowSteps 
-              activeStep={
-                activeView === 'course_config' ? 'syllabus' :
-                activeView === 'knowledge_base' ? 'rag' :
-                activeView === 'lesson_planner' ? 'slides' :
-                activeView === 'question_bank' ? 'questions' :
-                activeView === 'matrix_dashboard' ? 'matrix' : null
-              } 
-              onNavigate={onNavigate} 
-            />
+            {activeView !== 'admin_dashboard' && activeView !== 'ai_monitor' && course?.id !== 0 && (
+              <FlowSteps 
+                activeStep={
+                  activeView === 'course_config' ? 'syllabus' :
+                  activeView === 'knowledge_base' ? 'rag' :
+                  activeView === 'lesson_planner' ? 'slides' :
+                  activeView === 'question_bank' ? 'questions' :
+                  activeView === 'matrix_dashboard' ? 'matrix' : null
+                } 
+                onNavigate={onNavigate} 
+              />
+            )}
           </div>
 
           {/* Right Area: Action Portal Slot */}

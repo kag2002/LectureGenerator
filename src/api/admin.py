@@ -130,3 +130,65 @@ def optimize_database():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi tối ưu hóa cơ sở dữ liệu: {str(e)}"
         )
+
+
+@router.get("/agent/memory", dependencies=[Depends(require_admin)])
+def read_agent_memory(db: Session = Depends(get_db)):
+    """Trả về danh sách bộ nhớ trải nghiệm slide (episodic memory) của từng user."""
+    try:
+        from src.services.memory_service import episodic_collection
+        
+        # Lấy tất cả tài liệu trong ChromaDB collection
+        res = episodic_collection.get()
+        
+        memories = []
+        if res and res.get("ids"):
+            ids = res["ids"]
+            documents = res.get("documents") or []
+            metadatas = res.get("metadatas") or []
+            
+            for i in range(len(ids)):
+                meta = metadatas[i] if i < len(metadatas) else {}
+                prompt = documents[i] if i < len(documents) else ""
+                
+                user_id = meta.get("user_id", 0)
+                user_email = "Hệ thống"
+                if user_id:
+                    user_obj = db.query(User).filter(User.id == user_id).first()
+                    if user_obj:
+                        user_email = user_obj.email
+                
+                memories.append({
+                    "id": ids[i],
+                    "user_id": user_id,
+                    "user_email": user_email,
+                    "course_id": meta.get("course_id", 0),
+                    "chapter_id": meta.get("chapter_id", 0),
+                    "prompt": prompt,
+                    "layout": meta.get("layout", "standard_list"),
+                    "content": meta.get("revised_content", ""),
+                })
+        
+        # Sắp xếp theo thứ tự mới nhất (ID có timestamp)
+        memories.sort(key=lambda x: x["id"], reverse=True)
+        return memories
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi đọc bộ nhớ Agent: {str(e)}"
+        )
+
+
+@router.delete("/agent/memory/{memory_id}", dependencies=[Depends(require_admin)])
+def delete_agent_memory(memory_id: str):
+    """Xóa một bản ghi bộ nhớ trải nghiệm của agent."""
+    try:
+        from src.services.memory_service import episodic_collection
+        episodic_collection.delete(ids=[memory_id])
+        return {"status": "success", "message": f"Đã xóa bộ nhớ {memory_id} thành công."}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi xóa bộ nhớ Agent: {str(e)}"
+        )
+
