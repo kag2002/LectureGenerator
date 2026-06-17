@@ -111,6 +111,7 @@ class MaterialOrchestrator:
         if user_id and course_id:
             try:
                 from src.services.memory_service import retrieve_episodes
+
                 self.episodes = retrieve_episodes(user_id=user_id, course_id=course_id, query="", limit=10)
                 print(f"[EPISODIC MEMORY] Loaded {len(self.episodes)} custom templates for user {user_id}.")
             except Exception as e:
@@ -120,12 +121,13 @@ class MaterialOrchestrator:
             try:
                 from src.database.session import SessionLocal
                 from src.services.reflection_agent import get_approved_rules_context
+
                 db_temp = SessionLocal()
                 try:
                     rules_context = get_approved_rules_context(course_id, db_temp, category="slide_style")
                     if rules_context:
                         self.state["clos_context"] += f"\n\n{rules_context}"
-                        print(f"[META-MEMORY] Loaded approved system rules context.")
+                        print("[META-MEMORY] Loaded approved system rules context.")
                 finally:
                     db_temp.close()
             except Exception as e:
@@ -247,7 +249,7 @@ class MaterialOrchestrator:
             for idx, hit in enumerate(rag_hits, 1):
                 ref_mapping[str(idx)] = {
                     "file_name": hit.get("file_name", "N/A"),
-                    "page_number": hit.get("page_number", 0)
+                    "page_number": hit.get("page_number", 0),
                 }
                 slide_rag_context += f"[RAG-Ref: {idx}]: {hit['text']}\n\n"
 
@@ -261,7 +263,9 @@ class MaterialOrchestrator:
                 matching_episodes = matching_episodes[:2]
 
             if matching_episodes:
-                few_shot_context = "\nDƯỚI ĐÂY LÀ CÁC MẪU THIẾT KẾ SLIDE TRONG QUÁ KHỨ BẠN NÊN HỌC THEO (FEW-SHOT STYLES):\n"
+                few_shot_context = (
+                    "\nDƯỚI ĐÂY LÀ CÁC MẪU THIẾT KẾ SLIDE TRONG QUÁ KHỨ BẠN NÊN HỌC THEO (FEW-SHOT STYLES):\n"
+                )
                 for ep_idx, ep in enumerate(matching_episodes, 1):
                     few_shot_context += f"Mẫu {ep_idx} (Layout: {ep['layout']}):\n```markdown\n{ep['content']}\n```\n\n"
 
@@ -317,18 +321,22 @@ Nội dung slide hiện tại để sửa đổi:
                 slide_md = res.get("slide_markdown", "").strip()
                 length = get_slide_body_length(slide_md)
                 if length <= budget:
-                    print(f"[Self-Correction] Tối ưu hóa Slide {slide_index} thành công! Kích thước mới: {length}/{budget}")
+                    print(
+                        f"[Self-Correction] Tối ưu hóa Slide {slide_index} thành công! Kích thước mới: {length}/{budget}"
+                    )
                     break
 
         # Replace placeholders with real citations if mapping exists
         if ref_mapping:
+
             def replacer(match):
                 ref_id = match.group(1).strip()
                 if ref_id in ref_mapping:
                     info = ref_mapping[ref_id]
                     return f"[Nguồn: {info['file_name']} - Trang: {info['page_number']}]"
                 return match.group(0)
-            slide_md = re.sub(r'\[RAG-Ref:\s*(\d+)\]', replacer, slide_md, flags=re.IGNORECASE)
+
+            slide_md = re.sub(r"\[RAG-Ref:\s*(\d+)\]", replacer, slide_md, flags=re.IGNORECASE)
 
         return slide_md
 
@@ -592,7 +600,7 @@ Nội dung slide hiện tại để sửa đổi:
             for idx, hit in enumerate(rag_hits, 1):
                 ref_mapping[str(idx)] = {
                     "file_name": hit.get("file_name", "N/A"),
-                    "page_number": hit.get("page_number", 0)
+                    "page_number": hit.get("page_number", 0),
                 }
                 slide_rag_context += f"[RAG-Ref: {idx}]: {hit['text']}\n\n"
 
@@ -606,7 +614,9 @@ Nội dung slide hiện tại để sửa đổi:
                 matching_episodes = matching_episodes[:2]
 
             if matching_episodes:
-                few_shot_context = "\nDƯỚI ĐÂY LÀ CÁC MẪU THIẾT KẾ SLIDE TRONG QUÁ KHỨ BẠN NÊN HỌC THEO (FEW-SHOT STYLES):\n"
+                few_shot_context = (
+                    "\nDƯỚI ĐÂY LÀ CÁC MẪU THIẾT KẾ SLIDE TRONG QUÁ KHỨ BẠN NÊN HỌC THEO (FEW-SHOT STYLES):\n"
+                )
                 for ep_idx, ep in enumerate(matching_episodes, 1):
                     few_shot_context += f"Mẫu {ep_idx} (Layout: {ep['layout']}):\n```markdown\n{ep['content']}\n```\n\n"
 
@@ -652,9 +662,13 @@ Nội dung slide hiện tại để sửa đổi:
                 if slide_status_callback:
                     try:
                         if asyncio.iscoroutinefunction(slide_status_callback):
-                            await slide_status_callback(slide_index, "correcting", {"attempt": attempt, "length": length, "budget": budget})
+                            await slide_status_callback(
+                                slide_index, "correcting", {"attempt": attempt, "length": length, "budget": budget}
+                            )
                         else:
-                            slide_status_callback(slide_index, "correcting", {"attempt": attempt, "length": length, "budget": budget})
+                            slide_status_callback(
+                                slide_index, "correcting", {"attempt": attempt, "length": length, "budget": budget}
+                            )
                     except Exception as callback_err:
                         print(f"[WARNING] slide_status_callback error: {callback_err}")
 
@@ -681,13 +695,15 @@ Nội dung slide hiện tại để sửa đổi:
 
         # Replace placeholders with real citations if mapping exists
         if ref_mapping:
+
             def replacer(match):
                 ref_id = match.group(1).strip()
                 if ref_id in ref_mapping:
                     info = ref_mapping[ref_id]
                     return f"[Nguồn: {info['file_name']} - Trang: {info['page_number']}]"
                 return match.group(0)
-            slide_md = re.sub(r'\[RAG-Ref:\s*(\d+)\]', replacer, slide_md, flags=re.IGNORECASE)
+
+            slide_md = re.sub(r"\[RAG-Ref:\s*(\d+)\]", replacer, slide_md, flags=re.IGNORECASE)
 
         if slide_status_callback:
             try:

@@ -103,12 +103,13 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 1: STORYBOARD ARCHITECT ---
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 1,
                 "message": "Bước 1: Đang thiết kế cấu trúc đề cương bài giảng (Storyboard)...",
                 "active_agent": "storyboard_architect",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         try:
             await orchestrator.async_run_storyboard_architect(trace_or_span=mat_stream_trace)
@@ -123,7 +124,7 @@ async def generate_chapter_materials_stream_generator(
                 "stage": 2,
                 "message": "Bước 2: Đang phân bổ nội dung cho từng slide...",
                 "active_agent": "content_allocator",
-                "agent_status": "running"
+                "agent_status": "running",
             },
         )
         try:
@@ -139,8 +140,8 @@ async def generate_chapter_materials_stream_generator(
                 "stage": 3,
                 "message": "Bước 3: Đang soạn nội dung slide chi tiết...",
                 "active_agent": "slide_writer",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         yield send("token", {"token": "---SLIDES---\n"})
 
@@ -154,8 +155,7 @@ async def generate_chapter_materials_stream_generator(
 
             writer_task = asyncio.create_task(
                 orchestrator.async_run_slide_writer(
-                    trace_or_span=mat_stream_trace,
-                    slide_status_callback=on_slide_status
+                    trace_or_span=mat_stream_trace, slide_status_callback=on_slide_status
                 )
             )
 
@@ -239,12 +239,13 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 4: ACTIVE LEARNING PLANNER ---
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 4,
                 "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp...",
                 "active_agent": "active_learning_scheduler",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         yield send("token", {"token": "\n---ACTIVE_LEARNING---\n"})
 
@@ -262,12 +263,13 @@ async def generate_chapter_materials_stream_generator(
 
         # --- BƯỚC 5: LOGIC AUDITOR (KIỂM TOÁN CHÉO) ---
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 5,
                 "message": "Bước 5: Rà soát tính nhất quán sư phạm...",
                 "active_agent": "logic_auditor",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         try:
             is_valid = await orchestrator.async_run_logic_auditor(trace_or_span=mat_stream_trace)
@@ -278,12 +280,13 @@ async def generate_chapter_materials_stream_generator(
 
         # 6. Lưu kết quả cuối cùng vào DB
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 6,
                 "message": "Bước 6: Đang lưu bài giảng và giáo án đã hoàn thiện...",
                 "active_agent": "saver",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
 
         new_db = SessionLocal()
@@ -422,7 +425,7 @@ async def generate_materials_from_storyboard_stream_generator(
                 "stage": 2,
                 "message": "Bước 2: Đang phân bổ nội dung dựa trên đề cương đã duyệt...",
                 "active_agent": "content_allocator",
-                "agent_status": "running"
+                "agent_status": "running",
             },
         )
         try:
@@ -438,8 +441,8 @@ async def generate_materials_from_storyboard_stream_generator(
                 "stage": 3,
                 "message": "Bước 3: Đang soạn nội dung slide chi tiết...",
                 "active_agent": "slide_writer",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         yield send("token", {"token": "---SLIDES---\n"})
 
@@ -453,8 +456,7 @@ async def generate_materials_from_storyboard_stream_generator(
 
             writer_task = asyncio.create_task(
                 orchestrator.async_run_slide_writer(
-                    trace_or_span=mat_stream_trace,
-                    slide_status_callback=on_slide_status
+                    trace_or_span=mat_stream_trace, slide_status_callback=on_slide_status
                 )
             )
 
@@ -538,12 +540,13 @@ async def generate_materials_from_storyboard_stream_generator(
 
         # --- BƯỚC 4: ACTIVE LEARNING PLANNER ---
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 4,
                 "message": "Bước 4: Đang thiết kế các hoạt động tương tác trên lớp...",
                 "active_agent": "active_learning_scheduler",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         yield send("token", {"token": "\n---ACTIVE_LEARNING---\n"})
 
@@ -561,12 +564,13 @@ async def generate_materials_from_storyboard_stream_generator(
 
         # --- BƯỚC 5: LOGIC AUDITOR ---
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 5,
                 "message": "Bước 5: Rà soát tính nhất quán sư phạm...",
                 "active_agent": "logic_auditor",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         try:
             is_valid = await orchestrator.async_run_logic_auditor(trace_or_span=mat_stream_trace)
@@ -577,12 +581,13 @@ async def generate_materials_from_storyboard_stream_generator(
 
         # 6. Lưu kết quả cuối cùng vào DB
         yield send(
-            "stage", {
+            "stage",
+            {
                 "stage": 6,
                 "message": "Bước 6: Đang lưu bài giảng và giáo án...",
                 "active_agent": "saver",
-                "agent_status": "running"
-            }
+                "agent_status": "running",
+            },
         )
         new_db = SessionLocal()
         try:
@@ -626,6 +631,8 @@ async def generate_materials_from_storyboard_stream_generator(
         )
     finally:
         task_manager.unregister_task(f"material_{chapter_id}")
+
+
 async def append_slide_for_clo_stream_generator(
     chapter_id: int,
     course_id: int,
@@ -802,6 +809,8 @@ async def generate_slides_stream_generator(
         new_db.close()
 
     yield send("done", {"message": "Đã hoàn tất thiết kế các slide bài giảng!", "slide_content": slide_content})
+
+
 async def generate_active_learning_stream_generator(
     chapter_id: int,
     req_language: str,

@@ -28,6 +28,7 @@ from .llm_client import (
     robust_parse_json,
 )
 
+
 def _get_gemini_api_keys() -> list[str]:
     keys_str = os.environ.get("GEMINI_API_KEYS", "")
     keys = [k.strip() for k in keys_str.split(",") if k.strip()]
@@ -35,6 +36,7 @@ def _get_gemini_api_keys() -> list[str]:
     if single_key and single_key not in keys:
         keys.insert(0, single_key)
     return keys
+
 
 def _get_local_llm_timeout() -> float:
     try:
@@ -111,6 +113,7 @@ def _log_and_return(
 # ═══════════════════════════════════════════════════════════════════════
 # JSON providers (sync)
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def call_local_json(
     prompt, system_instruction, temperature, trace_or_span, prompt_name, prompt_version, metadata
@@ -195,14 +198,10 @@ def call_gemini_json(
 
     gemini_contents = format_gemini_contents(prompt)
 
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-3.1-flash-lite",
-        "gemini-3-flash-preview"
-    ]
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3-flash-preview"]
 
     import time
+
     last_err = None
     response = None
     res_dict = None
@@ -237,11 +236,15 @@ def call_gemini_json(
                         break
 
                     if "not found" in err_msg.lower() or "404" in err_msg:
-                        print(f"[WARNING] Model {model_name} khong kha dung cho key {masked_key}. Chuyen model tiep theo...")
+                        print(
+                            f"[WARNING] Model {model_name} khong kha dung cho key {masked_key}. Chuyen model tiep theo..."
+                        )
                         break
 
                     if attempt < 1 and is_json_err:
-                        print(f"[WARNING] Model {model_name} tra ve JSON loi (attempt {attempt+1}): {e}. Thu lai sau 2s...")
+                        print(
+                            f"[WARNING] Model {model_name} tra ve JSON loi (attempt {attempt + 1}): {e}. Thu lai sau 2s..."
+                        )
                         time.sleep(2.0)
                         continue
                     else:
@@ -269,7 +272,7 @@ def call_gemini_json(
         prompt_version,
         metadata,
         temperature,
-        extra_meta={"gemini_key_used": chosen_key[:6] + "..."}
+        extra_meta={"gemini_key_used": chosen_key[:6] + "..."},
     )
     return res_dict
 
@@ -508,11 +511,7 @@ def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, p
 
     gemini_contents = format_gemini_contents(prompt)
 
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-3-flash-preview"
-    ]
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash-preview"]
 
     last_err = None
     stream_started = False
@@ -531,7 +530,9 @@ def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, p
             try:
                 print(f"[INFO] [Stream] Dang thu goi Gemini API model {model_name} voi key {masked_key}...")
                 start_time = datetime.datetime.now(datetime.UTC)
-                response = client.models.generate_content_stream(model=model_name, contents=gemini_contents, config=config)
+                response = client.models.generate_content_stream(
+                    model=model_name, contents=gemini_contents, config=config
+                )
 
                 for chunk in response:
                     if chunk.text:
@@ -572,7 +573,7 @@ def call_gemini_stream(prompt, system_instruction, temperature, trace_or_span, p
         prompt_version,
         metadata,
         temperature,
-        extra_meta={"gemini_key_used": chosen_key[:6] + "..."}
+        extra_meta={"gemini_key_used": chosen_key[:6] + "..."},
     )
 
 
@@ -999,11 +1000,7 @@ async def async_call_gemini_stream(
 
     gemini_contents = format_gemini_contents(prompt)
 
-    models_to_try = [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-3-flash-preview"
-    ]
+    models_to_try = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash-preview"]
 
     last_err = None
     stream_started = False
@@ -1065,7 +1062,7 @@ async def async_call_gemini_stream(
         prompt_version,
         metadata,
         temperature,
-        extra_meta={"gemini_key_used": chosen_key[:6] + "...", "async": True, "stream": True}
+        extra_meta={"gemini_key_used": chosen_key[:6] + "...", "async": True, "stream": True},
     )
 
 

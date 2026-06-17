@@ -75,7 +75,8 @@ def safe_parse_bloom_level(bloom_val, default: int = 3) -> int:
     # Try converting to string and extract first digit
     val_str = str(bloom_val).strip()
     import re
-    match = re.search(r'\d+', val_str)
+
+    match = re.search(r"\d+", val_str)
     if match:
         try:
             val_int = int(match.group(0))
@@ -84,4 +85,3 @@ def safe_parse_bloom_level(bloom_val, default: int = 3) -> int:
         except ValueError:
             pass
     return default
-

@@ -213,7 +213,7 @@
   border-radius: 14px;
   padding: 6px;
   width: fit-content;
-  margin: 0 0 20px 380px;
+  margin: 0 0 20px clamp(20px, 25vw, 380px);
   gap: 6px;
   box-shadow: var(--shadow-sm);
 }
@@ -263,7 +263,7 @@
 /* Main Layout Grid & Dynamic Viewports */
 .planner-layout {
   display: grid;
-  grid-template-columns: 360px 1fr 1fr;
+  grid-template-columns: clamp(280px, 20vw, 360px) 1fr 1fr;
   gap: 24px;
   height: calc(100vh - 130px);
 }
@@ -279,7 +279,7 @@
 }
 
 .planner-layout-full {
-  grid-template-columns: 360px 1fr 1fr;
+  grid-template-columns: clamp(280px, 20vw, 360px) 1fr 1fr;
 }
 
 .planner-layout-split {
@@ -4055,7 +4055,7 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: 450px;
+  width: min(90vw, 450px);
   height: 100vh;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(20px);

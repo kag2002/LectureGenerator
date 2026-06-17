@@ -6,6 +6,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+
 def fetch_unsplash_image_url(keyword: str) -> str:
     """
     Calls Unsplash search photos API with the given keyword.
@@ -18,14 +19,8 @@ def fetch_unsplash_image_url(keyword: str) -> str:
 
     try:
         url = "https://api.unsplash.com/search/photos"
-        params = {
-            "query": keyword,
-            "per_page": 1,
-            "orientation": "landscape"
-        }
-        headers = {
-            "Authorization": f"Client-ID {access_key}"
-        }
+        params = {"query": keyword, "per_page": 1, "orientation": "landscape"}
+        headers = {"Authorization": f"Client-ID {access_key}"}
         response = requests.get(url, params=params, headers=headers, timeout=10)
         if response.status_code == 200:
             data = response.json()
@@ -47,6 +42,7 @@ def fetch_unsplash_image_url(keyword: str) -> str:
         logger.error(f"Exception while searching image on Unsplash: {str(e)}")
 
     return "https://images.unsplash.com/photo-placeholder"
+
 
 def process_markdown_images(md_content: str) -> str:
     """

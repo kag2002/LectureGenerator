@@ -34,7 +34,20 @@ def web_search_tavily(query: str, max_results: int = 10) -> list[dict]:
     """
     # Tự động tăng cường truy vấn học thuật nếu không chứa từ khóa học thuật đặc trưng
     query_lower = query.lower()
-    academic_keywords = ["syllabus", "lecture", "slide", "research", "paper", "journal", "complexity", "definition", "algorithm", "theory", "concept", "proof"]
+    academic_keywords = [
+        "syllabus",
+        "lecture",
+        "slide",
+        "research",
+        "paper",
+        "journal",
+        "complexity",
+        "definition",
+        "algorithm",
+        "theory",
+        "concept",
+        "proof",
+    ]
     augmented_query = query
     if not any(kw in query_lower for kw in academic_keywords):
         augmented_query = f"{query} academic lecture notes OR course material"
@@ -43,7 +56,12 @@ def web_search_tavily(query: str, max_results: int = 10) -> list[dict]:
     if tavily_key:
         try:
             url = "https://api.tavily.com/search"
-            payload = {"api_key": tavily_key, "query": augmented_query, "search_depth": "basic", "max_results": max_results}
+            payload = {
+                "api_key": tavily_key,
+                "query": augmented_query,
+                "search_depth": "basic",
+                "max_results": max_results,
+            }
             response = requests.post(url, json=payload, timeout=10)
             if response.status_code == 200:
                 results = response.json().get("results", [])
@@ -104,7 +122,7 @@ def evaluate_source_credibility(title: str, url: str, content: str) -> dict:
             "wikipedia.org",
             "geeksforgeeks.org",
             "github.com",
-            "w3schools.com"
+            "w3schools.com",
         ]
 
     is_high_domain = False
@@ -225,14 +243,14 @@ def web_search_and_ingest(
                     course_id=course_id,
                     category="Web Research",
                     tags=f"web_search, {req.query}",
-                    chapter_id=req.chapter_id
+                    chapter_id=req.chapter_id,
                 )
 
                 # Cập nhật/Tạo RAGDocument trong SQLite
                 db.query(RAGDocument).filter(
                     RAGDocument.course_id == course_id,
                     RAGDocument.user_id == current_user.id,
-                    RAGDocument.file_name == file_name
+                    RAGDocument.file_name == file_name,
                 ).delete()
 
                 new_doc = RAGDocument(
@@ -242,7 +260,7 @@ def web_search_and_ingest(
                     category="Web Research",
                     tags=f"web_search, {req.query}",
                     chapter_id=req.chapter_id,
-                    status="ready"
+                    status="ready",
                 )
                 db.add(new_doc)
                 db.commit()
@@ -307,14 +325,14 @@ def force_ingest_url(
             course_id=course_id,
             category="Forced Ingest",
             tags="manual_ingest",
-            chapter_id=req.chapter_id
+            chapter_id=req.chapter_id,
         )
 
         # Cập nhật/Tạo RAGDocument trong SQLite
         db.query(RAGDocument).filter(
             RAGDocument.course_id == course_id,
             RAGDocument.user_id == current_user.id,
-            RAGDocument.file_name == file_name
+            RAGDocument.file_name == file_name,
         ).delete()
 
         new_doc = RAGDocument(
@@ -324,7 +342,7 @@ def force_ingest_url(
             category="Forced Ingest",
             tags="manual_ingest",
             chapter_id=req.chapter_id,
-            status="ready"
+            status="ready",
         )
         db.add(new_doc)
         db.commit()

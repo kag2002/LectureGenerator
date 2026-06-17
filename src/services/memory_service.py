@@ -1,13 +1,12 @@
 import time
-import chromadb
+
 from src.database.vector_db import chroma_client, embedding_func
 
 # Khởi tạo hoặc lấy collection cho bộ nhớ trải nghiệm slide
 episodic_collection = chroma_client.get_or_create_collection(
-    name="episodic_revisions",
-    embedding_function=embedding_func,
-    metadata={"hnsw:space": "cosine"}
+    name="episodic_revisions", embedding_function=embedding_func, metadata={"hnsw:space": "cosine"}
 )
+
 
 def levenshtein_ratio(s1: str, s2: str) -> float:
     """Tính tỷ lệ khoảng cách Levenshtein (edit distance / max length)."""
@@ -27,17 +26,18 @@ def levenshtein_ratio(s1: str, s2: str) -> float:
 
     for col in range(1, cols):
         for row in range(1, rows):
-            if s1[row-1] == s2[col-1]:
+            if s1[row - 1] == s2[col - 1]:
                 cost = 0
             else:
                 cost = 1
             dist[row][col] = min(
-                dist[row-1][col] + 1,      # deletion
-                dist[row][col-1] + 1,      # insertion
-                dist[row-1][col-1] + cost  # substitution
+                dist[row - 1][col] + 1,  # deletion
+                dist[row][col - 1] + 1,  # insertion
+                dist[row - 1][col - 1] + cost,  # substitution
             )
 
     return dist[-1][-1] / max(len(s1), len(s2))
+
 
 def store_episodic_revision(
     user_id: int,
@@ -47,7 +47,7 @@ def store_episodic_revision(
     content_before: str,
     content_after: str,
     layout_before: str,
-    layout_after: str
+    layout_after: str,
 ):
     """
     Đánh giá độ lớn thay đổi của slide revision và lưu vào bộ nhớ trải nghiệm (ChromaDB)
@@ -66,26 +66,23 @@ def store_episodic_revision(
 
     # 2. Tạo ID và Metadata để lưu vào ChromaDB
     doc_id = f"ep_usr_{user_id}_crs_{course_id}_t_{int(time.time() * 1000)}"
-    
+
     metadata = {
         "user_id": user_id,
         "course_id": course_id,
         "chapter_id": chapter_id if chapter_id else 0,
         "layout": layout_after,
-        "revised_content": content_after
+        "revised_content": content_after,
     }
 
     try:
-        episodic_collection.add(
-            documents=[prompt],
-            metadatas=[metadata],
-            ids=[doc_id]
-        )
+        episodic_collection.add(documents=[prompt], metadatas=[metadata], ids=[doc_id])
         print(f"[EPISODIC MEMORY] Đã lưu thành công episode mới cho User {user_id} (Layout: {layout_after})")
         return True
     except Exception as e:
         print(f"[EPISODIC MEMORY ERROR] Lỗi khi lưu bộ nhớ trải nghiệm: {e}")
         return False
+
 
 def retrieve_episodes(user_id: int, course_id: int, query: str = "", limit: int = 5) -> list[dict]:
     """
@@ -93,34 +90,27 @@ def retrieve_episodes(user_id: int, course_id: int, query: str = "", limit: int 
     Đầu ra dùng để build dynamic few-shot prompt.
     """
     try:
-        where_cond = {
-            "$and": [
-                {"user_id": {"$eq": user_id}},
-                {"course_id": {"$eq": course_id}}
-            ]
-        }
-        
+        where_cond = {"$and": [{"user_id": {"$eq": user_id}}, {"course_id": {"$eq": course_id}}]}
+
         # Nếu không có query cụ thể, chúng ta query với chuỗi rỗng
         search_query = query if query else "Slide giảng dạy"
-        
-        results = episodic_collection.query(
-            query_texts=[search_query],
-            n_results=limit,
-            where=where_cond
-        )
-        
+
+        results = episodic_collection.query(query_texts=[search_query], n_results=limit, where=where_cond)
+
         episodes = []
         if results and results["documents"]:
             docs = results["documents"][0]
             metas = results["metadatas"][0] if results.get("metadatas") else []
-            
+
             for i in range(len(docs)):
                 meta = metas[i] if i < len(metas) else {}
-                episodes.append({
-                    "prompt": docs[i],
-                    "layout": meta.get("layout", "standard_list"),
-                    "content": meta.get("revised_content", "")
-                })
+                episodes.append(
+                    {
+                        "prompt": docs[i],
+                        "layout": meta.get("layout", "standard_list"),
+                        "content": meta.get("revised_content", ""),
+                    }
+                )
         return episodes
     except Exception as e:
         print(f"[EPISODIC MEMORY ERROR] Lỗi khi truy xuất bộ nhớ trải nghiệm: {e}")

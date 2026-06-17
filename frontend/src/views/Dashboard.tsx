@@ -152,6 +152,17 @@ export default function Dashboard({ user, onLogout, onSelectCourse }: DashboardP
             <div className="dashboard-empty">
               <p>Chưa có môn học nào được tạo.</p>
               <p className="dashboard-empty-desc">Hãy nhập mã và tên môn học ở cột bên trái để khởi tạo.</p>
+              
+              <div className="empty-suggestions-box">
+                <div className="empty-suggestions-title">
+                  <span>💡 Hướng dẫn & Gợi ý thực hiện:</span>
+                </div>
+                <ul className="empty-suggestions-list">
+                  <li className="empty-suggestions-item">Nhập mã môn học (ví dụ: COMP2010) vào ô nhập liệu ở phần "Tạo Môn Học Mới".</li>
+                  <li className="empty-suggestions-item">Nhập tên đầy đủ của môn học (ví dụ: Cấu trúc Dữ liệu & Giải thuật).</li>
+                  <li className="empty-suggestions-item">Nhấn nút "Tạo Môn Học" để bắt đầu thiết kế bài giảng và ma trận Bloom.</li>
+                </ul>
+              </div>
             </div>
           ) : (
             <div className="dashboard-grid">

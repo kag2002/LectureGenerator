@@ -5,7 +5,7 @@
   min-height: 100%;
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  padding: 24px 30px;
+  padding: clamp(15px, 3vw, 24px) clamp(20px, 4vw, 30px);
   box-sizing: border-box;
 }
 
@@ -194,7 +194,7 @@
 /* Tab 1 Layout: RAG Vector Library */
 .rag-split-layout {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: clamp(300px, 30vw, 380px) 1fr;
   gap: 40px;
   align-items: start;
 }
@@ -436,7 +436,7 @@
 /* Tab 2 Layout: Academic Search */
 .search-split-layout {
   display: grid;
-  grid-template-columns: 420px 1fr;
+  grid-template-columns: clamp(320px, 32vw, 420px) 1fr;
   gap: 40px;
   align-items: start;
 }

@@ -5,17 +5,6 @@ from sqlalchemy.orm import Session
 
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, RAGDocument, SystemRule
 from src.database.vector_db import search_rag_isolated
-from src.prompts.materials import LANGUAGE_MAP
-from src.prompts.questions import (
-    SOLVER_SYSTEM_PROMPT,
-    build_correction_prompt,
-    build_generator_system_prompt,
-    build_generator_user_prompt,
-    build_solver_prompt,
-)
-from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
-from src.utils.llm_client import async_call_llm_json
-from src.utils.parser import safe_parse_bloom_level
 
 
 async def execute_chatbot_tool(
@@ -35,6 +24,7 @@ async def execute_chatbot_tool(
         return {"results": formatted_hits}
 
     elif name == "get_course_chapters":
+
         def query_chapters():
             return (
                 db.query(Chapter)
@@ -42,6 +32,7 @@ async def execute_chatbot_tool(
                 .order_by(Chapter.sort_order.asc())
                 .all()
             )
+
         chapters = await asyncio.to_thread(query_chapters)
         return {
             "chapters": [
@@ -60,6 +51,7 @@ async def execute_chatbot_tool(
         }
 
     elif name == "get_matrix_coverage":
+
         def fetch_matrix():
             clos = db.query(CLO).filter(CLO.course_id == course_id).all()
             questions = db.query(Question).filter(Question.course_id == course_id, Question.is_active).all()
@@ -109,7 +101,9 @@ async def execute_chatbot_tool(
 
     elif name == "generate_course_outline_action":
         # 1. Kiểm tra quyền sở hữu môn học
-        course = await asyncio.to_thread(lambda: db.query(Course).filter(Course.id == course_id, Course.user_id == user_id).first())
+        course = await asyncio.to_thread(
+            lambda: db.query(Course).filter(Course.id == course_id, Course.user_id == user_id).first()
+        )
         if not course:
             return {"error": "unauthorized", "message": "Môn học không tồn tại hoặc bạn không có quyền truy cập."}
 
@@ -121,7 +115,7 @@ async def execute_chatbot_tool(
                 "view": "course_config",
                 "action": "navigate_to_upload",
                 "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Cấu hình môn học để Thầy/Cô nạp Syllabus.",
+                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
             }
 
         return {
@@ -141,11 +135,13 @@ async def execute_chatbot_tool(
                 "view": "course_config",
                 "action": "navigate_to_upload",
                 "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Cấu hình môn học để Thầy/Cô nạp Syllabus.",
+                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
             }
 
         # Check if Chapters outline exists
-        chapters = await asyncio.to_thread(lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all())
+        chapters = await asyncio.to_thread(
+            lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
+        )
         if not chapters:
             return {
                 "status": "proposed",
@@ -159,7 +155,9 @@ async def execute_chatbot_tool(
         if not chapter_id:
             chapter_id = chapters[0].id
 
-        chapter = await asyncio.to_thread(lambda: db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == user_id).first())
+        chapter = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == user_id).first()
+        )
         if not chapter:
             return {"error": "unauthorized", "message": "Chương học không tồn tại hoặc bạn không có quyền truy cập."}
 
@@ -185,11 +183,13 @@ async def execute_chatbot_tool(
                 "view": "course_config",
                 "action": "navigate_to_upload",
                 "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Cấu hình môn học để Thầy/Cô nạp Syllabus.",
+                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
             }
 
         # Check if Chapters outline exists
-        chapters = await asyncio.to_thread(lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all())
+        chapters = await asyncio.to_thread(
+            lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
+        )
         if not chapters:
             return {
                 "status": "proposed",
@@ -203,7 +203,9 @@ async def execute_chatbot_tool(
         if not chapter_id:
             chapter_id = chapters[0].id
 
-        chapter = await asyncio.to_thread(lambda: db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == user_id).first())
+        chapter = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == user_id).first()
+        )
         if not chapter:
             return {"error": "unauthorized", "message": "Chương học không tồn tại hoặc bạn không có quyền truy cập."}
 
@@ -219,7 +221,7 @@ async def execute_chatbot_tool(
                 "furniture_type": args.get("furniture_type", "movable"),
                 "language": args.get("language", "vi"),
                 "session_duration": args.get("session_duration", 90),
-                "storyboard": args.get("storyboard")
+                "storyboard": args.get("storyboard"),
             },
             "message": f"Đề xuất soạn thảo chi tiết slide bài giảng và active learning cho chương: {chapter.title}.",
         }
@@ -233,11 +235,13 @@ async def execute_chatbot_tool(
                 "view": "course_config",
                 "action": "navigate_to_upload",
                 "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Cấu hình môn học để Thầy/Cô nạp Syllabus.",
+                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
             }
 
         # Check if Chapters outline exists
-        chapters = await asyncio.to_thread(lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all())
+        chapters = await asyncio.to_thread(
+            lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
+        )
         if not chapters:
             return {
                 "status": "proposed",
@@ -253,20 +257,26 @@ async def execute_chatbot_tool(
         count = args.get("count", 5)
         fast_mode = args.get("fast_mode", True)
 
-        course = await asyncio.to_thread(lambda: db.query(Course).filter(Course.id == course_id, Course.user_id == user_id).first())
+        course = await asyncio.to_thread(
+            lambda: db.query(Course).filter(Course.id == course_id, Course.user_id == user_id).first()
+        )
         if not course:
             return {"error": "unauthorized", "message": "Môn học không tồn tại hoặc bạn không có quyền truy cập."}
 
         chapter = None
         if chapter_id:
-            chapter = await asyncio.to_thread(lambda: db.query(Chapter).filter(Chapter.id == chapter_id, Chapter.course_id == course_id).first())
+            chapter = await asyncio.to_thread(
+                lambda: db.query(Chapter).filter(Chapter.id == chapter_id, Chapter.course_id == course_id).first()
+            )
         elif chapters:
             chapter = chapters[0]
             chapter_id = chapter.id
 
         clo = None
         if clo_id:
-            clo = await asyncio.to_thread(lambda: db.query(CLO).filter(CLO.id == clo_id, CLO.course_id == course_id).first())
+            clo = await asyncio.to_thread(
+                lambda: db.query(CLO).filter(CLO.id == clo_id, CLO.course_id == course_id).first()
+            )
         elif clos:
             clo = clos[0]
             clo_id = clo.id
@@ -282,7 +292,7 @@ async def execute_chatbot_tool(
                 "clo_code": clo.clo_code if clo else None,
                 "bloom_level": bloom_level,
                 "count": count,
-                "fast_mode": fast_mode
+                "fast_mode": fast_mode,
             },
             "message": f"Đề xuất soạn {count} câu hỏi trắc nghiệm chuẩn Bloom B{bloom_level} cho chuẩn đầu ra {clo.clo_code if clo else 'môn học'}.",
         }
@@ -296,31 +306,45 @@ async def execute_chatbot_tool(
             "course_name": course.course_name,
             "course_code": course.course_code,
             "required_textbooks": course.required_textbooks,
-            "recommended_readings": course.recommended_readings
+            "recommended_readings": course.recommended_readings,
         }
 
     elif name == "get_chapter_materials":
         chapter_id = args.get("chapter_id")
         if not chapter_id:
-            chapters = await asyncio.to_thread(lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all())
+            chapters = await asyncio.to_thread(
+                lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
+            )
             if not chapters:
                 return {"error": "not_found", "message": "Môn học chưa có chương học nào."}
             chapter_id = chapters[0].id
 
-        mat = await asyncio.to_thread(lambda: db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id, ChapterMaterial.is_active == True).first())
+        mat = await asyncio.to_thread(
+            lambda: (
+                db.query(ChapterMaterial)
+                .filter(ChapterMaterial.chapter_id == chapter_id, ChapterMaterial.is_active)
+                .first()
+            )
+        )
         if not mat:
-            return {"chapter_id": chapter_id, "slide_content": "", "active_learning_script": "", "message": "Chưa soạn slide bài giảng hay kịch bản cho chương này."}
+            return {
+                "chapter_id": chapter_id,
+                "slide_content": "",
+                "active_learning_script": "",
+                "message": "Chưa soạn slide bài giảng hay kịch bản cho chương này.",
+            }
 
         return {
             "chapter_id": chapter_id,
             "slide_content": mat.slide_content or "",
-            "active_learning_script": mat.active_learning_script or ""
+            "active_learning_script": mat.active_learning_script or "",
         }
 
     elif name == "get_chapter_questions":
         chapter_id = args.get("chapter_id")
+
         def query_questions():
-            q_query = db.query(Question).filter(Question.course_id == course_id, Question.is_active == True)
+            q_query = db.query(Question).filter(Question.course_id == course_id, Question.is_active)
             if chapter_id:
                 q_query = q_query.filter(Question.chapter_id == chapter_id)
             return q_query.all()
@@ -334,22 +358,24 @@ async def execute_chatbot_tool(
                     opts = json.loads(q.options_json)
                 except Exception:
                     opts = []
-            
+
             clo_code = None
             if q.clo_id:
                 clo_obj = db.query(CLO).filter(CLO.id == q.clo_id).first()
                 if clo_obj:
                     clo_code = clo_obj.clo_code
 
-            formatted_qs.append({
-                "id": q.id,
-                "chapter_id": q.chapter_id,
-                "question_text": q.question_text,
-                "options": opts,
-                "correct_answer": q.correct_answer,
-                "bloom_level": q.bloom_level,
-                "clo_code": clo_code
-            })
+            formatted_qs.append(
+                {
+                    "id": q.id,
+                    "chapter_id": q.chapter_id,
+                    "question_text": q.question_text,
+                    "options": opts,
+                    "correct_answer": q.correct_answer,
+                    "bloom_level": q.bloom_level,
+                    "clo_code": clo_code,
+                }
+            )
         return {"questions": formatted_qs}
 
     elif name == "get_uploaded_documents":
@@ -361,21 +387,25 @@ async def execute_chatbot_tool(
                     "file_name": d.file_name,
                     "category": d.category,
                     "status": d.status,
-                    "created_at": d.created_at.isoformat() if d.created_at else None
+                    "created_at": d.created_at.isoformat() if d.created_at else None,
                 }
                 for d in docs
             ]
         }
 
     elif name == "get_system_rules":
-        rules = await asyncio.to_thread(lambda: db.query(SystemRule).filter(SystemRule.course_id == course_id, SystemRule.status == "approved").all())
+        rules = await asyncio.to_thread(
+            lambda: (
+                db.query(SystemRule).filter(SystemRule.course_id == course_id, SystemRule.status == "approved").all()
+            )
+        )
         return {
             "rules": [
                 {
                     "id": r.id,
                     "rule_text": r.rule_text,
                     "rule_category": r.rule_category,
-                    "created_at": r.created_at.isoformat() if r.created_at else None
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
                 }
                 for r in rules
             ]

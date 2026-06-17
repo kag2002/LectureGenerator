@@ -103,7 +103,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học (lấy từ kết quả get_course_chapters). Nếu không truyền, hệ thống sẽ tự chọn chương đầu tiên."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học (lấy từ kết quả get_course_chapters). Nếu không truyền, hệ thống sẽ tự chọn chương đầu tiên.",
+                    },
                     "language": {
                         "type": "string",
                         "enum": ["vi", "en", "bilingual"],
@@ -125,7 +128,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học (lấy từ kết quả get_course_chapters). Nếu không truyền, hệ thống sẽ tự chọn chương đầu tiên."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học (lấy từ kết quả get_course_chapters). Nếu không truyền, hệ thống sẽ tự chọn chương đầu tiên.",
+                    },
                     "class_size": {
                         "type": "integer",
                         "description": "Sĩ số lớp học để thiết kế các hoạt động active learning nhóm. Mặc định là 40.",
@@ -172,7 +178,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học (lấy từ kết quả get_course_chapters). Nếu không truyền, hệ thống sẽ tự chọn chương đầu tiên."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học (lấy từ kết quả get_course_chapters). Nếu không truyền, hệ thống sẽ tự chọn chương đầu tiên.",
+                    },
                     "clo_id": {"type": "integer", "description": "ID của CLO mục tiêu cần sinh câu hỏi (Tùy chọn)."},
                     "bloom_level": {"type": "integer", "description": "Mức độ Bloom từ 1 đến 6. Mặc định là 3."},
                     "count": {"type": "integer", "description": "Số lượng câu hỏi cần sinh (1-10). Mặc định là 5."},
@@ -200,7 +209,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học cần xem học liệu. Nếu không truyền, hệ thống tự động lấy chương đầu tiên."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học cần xem học liệu. Nếu không truyền, hệ thống tự động lấy chương đầu tiên.",
+                    },
                 },
             },
         },
@@ -213,7 +225,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học cần xem câu hỏi. Nếu không truyền, hệ thống sẽ lấy tất cả câu hỏi của môn học."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học cần xem câu hỏi. Nếu không truyền, hệ thống sẽ lấy tất cả câu hỏi của môn học.",
+                    },
                 },
             },
         },
@@ -258,7 +273,7 @@ HƯỚNG DẪN HOẠT ĐỘNG:
 - HƯỚNG DẪN LUỒNG HOẠT ĐỘNG & CÁC MÀN HÌNH GIAO DIỆN THỰC TẾ CỦA HỆ THỐNG:
   * Màn hình Dashboard (Bảng điều khiển chính): Chứa danh sách các môn học. Thầy/Cô chọn môn học ở đây để bắt đầu.
   * Màn hình Sơ đồ môn học (Course Roadmap): Xuất hiện sau khi chọn môn học. Hiển thị danh sách các tuần/chương học, tình trạng phủ CLO và các nút liên kết nhanh sang các công cụ khác.
-  * Màn hình Cấu hình môn học (Course Config): Nơi nạp/tải lên file Syllabus (PDF/DOCX/TXT) hoặc dán văn bản thô để AI tự động trích xuất danh sách Chuẩn đầu ra (CLOs) và giáo trình môn học. Giảng viên cũng có thể thêm/sửa/xóa CLOs thủ công tại đây.
+  * Màn hình Bóc tách Syllabus (Cấu hình môn học / Course Config): Nơi nạp/tải lên file Syllabus (PDF/DOCX/TXT) hoặc dán văn bản thô để AI tự động trích xuất danh sách Chuẩn đầu ra (CLOs) và giáo trình môn học. Giảng viên cũng có thể thêm/sửa/xóa CLOs thủ công tại đây.
   * Màn hình Soạn bài giảng (Lesson Planner): Chọn chương học cụ thể, thiết lập "Bối cảnh sư phạm" (Sĩ số, Wifi, loại Bàn ghế), lên "Storyboard" nháp (khung slide) và "Bắt đầu soạn bài (AI Planner)" để sinh chi tiết slide kèm hoạt động active learning.
   * Màn hình Ngân hàng câu hỏi (Question Bank): Quản lý danh sách câu hỏi trắc nghiệm (MCQ). Giảng viên chọn chương học, CLO, Bloom Level và số lượng để AI tự động sinh câu hỏi bằng công cụ tự sửa lỗi (Self-Correction) của Solver.
   * Màn hình Ma trận bao phủ (Matrix Dashboard): Bản đồ nhiệt (Heatmap) trực quan hóa độ bao phủ của slide bài giảng và câu hỏi thi đối với ma trận CLO x Bloom. Giảng viên có thể chạy "Hàng đợi tự động khắc phục điểm mù" để sinh bù đắp slide/câu hỏi cho các ô còn thiếu.
@@ -266,7 +281,7 @@ HƯỚNG DẪN HOẠT ĐỘNG:
   * Màn hình Giám sát AI (AI Monitor): Theo dõi số lượng request, độ trễ trung bình, chi phí (cost) và tokens đã tiêu thụ.
 
 - QUY TẮC PHẢN HỒI KHI GIẢNG VIÊN HỎI VỀ LUỒNG HỆ THỐNG / HƯỚNG DẪN SỬ DỤNG:
-  * Khi giảng viên hỏi cách trích xuất nội dung từ đề cương môn học (Syllabus) hoặc khai báo CLOs: Hướng dẫn họ dán trực tiếp nội dung văn bản đề cương vào khung chat, hoặc kéo thả trực tiếp tệp Syllabus (.pdf, .docx, .txt) vào bất cứ đâu trong khung chat (hoặc bấm biểu tượng kẹp giấy đính kèm file) để hệ thống tự động phân tích và trích xuất CLOs tại chỗ. Ngoài ra, họ cũng có thể làm điều này ở màn hình "Cấu hình môn học (Course Config)".
+  * Khi giảng viên hỏi cách trích xuất nội dung từ đề cương môn học (Syllabus) hoặc khai báo CLOs: Hướng dẫn họ dán trực tiếp nội dung văn bản đề cương vào khung chat, hoặc kéo thả trực tiếp tệp Syllabus (.pdf, .docx, .txt) vào bất cứ đâu trong khung chat (hoặc bấm biểu tượng kẹp giấy đính kèm file) để hệ thống tự động phân tích và trích xuất CLOs tại chỗ. Ngoài ra, họ cũng có thể làm điều này ở màn hình "Bóc tách Syllabus (Cấu hình môn học / Course Config)".
   * Khi giảng viên hỏi cách soạn bài giảng hoặc thiết kế active learning: Hướng dẫn họ chọn chương học ở trang "Sơ đồ môn học", nhấn "Soạn bài giảng" để đi tới trang "Lesson Planner", điền bối cảnh sư phạm, lập Storyboard và nhấn "Bắt đầu soạn bài".
   * Khi giảng viên hỏi cách soạn câu hỏi/đề thi MCQ: Hướng dẫn họ đi tới "Ngân hàng câu hỏi (Question Bank)", chọn chương học, CLO mục tiêu, Bloom level và số lượng câu hỏi rồi nhấn "Tạo câu hỏi (AI)".
   * Khi giảng viên hỏi cách xem ma trận bao phủ hoặc bù đắp điểm mù chất lượng: Hướng dẫn họ vào trang "Ma trận bao phủ (Matrix Dashboard)" để xem Heatmap. Để sinh bù đắp tự động, chọn "Hàng đợi Điểm Mù" và nhấn "Bắt đầu" để hệ thống tự động sinh bù đắp hàng loạt câu hỏi/slide cho những phần bị thiếu hụt.
@@ -287,6 +302,7 @@ HƯỚNG DẪN HOẠT ĐỘNG:
 - TUYỆT ĐỐI KHÔNG đề cập đến tên các công cụ/hàm kỹ thuật (như `generate_chapter_materials_action`, `generate_chapter_storyboard_action`, v.v.) trong câu trả lời trực tiếp cho người dùng. Hãy sử dụng các cụm từ tiếng Việt tự nhiên và thân thiện (như "sinh bài giảng/học liệu", "lên khung slide nháp", "thiết kế câu hỏi").
 - TUYỆT ĐỐI KHÔNG hỏi người dùng về ID số (chapter_id, clo_id, v.v.). Người dùng KHÔNG biết ID. Thay vào đó, hãy gọi `get_course_chapters` hoặc `get_course_clos` trước để lấy danh sách, rồi hiển thị TÊN CHƯƠNG hoặc MÃ CLO bằng tiếng Việt tự nhiên để người dùng chọn. Sau khi người dùng chọn theo tên, bạn tự tra cứu ID tương ứng từ kết quả trước đó.
 """
+
 
 def get_candidate_models() -> list[dict]:
     candidate_models = []
@@ -329,14 +345,17 @@ def get_candidate_models() -> list[dict]:
             )
     return candidate_models
 
+
 class MockFunc:
     def __init__(self, name: str, arguments: str):
         self.name = name
         self.arguments = arguments
 
+
 class MockToolCall:
     def __init__(self, name: str, arguments: str):
         self.function = MockFunc(name, arguments)
+
 
 MOCK_FALLBACK_RULES = [
     {
@@ -395,6 +414,7 @@ MOCK_FALLBACK_RULES = [
     },
 ]
 
+
 def get_mock_fallback_response(user_message: str, working_messages: list) -> tuple[str, list | None]:
     if (
         working_messages
@@ -418,18 +438,20 @@ def get_mock_fallback_response(user_message: str, working_messages: list) -> tup
 
 # --- LANGGRAPH NODE FUNCTIONS ---
 
+
 async def guardrail_input_node(state: AgentState) -> dict[str, Any]:
     on_event = state.get("on_event")
     if on_event:
-        await on_event(
-            "stage", {"stage": 1, "message": "🛡️ Bước 1: Đang xác thực độ an toàn của yêu cầu..."}
-        )
+        await on_event("stage", {"stage": 1, "message": "🛡️ Bước 1: Đang xác thực độ an toàn của yêu cầu..."})
 
     input_violations = validate_input(state["user_message"])
     if input_violations:
         block_msg = f"Xin lỗi Thầy/Cô, yêu cầu nằm ngoài phạm vi học thuật/sư phạm hoặc vi phạm chính sách của nhà trường: {input_violations[0]}"
         if on_event:
-            await on_event("stage", {"stage": 5, "message": "⚠️ Cảnh báo: Câu hỏi không phù hợp với quy chuẩn an toàn của hệ thống."})
+            await on_event(
+                "stage",
+                {"stage": 5, "message": "⚠️ Cảnh báo: Câu hỏi không phù hợp với quy chuẩn an toàn của hệ thống."},
+            )
         return {
             "status": "blocked",
             "final_text": block_msg,
@@ -616,7 +638,9 @@ async def execute_tools_node(state: AgentState) -> dict[str, Any]:
     if on_event:
         tc_names = [item["name"] for item in tool_calls]
         tc_friendly = [TOOL_FRIENDLY_NAMES.get(n, n) for n in tc_names]
-        await on_event("stage", {"stage": 2, "message": f"🛠️ Đang truy xuất thông tin từ hệ thống: {', '.join(tc_friendly)}"})
+        await on_event(
+            "stage", {"stage": 2, "message": f"🛠️ Đang truy xuất thông tin từ hệ thống: {', '.join(tc_friendly)}"}
+        )
         await on_event("tool_call", {"round": r_idx, "tool_calls": tool_calls})
 
     tool_results = []
@@ -735,9 +759,9 @@ async def summarize_history_node(state: AgentState) -> dict[str, Any]:
     summary_prompt = [
         {
             "role": "system",
-            "content": "Bạn là trợ lý ảo lưu trữ bộ nhớ sư phạm. Hãy tóm tắt ngắn gọn các tin nhắn hội thoại cũ sau đây thành các ý chính quan trọng (ngôn ngữ giảng dạy, chương học đang làm việc, các chuẩn đầu ra cần tập trung, thói quen thiết kế). Tóm tắt phải cực kỳ ngắn gọn, súc tích và dưới 250 từ."
+            "content": "Bạn là trợ lý ảo lưu trữ bộ nhớ sư phạm. Hãy tóm tắt ngắn gọn các tin nhắn hội thoại cũ sau đây thành các ý chính quan trọng (ngôn ngữ giảng dạy, chương học đang làm việc, các chuẩn đầu ra cần tập trung, thói quen thiết kế). Tóm tắt phải cực kỳ ngắn gọn, súc tích và dưới 250 từ.",
         },
-        {"role": "user", "content": json.dumps(to_summarize, ensure_ascii=False)}
+        {"role": "user", "content": json.dumps(to_summarize, ensure_ascii=False)},
     ]
 
     try:
@@ -754,22 +778,17 @@ async def summarize_history_node(state: AgentState) -> dict[str, Any]:
         if system_messages:
             new_messages.extend(system_messages)
 
-        new_messages.append({
-            "role": "system",
-            "content": f"[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n{summary_text}"
-        })
+        new_messages.append({"role": "system", "content": f"[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]:\n{summary_text}"})
         new_messages.extend(to_keep)
 
-        return {
-            "messages": new_messages,
-            "summary_history": summary_text
-        }
+        return {"messages": new_messages, "summary_history": summary_text}
     except Exception as e:
         print(f"[SUMMARIZE HISTORY NODE ERROR] Failed to summarize: {e}")
         return {}
 
 
 # --- ROUTING CONDITION ---
+
 
 def chatbot_routing_condition(state: AgentState) -> str:
     status = state.get("status")
@@ -794,6 +813,7 @@ def chatbot_routing_condition(state: AgentState) -> str:
 
 # --- BUILD STATE GRAPH ---
 
+
 def build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
 
@@ -815,21 +835,14 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges(
         "llm_router",
         chatbot_routing_condition,
-        {
-            "execute_tools": "execute_tools",
-            "guardrail_output": "guardrail_output",
-            "end": END
-        }
+        {"execute_tools": "execute_tools", "guardrail_output": "guardrail_output", "end": END},
     )
 
     # Edge chuyển tiếp từ execute_tools quay lại summarize_history để kiểm tra tóm tắt
     graph.add_conditional_edges(
         "execute_tools",
         lambda state: "end" if state.get("status") == "waiting_for_user" else "summarize_history",
-        {
-            "end": END,
-            "summarize_history": "summarize_history"
-        }
+        {"end": END, "summarize_history": "summarize_history"},
     )
 
     graph.add_edge("guardrail_output", END)
@@ -838,4 +851,3 @@ def build_graph() -> StateGraph:
 
 
 agent = build_graph()
-

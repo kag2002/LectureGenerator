@@ -722,6 +722,17 @@ export default function QuestionBank({
               <div className="qb-empty-state">
                 <p>Chưa có câu hỏi nào trong môn học này.</p>
                 <p className="qb-empty-desc">Hãy cấu hình bảng AI Generator ở bên trái để sinh tự động.</p>
+                
+                <div className="empty-suggestions-box">
+                  <div className="empty-suggestions-title">
+                    <span>💡 Hướng dẫn & Gợi ý thực hiện:</span>
+                  </div>
+                  <ul className="empty-suggestions-list">
+                    <li className="empty-suggestions-item">Chọn <strong>Chuẩn đầu ra (CLO)</strong>, <strong>Chương học</strong> và <strong>Mức độ nhận thức (Bloom)</strong> mong muốn tại panel <strong>"Cấu hình Sinh Câu hỏi AI"</strong> ở bên trái.</li>
+                    <li className="empty-suggestions-item">Chọn số lượng câu hỏi cần tạo và bấm nút <strong>"Bắt đầu tạo câu hỏi (AI)"</strong> để AI tự động sinh và kiểm định.</li>
+                    <li className="empty-suggestions-item">Hoặc click vào nút <strong>"Thêm câu hỏi thủ công"</strong> ở góc phải của danh sách để tự biên soạn câu hỏi.</li>
+                  </ul>
+                </div>
               </div>
             ) : (
               questions.map((q, index) => (

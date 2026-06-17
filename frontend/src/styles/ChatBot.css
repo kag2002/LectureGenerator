@@ -5,7 +5,7 @@
   height: calc(100vh - 64px);
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  padding: 24px 30px;
+  padding: clamp(12px, 3vh, 24px) clamp(15px, 4vw, 30px);
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -84,7 +84,7 @@
 /* 3-Column Grid Layout */
 .chatbot-main-grid {
   display: grid;
-  grid-template-columns: 260px 1fr 340px;
+  grid-template-columns: clamp(200px, 20vw, 260px) 1fr clamp(280px, 25vw, 340px);
   gap: 20px;
   flex: 1;
   min-height: 0;

@@ -171,7 +171,18 @@ export default function LessonPlannerSidebar({
               </div>
             )}
             {chapters.length === 0 && !loading ? (
-              <div className="planner-empty-state">Chưa có dàn ý chương học. Bấm nút phía trên để AI gợi ý.</div>
+              <div className="planner-empty-state">
+                Chưa có dàn ý chương học. Bấm nút phía trên để AI gợi ý.
+                <div className="empty-suggestions-box">
+                  <div className="empty-suggestions-title">
+                    <span>💡 Hướng dẫn & Gợi ý:</span>
+                  </div>
+                  <ul className="empty-suggestions-list">
+                    <li className="empty-suggestions-item">Bấm nút <strong>"Gợi ý Dàn ý chương học"</strong> ở phía trên để AI gợi ý cấu trúc bài giảng.</li>
+                    <li className="empty-suggestions-item">Hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để kiểm tra các chuẩn đầu ra đã nạp.</li>
+                  </ul>
+                </div>
+              </div>
             ) : (
               <div className="planner-chapter-list" style={{ opacity: loading ? 0.6 : 1, pointerEvents: loading ? 'none' : 'auto' }}>
                 {chapters.map((ch, idx) => (
@@ -226,7 +237,18 @@ export default function LessonPlannerSidebar({
               </form>
               <div className="planner-doc-list sidebar-doc-scroll">
                 {documents.length === 0 ? (
-                  <div className="planner-empty-state">Chưa có tài liệu nguồn.</div>
+                  <div className="planner-empty-state">
+                    Chưa có tài liệu nguồn.
+                    <div className="empty-suggestions-box">
+                      <div className="empty-suggestions-title">
+                        <span>💡 Hướng dẫn & Gợi ý:</span>
+                      </div>
+                      <ul className="empty-suggestions-list">
+                        <li className="empty-suggestions-item">Chọn file tài liệu học liệu (.pdf, .docx, .txt) và nhấn <strong>"Nạp tài liệu lên Vector DB"</strong>.</li>
+                        <li className="empty-suggestions-item">Hoặc sử dụng ô tìm kiếm ở dưới để tìm kiếm và nạp RAG trực tuyến từ các nguồn uy tín.</li>
+                      </ul>
+                    </div>
+                  </div>
                 ) : (
                   documents.map((doc, idx) => (
                     <div key={idx} className="planner-doc-item">
@@ -311,7 +333,18 @@ export default function LessonPlannerSidebar({
             </div>
             
             {clos.length === 0 ? (
-              <div className="planner-empty-state">Môn học này chưa có danh sách chuẩn đầu ra CLO.</div>
+              <div className="planner-empty-state">
+                Môn học này chưa có danh sách chuẩn đầu ra CLO.
+                <div className="empty-suggestions-box">
+                  <div className="empty-suggestions-title">
+                    <span>💡 Hướng dẫn & Gợi ý:</span>
+                  </div>
+                  <ul className="empty-suggestions-list">
+                    <li className="empty-suggestions-item">Quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để nạp đề cương Syllabus môn học.</li>
+                    <li className="empty-suggestions-item">Hệ thống sẽ tự động bóc tách chuẩn đầu ra CLO và ánh xạ mức độ Bloom tương ứng.</li>
+                  </ul>
+                </div>
+              </div>
             ) : (
               <div className="sidebar-clo-list">
                 {clos.map((clo) => {
@@ -362,7 +395,18 @@ export default function LessonPlannerSidebar({
                 <RefreshCw size={14} aria-hidden="true" style={{ animation: 'spin 1.5s linear infinite', marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} /> Đang tải câu hỏi trắc nghiệm…
               </div>
             ) : !chapterMcqs || chapterMcqs.length === 0 ? (
-              <div className="planner-empty-state">Chưa có câu hỏi trắc nghiệm cho chương này.</div>
+              <div className="planner-empty-state">
+                Chưa có câu hỏi trắc nghiệm cho chương này.
+                <div className="empty-suggestions-box">
+                  <div className="empty-suggestions-title">
+                    <span>💡 Hướng dẫn & Gợi ý:</span>
+                  </div>
+                  <ul className="empty-suggestions-list">
+                    <li className="empty-suggestions-item">Vào trang <strong>Ngân hàng đề thi</strong> từ trang chủ hoặc Roadmap để sinh câu hỏi trắc nghiệm.</li>
+                    <li className="empty-suggestions-item">Khi sinh câu hỏi, nhớ chọn đúng chương học hiện tại để dữ liệu hiển thị đồng bộ ở đây.</li>
+                  </ul>
+                </div>
+              </div>
             ) : (
               <div className="sidebar-mcq-list">
                 {chapterMcqs.map((q, qIdx) => {
@@ -428,7 +472,18 @@ export default function LessonPlannerSidebar({
             </div>
 
             {!ragReferences || ragReferences.length === 0 ? (
-              <div className="planner-empty-state">Chưa phát hiện trích dẫn nguồn RAG nào trong slide chương này.</div>
+              <div className="planner-empty-state">
+                Chưa phát hiện trích dẫn nguồn RAG nào trong slide chương này.
+                <div className="empty-suggestions-box">
+                  <div className="empty-suggestions-title">
+                    <span>💡 Hướng dẫn & Gợi ý:</span>
+                  </div>
+                  <ul className="empty-suggestions-list">
+                    <li className="empty-suggestions-item">Hãy chèn thông tin trích dẫn dưới dạng tag hoặc nội dung RAG trong khi soạn slide.</li>
+                    <li className="empty-suggestions-item">Hệ thống sẽ quét và hiển thị chi tiết các trích dẫn tài liệu tham chiếu ở đây.</li>
+                  </ul>
+                </div>
+              </div>
             ) : (
               <div className="sidebar-clo-list">
                 {ragReferences.map((ref, idx) => (

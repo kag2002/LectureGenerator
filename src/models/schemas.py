@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # --- CHATBOT SCHEMAS ---
 
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000, description="Tin nhắn từ user")
 
@@ -12,6 +13,7 @@ class ChatResponse(BaseModel):
 
 
 # --- AUTH SCHEMAS ---
+
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -31,6 +33,7 @@ class TokenResponse(BaseModel):
 
 
 # --- COURSE & CLO SCHEMAS ---
+
 
 class CourseCreate(BaseModel):
     course_code: str = Field(..., json_schema_extra={"example": "COMP2010"})
@@ -78,9 +81,13 @@ class DocumentMetadataUpdate(BaseModel):
 
 # --- OUTLINE/CHAPTER SCHEMAS ---
 
+
 class ChapterCreate(BaseModel):
     title: str = Field(..., json_schema_extra={"example": "Chương 1: Tổng quan về Cây BST"})
-    description: str = Field(..., json_schema_extra={"example": "Giới thiệu cấu trúc cây, định nghĩa và tính chất của cây nhị phân tìm kiếm."})
+    description: str = Field(
+        ...,
+        json_schema_extra={"example": "Giới thiệu cấu trúc cây, định nghĩa và tính chất của cây nhị phân tìm kiếm."},
+    )
     sort_order: int = Field(..., json_schema_extra={"example": 1})
 
 
@@ -95,6 +102,7 @@ class ChapterResponse(BaseModel):
 
 
 # --- MATERIALS SCHEMAS ---
+
 
 class MaterialSave(BaseModel):
     slide_content: str = Field(..., description="Slide outline dạng Markdown")
@@ -168,6 +176,7 @@ class SingleSlideRevisionRequest(BaseModel):
 
 
 # --- QUESTIONS SCHEMAS ---
+
 
 class QuestionGenerateRequest(BaseModel):
     clo_id: int | None = Field(None, description="ID của CLO mục tiêu")

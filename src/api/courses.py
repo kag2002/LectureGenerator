@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 
@@ -182,7 +183,7 @@ def upload_and_parse_syllabus(
     if ext not in [".pdf", ".docx", ".txt"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt."
+            detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt.",
         )
 
     # 2. Tạo thư mục tạm lưu file
@@ -289,7 +290,7 @@ def upload_and_parse_syllabus_stream(
     if ext not in [".pdf", ".docx", ".txt"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt."
+            detail=f"Định dạng tệp '{ext}' không được hỗ trợ. Chỉ chấp nhận file đề cương .pdf, .docx hoặc .txt.",
         )
 
     # 2. Tạo thư mục tạm lưu file
@@ -332,8 +333,7 @@ def upload_course_document(
     _, ext = os.path.splitext(file.filename.lower())
     if ext not in [".pdf", ".docx", ".txt"]:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Định dạng tệp không hỗ trợ. Chỉ hỗ trợ .pdf, .docx, .txt."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Định dạng tệp không hỗ trợ. Chỉ hỗ trợ .pdf, .docx, .txt."
         )
 
     # Check file size limit (20MB)
@@ -342,8 +342,7 @@ def upload_course_document(
     file.file.seek(0)
     if file_size > 20 * 1024 * 1024:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Dung lượng tệp vượt quá giới hạn cho phép (Tối đa 20MB)."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Dung lượng tệp vượt quá giới hạn cho phép (Tối đa 20MB)."
         )
 
     # Validate file content magic bytes (signatures)
@@ -351,13 +350,12 @@ def upload_course_document(
     file.file.seek(0)
     if ext == ".pdf" and not header.startswith(b"%PDF"):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tệp PDF không hợp lệ (Chữ ký định dạng không đúng)."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Tệp PDF không hợp lệ (Chữ ký định dạng không đúng)."
         )
     elif ext == ".docx" and not header.startswith(b"PK\x03\x04"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tệp Word (.docx) không hợp lệ (Chữ ký định dạng không đúng)."
+            detail="Tệp Word (.docx) không hợp lệ (Chữ ký định dạng không đúng).",
         )
     elif ext == ".txt":
         # Check for binary null byte in the first 1KB of content
@@ -366,14 +364,15 @@ def upload_course_document(
         if b"\x00" in sample:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Tệp văn bản (.txt) không hợp lệ (Phát hiện dữ liệu nhị phân)."
+                detail="Tệp văn bản (.txt) không hợp lệ (Phát hiện dữ liệu nhị phân).",
             )
 
     # Sanitize file name to prevent path traversal, keeping Unicode/Vietnamese letters
     import re
+
     filename_clean = os.path.basename(file.filename)
-    safe_name = re.sub(r'[^\w\s.-]', '_', filename_clean)
-    safe_name = re.sub(r'\s+', ' ', safe_name).strip()
+    safe_name = re.sub(r"[^\w\s.-]", "_", filename_clean)
+    safe_name = re.sub(r"\s+", " ", safe_name).strip()
     if not safe_name:
         safe_name = "unnamed_file" + ext
 
@@ -383,15 +382,19 @@ def upload_course_document(
     temp_file_path = os.path.join(temp_dir, f"{current_user.id}_{course_id}_{safe_name}")
 
     # Check if the document with same name is currently processing
-    existing_doc = db.query(RAGDocument).filter(
-        RAGDocument.course_id == course_id,
-        RAGDocument.user_id == current_user.id,
-        RAGDocument.file_name == safe_name
-    ).first()
+    existing_doc = (
+        db.query(RAGDocument)
+        .filter(
+            RAGDocument.course_id == course_id,
+            RAGDocument.user_id == current_user.id,
+            RAGDocument.file_name == safe_name,
+        )
+        .first()
+    )
     if existing_doc and existing_doc.status == "processing":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tài liệu cùng tên đang được xử lý trong nền. Vui lòng đợi hoàn tất trước khi tải lên lại."
+            detail="Tài liệu cùng tên đang được xử lý trong nền. Vui lòng đợi hoàn tất trước khi tải lên lại.",
         )
 
     try:
@@ -404,7 +407,7 @@ def upload_course_document(
         db.query(RAGDocument).filter(
             RAGDocument.course_id == course_id,
             RAGDocument.user_id == current_user.id,
-            RAGDocument.file_name == safe_name
+            RAGDocument.file_name == safe_name,
         ).delete()
         db.commit()
 
@@ -415,7 +418,7 @@ def upload_course_document(
             category=category or "Textbook",
             tags=tags,
             chapter_id=chapter_id,
-            status="processing"
+            status="processing",
         )
         db.add(new_doc)
         db.commit()
@@ -431,7 +434,7 @@ def upload_course_document(
             category=category,
             tags=tags,
             chapter_id=chapter_id,
-            document_id=new_doc.id
+            document_id=new_doc.id,
         )
 
         return {
@@ -458,14 +461,9 @@ def upload_course_document(
         )
 
 
-import asyncio
-
 @router.get("/{course_id}/documents/{file_name}/progress")
 async def get_document_progress(
-    course_id: int,
-    file_name: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    course_id: int, file_name: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Theo dõi và stream tiến độ nạp tài liệu vào RAG bằng Server-Sent Events (SSE).
@@ -478,32 +476,37 @@ async def get_document_progress(
         )
 
     async def progress_generator():
-        yield "event: stage\ndata: {\"message\": \"Đang bắt đầu đọc tài liệu...\", \"status\": \"processing\"}\n\n"
-        
-        for i in range(120): # Timeout sau 2 phút
+        yield 'event: stage\ndata: {"message": "Đang bắt đầu đọc tài liệu...", "status": "processing"}\n\n'
+
+        for i in range(120):  # Timeout sau 2 phút
             await asyncio.sleep(1.0)
-            
+
             # Sử dụng session mới để tránh caching đối tượng ORM của SQLAlchemy
             from src.database.session import SessionLocal
+
             session = SessionLocal()
             try:
-                doc = session.query(RAGDocument).filter(
-                    RAGDocument.course_id == course_id,
-                    RAGDocument.user_id == current_user.id,
-                    RAGDocument.file_name == file_name
-                ).first()
-                
+                doc = (
+                    session.query(RAGDocument)
+                    .filter(
+                        RAGDocument.course_id == course_id,
+                        RAGDocument.user_id == current_user.id,
+                        RAGDocument.file_name == file_name,
+                    )
+                    .first()
+                )
+
                 if not doc:
-                    yield "event: error\ndata: {\"message\": \"Tài liệu không tồn tại.\"}\n\n"
+                    yield 'event: error\ndata: {"message": "Tài liệu không tồn tại."}\n\n'
                     break
-                
+
                 if doc.status == "ready":
-                    yield "event: stage\ndata: {\"message\": \"Đã phân tích cấu trúc và băm vector thành công!\", \"status\": \"ready\"}\n\n"
-                    yield "event: done\ndata: {\"status\": \"ready\"}\n\n"
+                    yield 'event: stage\ndata: {"message": "Đã phân tích cấu trúc và băm vector thành công!", "status": "ready"}\n\n'
+                    yield 'event: done\ndata: {"status": "ready"}\n\n'
                     break
                 elif doc.status == "failed":
                     err_msg = doc.error_message or "Lỗi không xác định khi bóc tách văn bản."
-                    yield f"event: error\ndata: {{\"message\": \"{err_msg}\"}}\n\n"
+                    yield f'event: error\ndata: {{"message": "{err_msg}"}}\n\n'
                     break
                 else:
                     # Stream các micro-copy khác nhau dựa trên thời gian trôi qua để làm UI sinh động
@@ -513,14 +516,14 @@ async def get_document_progress(
                         msg = "Đang thực hiện làm sạch dữ liệu nhiễu và loại bỏ References..."
                     else:
                         msg = "Đang băm nhỏ văn bản (sliding window) và lập chỉ mục ChromaDB..."
-                    yield f"event: stage\ndata: {{\"message\": \"{msg}\", \"status\": \"processing\"}}\n\n"
+                    yield f'event: stage\ndata: {{"message": "{msg}", "status": "processing"}}\n\n'
             except Exception as e:
-                yield f"event: error\ndata: {{\"message\": \"Lỗi truy xuất trạng thái: {str(e)}\"}}\n\n"
+                yield f'event: error\ndata: {{"message": "Lỗi truy xuất trạng thái: {str(e)}"}}\n\n'
                 break
             finally:
                 session.close()
         else:
-            yield "event: error\ndata: {\"message\": \"Quá thời gian xử lý tài liệu.\"}\n\n"
+            yield 'event: error\ndata: {"message": "Quá thời gian xử lý tài liệu."}\n\n'
 
     return StreamingResponse(
         progress_generator(),
@@ -539,10 +542,11 @@ def get_course_documents(course_id: int, current_user: User = Depends(get_curren
         )
 
     try:
-        docs = db.query(RAGDocument).filter(
-            RAGDocument.course_id == course_id,
-            RAGDocument.user_id == current_user.id
-        ).all()
+        docs = (
+            db.query(RAGDocument)
+            .filter(RAGDocument.course_id == course_id, RAGDocument.user_id == current_user.id)
+            .all()
+        )
 
         file_names = [d.file_name for d in docs]
         detailed = [
@@ -553,15 +557,12 @@ def get_course_documents(course_id: int, current_user: User = Depends(get_curren
                 "chapter_id": d.chapter_id,
                 "status": d.status,
                 "error_message": d.error_message,
-                "created_at": d.created_at.isoformat() if d.created_at else None
+                "created_at": d.created_at.isoformat() if d.created_at else None,
             }
             for d in docs
         ]
 
-        return {
-            "documents": file_names,
-            "documents_detailed": detailed
-        }
+        return {"documents": file_names, "documents_detailed": detailed}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi lấy danh sách tài liệu: {str(e)}"
@@ -596,7 +597,7 @@ def delete_course_document(
         db.query(RAGDocument).filter(
             RAGDocument.course_id == course_id,
             RAGDocument.user_id == current_user.id,
-            RAGDocument.file_name == file_name
+            RAGDocument.file_name == file_name,
         ).delete()
         db.commit()
 
@@ -613,7 +614,7 @@ def update_document_metadata(
     file_name: str,
     req: DocumentMetadataUpdate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
     if not course:
@@ -622,15 +623,17 @@ def update_document_metadata(
         )
 
     # 1. Cập nhật trong SQLite
-    doc = db.query(RAGDocument).filter(
-        RAGDocument.course_id == course_id,
-        RAGDocument.user_id == current_user.id,
-        RAGDocument.file_name == file_name
-    ).first()
-    if not doc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Tài liệu không tồn tại."
+    doc = (
+        db.query(RAGDocument)
+        .filter(
+            RAGDocument.course_id == course_id,
+            RAGDocument.user_id == current_user.id,
+            RAGDocument.file_name == file_name,
         )
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tài liệu không tồn tại.")
 
     if req.category is not None:
         doc.category = req.category
@@ -643,6 +646,7 @@ def update_document_metadata(
 
     # 2. Cập nhật metadata của các chunks trong ChromaDB
     from src.database.vector_db import collection
+
     try:
         data = collection.get(
             where={
@@ -652,7 +656,7 @@ def update_document_metadata(
                     {"file_name": {"$eq": file_name}},
                 ]
             },
-            include=["metadatas"]
+            include=["metadatas"],
         )
 
         if data and data["ids"]:
@@ -669,10 +673,7 @@ def update_document_metadata(
                         meta.pop("chapter_id", None)
                 new_metadatas.append(meta)
 
-            collection.update(
-                ids=data["ids"],
-                metadatas=new_metadatas
-            )
+            collection.update(ids=data["ids"], metadatas=new_metadatas)
     except Exception as e:
         print(f"[WARNING] Loi khi dong bo metadata sang ChromaDB: {e}")
 
@@ -731,7 +732,7 @@ def get_chunk_by_page(
     file_name: str,
     page_number: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Lấy đoạn văn bản trích dẫn của một trang tài liệu cụ thể trong RAG.
@@ -763,10 +764,7 @@ def get_chunk_by_page(
         # Sort chunks by id or chunk_index if present
         chunks = []
         for i in range(len(data["documents"])):
-            chunks.append({
-                "id": data["ids"][i],
-                "text": data["documents"][i]
-            })
+            chunks.append({"id": data["ids"][i], "text": data["documents"][i]})
         chunks.sort(key=lambda x: x["id"])
 
         combined_text = "\n\n".join([c["text"] for c in chunks])
@@ -784,7 +782,7 @@ def get_course_document_chunks(
     page: int = 1,
     page_size: int = 10,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Lấy danh sách các vector chunks phân trang của một tệp tài liệu trong RAG để kiểm tra trực quan.
@@ -815,14 +813,16 @@ def get_course_document_chunks(
         chunks = []
         for i in range(len(data["documents"])):
             meta = data["metadatas"][i]
-            chunks.append({
-                "id": data["ids"][i],
-                "text": data["documents"][i],
-                "page_number": meta.get("page_number", 1),
-                "category": meta.get("category", "Chưa phân loại"),
-                "tags": meta.get("tags", ""),
-                "chapter_id": meta.get("chapter_id", None)
-            })
+            chunks.append(
+                {
+                    "id": data["ids"][i],
+                    "text": data["documents"][i],
+                    "page_number": meta.get("page_number", 1),
+                    "category": meta.get("category", "Chưa phân loại"),
+                    "tags": meta.get("tags", ""),
+                    "chapter_id": meta.get("chapter_id", None),
+                }
+            )
 
         chunks.sort(key=lambda x: (x["page_number"], x["id"]))
 
@@ -831,19 +831,11 @@ def get_course_document_chunks(
         end = start + page_size
         paginated_chunks = chunks[start:end]
 
-        return {
-            "chunks": paginated_chunks,
-            "total_chunks": total,
-            "page": page,
-            "page_size": page_size
-        }
+        return {"chunks": paginated_chunks, "total_chunks": total, "page": page, "page_size": page_size}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi tải chunks của tài liệu: {str(e)}"
         )
-
-
-
 
 
 @router.post("/{course_id}/documents/search-test")
@@ -851,7 +843,7 @@ def search_test_rag(
     course_id: int,
     req: SearchTestRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Thực hiện truy vấn thử nghiệm RAG trực tiếp trên Vector DB để kiểm tra điểm tương đồng.

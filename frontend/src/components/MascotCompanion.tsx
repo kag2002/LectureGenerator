@@ -191,7 +191,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       setMessage("Em đã chuyển sang Ngân hàng câu hỏi trắc nghiệm rồi Thầy/Cô nhé!");
     } else if (actionType === 'syllabus') {
       onNavigate('course_config');
-      setMessage("Em đã mở trang Cấu hình môn học để Thầy/Cô bóc tách đề cương Syllabus rồi nhé!");
+      setMessage("Em đã mở trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp đề cương Syllabus rồi nhé!");
     }
   };
 

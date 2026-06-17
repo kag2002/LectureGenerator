@@ -191,7 +191,9 @@ def generate_questions(
 
     # 3. Tìm kiếm RAG ngữ cảnh
     query_str = f"Câu hỏi trắc nghiệm {target_clo.description if target_clo else ''} {target_chapter.title if target_chapter else ''}"
-    rag_hits = search_rag_isolated(query_str, user_id=current_user.id, course_id=course_id, top_k=4, chapter_id=req.chapter_id)
+    rag_hits = search_rag_isolated(
+        query_str, user_id=current_user.id, course_id=course_id, top_k=4, chapter_id=req.chapter_id
+    )
     rag_context = ""
     if rag_hits:
         for hit in rag_hits:

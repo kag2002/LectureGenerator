@@ -503,125 +503,151 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                 </tr>
               </thead>
               <tbody>
-                {chapters.map((ch, idx) => {
-                  const hasSlide = !!materialsMap[ch.id]?.hasSlide;
-                  const hasScript = !!materialsMap[ch.id]?.hasScript;
-                  const chQuestions = questions.filter(q => q.chapter_id === ch.id);
-                  const hasQ = chQuestions.length > 0;
-                  
-                  // Compute dynamic guide
-                  let nextActionGuide = "";
-                  let guideClass = "guide-info";
-                  if (!hasSlide && !hasScript && !hasQ) {
-                    nextActionGuide = "Chương học trống. Hãy chọn 'Biên soạn' tại cột Slide để AI gợi ý bài soạn.";
-                    guideClass = "guide-pending";
-                  } else if (hasSlide && !hasScript) {
-                    nextActionGuide = "Đã soạn Slide nhưng thiếu Kịch bản giảng dạy. Hãy nhấp 'Biên soạn' tại cột Giáo án.";
-                    guideClass = "guide-warning";
-                  } else if (hasSlide && hasScript && !hasQ) {
-                    nextActionGuide = "Học liệu đã xong. Hãy tạo bộ câu hỏi thi trắc nghiệm để hoàn thiện chương học.";
-                    guideClass = "guide-warning";
-                  } else if (hasSlide && hasScript && hasQ) {
-                    nextActionGuide = "Chương học đã hoàn thiện 100%. Toàn bộ file slide, giáo án và đề thi đã sẵn sàng tải về!";
-                    guideClass = "guide-success";
-                  } else {
-                    nextActionGuide = "Tiến độ đang hoàn thiện. Tiếp tục bổ sung nội dung slide bài soạn.";
-                    guideClass = "guide-info";
-                  }
+                {chapters.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '40px 20px', textAlign: 'center' }}>
+                      <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '12px', fontWeight: 'bold' }}>
+                        Chưa có chương học nào được tạo cho môn học này.
+                      </p>
+                      <div className="empty-suggestions-box" style={{ maxWidth: '650px', margin: '0 auto' }}>
+                        <div className="empty-suggestions-title">
+                          <span>💡 Hướng dẫn & Gợi ý thực hiện:</span>
+                        </div>
+                        <ul className="empty-suggestions-list">
+                          <li className="empty-suggestions-item">
+                            Bước 1: Click <strong>"Nạp Đề Cương (Syllabus)"</strong> bằng cách chọn Sơ đồ tư duy bên cạnh, hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để tải lên Syllabus của bạn.
+                          </li>
+                          <li className="empty-suggestions-item">
+                            Bước 2: Click vào mục <strong>Soạn bài giảng</strong> (hoặc hỏi Trợ lý ảo Falcon AI) và chọn <strong>"Gợi ý Dàn ý chương học"</strong> để AI tự động sinh cấu trúc các chương học.
+                          </li>
+                          <li className="empty-suggestions-item">
+                            Sau khi các chương học được khởi tạo, danh sách sẽ hiển thị ở đây để bạn theo dõi tiến độ và tải trọn bộ tài liệu PowerPoint, Giáo án & Đề thi.
+                          </li>
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  chapters.map((ch, idx) => {
+                    const hasSlide = !!materialsMap[ch.id]?.hasSlide;
+                    const hasScript = !!materialsMap[ch.id]?.hasScript;
+                    const chQuestions = questions.filter(q => q.chapter_id === ch.id);
+                    const hasQ = chQuestions.length > 0;
+                    
+                    // Compute dynamic guide
+                    let nextActionGuide = "";
+                    let guideClass = "guide-info";
+                    if (!hasSlide && !hasScript && !hasQ) {
+                      nextActionGuide = "Chương học trống. Hãy chọn 'Biên soạn' tại cột Slide để AI gợi ý bài soạn.";
+                      guideClass = "guide-pending";
+                    } else if (hasSlide && !hasScript) {
+                      nextActionGuide = "Đã soạn Slide nhưng thiếu Kịch bản giảng dạy. Hãy nhấp 'Biên soạn' tại cột Giáo án.";
+                      guideClass = "guide-warning";
+                    } else if (hasSlide && hasScript && !hasQ) {
+                      nextActionGuide = "Học liệu đã xong. Hãy tạo bộ câu hỏi thi trắc nghiệm để hoàn thiện chương học.";
+                      guideClass = "guide-warning";
+                    } else if (hasSlide && hasScript && hasQ) {
+                      nextActionGuide = "Chương học đã hoàn thiện 100%. Toàn bộ file slide, giáo án và đề thi đã sẵn sàng tải về!";
+                      guideClass = "guide-success";
+                    } else {
+                      nextActionGuide = "Tiến độ đang hoàn thiện. Tiếp tục bổ sung nội dung slide bài soạn.";
+                      guideClass = "guide-info";
+                    }
 
-                  return (
-                    <tr key={ch.id}>
-                      <td className="col-chapter">
-                        <div className="chapter-order">Chương {idx + 1}</div>
-                        <div className="chapter-title" title={ch.title}>{ch.title}</div>
-                      </td>
-                      
-                      <td className="col-slides">
-                        <div className="status-badge-row">
-                          <span className={`status-badge ${hasSlide ? 'status-done' : 'status-pending'}`}>
-                            {hasSlide ? '🟢 Đã soạn' : '⚪ Chưa soạn'}
-                          </span>
-                        </div>
-                        <div className="action-buttons-row">
-                          <button 
-                            onClick={() => handleExportPPTX(ch.id)}
-                            disabled={!hasSlide || downloadingChapterId === ch.id}
-                            className="checklist-action-btn pptx"
-                            title="Tải slide PowerPoint của chương này"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                          >
-                            {downloadingChapterId === ch.id ? 'Tải...' : <><Download size={13} /> Tải PPTX</>}
-                          </button>
-                          <button 
-                            onClick={() => onNavigate('lesson_planner', ch.id)}
-                            className="checklist-action-btn-secondary"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                          >
-                            <Pencil size={13} /> Biên soạn
-                          </button>
-                        </div>
-                      </td>
+                    return (
+                      <tr key={ch.id}>
+                        <td className="col-chapter">
+                          <div className="chapter-order">Chương {idx + 1}</div>
+                          <div className="chapter-title" title={ch.title}>{ch.title}</div>
+                        </td>
+                        
+                        <td className="col-slides">
+                          <div className="status-badge-row">
+                            <span className={`status-badge ${hasSlide ? 'status-done' : 'status-pending'}`}>
+                              {hasSlide ? '🟢 Đã soạn' : '⚪ Chưa soạn'}
+                            </span>
+                          </div>
+                          <div className="action-buttons-row">
+                            <button 
+                              onClick={() => handleExportPPTX(ch.id)}
+                              disabled={!hasSlide || downloadingChapterId === ch.id}
+                              className="checklist-action-btn pptx"
+                              title="Tải slide PowerPoint của chương này"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                            >
+                              {downloadingChapterId === ch.id ? 'Tải...' : <><Download size={13} /> Tải PPTX</>}
+                            </button>
+                            <button 
+                              onClick={() => onNavigate('lesson_planner', ch.id)}
+                              className="checklist-action-btn-secondary"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                            >
+                              <Pencil size={13} /> Biên soạn
+                            </button>
+                          </div>
+                        </td>
 
-                      <td className="col-lesson-plan">
-                        <div className="status-badge-row">
-                          <span className={`status-badge ${hasScript ? 'status-done' : 'status-pending'}`}>
-                            {hasScript ? '🟢 Đã soạn' : '⚪ Chưa soạn'}
-                          </span>
-                        </div>
-                        <div className="action-buttons-row">
-                          <button 
-                            onClick={() => handleExportLessonPlan(ch.id)}
-                            disabled={!hasScript}
-                            className="checklist-action-btn script"
-                            title="In hoặc lưu file PDF giáo án bài giảng tương tác"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                          >
-                            <Printer size={13} /> In Giáo án
-                          </button>
-                          <button 
-                            onClick={() => onNavigate('lesson_planner', ch.id)}
-                            className="checklist-action-btn-secondary"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                          >
-                            <Pencil size={13} /> Biên soạn
-                          </button>
-                        </div>
-                      </td>
+                        <td className="col-lesson-plan">
+                          <div className="status-badge-row">
+                            <span className={`status-badge ${hasScript ? 'status-done' : 'status-pending'}`}>
+                              {hasScript ? '🟢 Đã soạn' : '⚪ Chưa soạn'}
+                            </span>
+                          </div>
+                          <div className="action-buttons-row">
+                            <button 
+                              onClick={() => handleExportLessonPlan(ch.id)}
+                              disabled={!hasScript}
+                              className="checklist-action-btn script"
+                              title="In hoặc lưu file PDF giáo án bài giảng tương tác"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                            >
+                              <Printer size={13} /> In Giáo án
+                            </button>
+                            <button 
+                              onClick={() => onNavigate('lesson_planner', ch.id)}
+                              className="checklist-action-btn-secondary"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                            >
+                              <Pencil size={13} /> Biên soạn
+                            </button>
+                          </div>
+                        </td>
 
-                      <td className="col-questions">
-                        <div className="status-badge-row">
-                          <span className={`status-badge ${hasQ ? 'status-done' : 'status-pending'}`}>
-                            {hasQ ? `🟢 Đã có (${chQuestions.length} câu)` : '⚪ Chưa có'}
-                          </span>
-                        </div>
-                        <div className="action-buttons-row">
-                          <button 
-                            onClick={() => roadmapData.handleExportChapterExam(ch.id, ch.title)}
-                            disabled={!hasQ}
-                            className="checklist-action-btn questions"
-                            title="Tải ngân hàng câu hỏi trắc nghiệm của chương"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                          >
-                            <Download size={13} /> Tải Đề thi
-                          </button>
-                          <button 
-                            onClick={() => onNavigate('question_bank', ch.id)}
-                            className="checklist-action-btn-secondary"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
-                          >
-                            <Plus size={13} /> Tạo câu hỏi
-                          </button>
-                        </div>
-                      </td>
+                        <td className="col-questions">
+                          <div className="status-badge-row">
+                            <span className={`status-badge ${hasQ ? 'status-done' : 'status-pending'}`}>
+                              {hasQ ? `🟢 Đã có (${chQuestions.length} câu)` : '⚪ Chưa có'}
+                            </span>
+                          </div>
+                          <div className="action-buttons-row">
+                            <button 
+                              onClick={() => roadmapData.handleExportChapterExam(ch.id, ch.title)}
+                              disabled={!hasQ}
+                              className="checklist-action-btn questions"
+                              title="Tải ngân hàng câu hỏi trắc nghiệm của chương"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                            >
+                              <Download size={13} /> Tải Đề thi
+                            </button>
+                            <button 
+                              onClick={() => onNavigate('question_bank', ch.id)}
+                              className="checklist-action-btn-secondary"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
+                            >
+                              <Plus size={13} /> Tạo câu hỏi
+                            </button>
+                          </div>
+                        </td>
 
-                      <td className="col-guide">
-                        <div className={`guide-box ${guideClass}`}>
-                          {nextActionGuide}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        <td className="col-guide">
+                          <div className={`guide-box ${guideClass}`}>
+                            {nextActionGuide}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

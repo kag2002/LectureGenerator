@@ -13,7 +13,7 @@ async def test_agent_basic_flow():
         "messages": [{"role": "user", "content": "Hello"}],
         "course_id": 1,
         "user_id": 1,
-        "db": MagicMock()
+        "db": MagicMock(),
     }
     result = await agent.ainvoke(state_input)
     assert "final_text" in result
@@ -27,7 +27,7 @@ async def test_agent_state_structure():
         "messages": [{"role": "user", "content": "Test query"}],
         "course_id": 1,
         "user_id": 1,
-        "db": MagicMock()
+        "db": MagicMock(),
     }
     result = await agent.ainvoke(state_input)
     assert isinstance(result, dict)

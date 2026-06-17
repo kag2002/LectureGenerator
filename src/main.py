@@ -68,6 +68,7 @@ async def lifespan(app: FastAPI):
     print(f"Starting {settings.app_name} in {settings.app_env} mode")
     try:
         from src.database.vector_db import migrate_vector_db_metadata
+
         migrate_vector_db_metadata()
     except Exception as e:
         print(f"[WARNING] Startup migration failed: {e}")
@@ -133,7 +134,11 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         pass
 
     # Ẩn chi tiết lỗi chi tiết ở môi trường production để bảo mật hệ thống
-    details_val = exc_str if settings.app_env != "production" else "Chi tiết lỗi được ẩn ở môi trường production vì lý do bảo mật."
+    details_val = (
+        exc_str
+        if settings.app_env != "production"
+        else "Chi tiết lỗi được ẩn ở môi trường production vì lý do bảo mật."
+    )
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

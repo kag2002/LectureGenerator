@@ -1,6 +1,6 @@
+import asyncio
 import json
 import os
-import asyncio
 
 from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
@@ -180,7 +180,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học cần xem học liệu. Nếu không truyền, hệ thống tự động lấy chương đầu tiên."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học cần xem học liệu. Nếu không truyền, hệ thống tự động lấy chương đầu tiên.",
+                    },
                 },
             },
         },
@@ -193,7 +196,10 @@ CHATBOT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "chapter_id": {"type": "integer", "description": "ID của chương học cần xem câu hỏi. Nếu không truyền, hệ thống sẽ lấy tất cả câu hỏi của môn học."},
+                    "chapter_id": {
+                        "type": "integer",
+                        "description": "ID của chương học cần xem câu hỏi. Nếu không truyền, hệ thống sẽ lấy tất cả câu hỏi của môn học.",
+                    },
                 },
             },
         },
@@ -430,7 +436,7 @@ async def run_chatbot_agent_loop(
         course_obj = db.query(Course).filter(Course.id == course_id).first()
         msgs = (
             db.query(ChatMessage)
-            .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)
+            .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)  # noqa: E712
             .order_by(ChatMessage.id.desc())
             .limit(20)
             .all()
@@ -440,12 +446,13 @@ async def run_chatbot_agent_loop(
 
     course, recent_messages = await asyncio.to_thread(load_context)
     from src.agents.graph import SYSTEM_PROMPT
+
     system_prompt = SYSTEM_PROMPT
     if course:
         system_prompt += f"\n\nTHÔNG TIN MÔN HỌC HIỆN TẠI ĐANG ĐƯỢC CHỌN:\n- Tên môn học: {course.course_name}\n- Mã môn học: {course.course_code}\n- ID môn học: {course.id}"
 
     messages = [{"role": "system", "content": system_prompt}]
-    
+
     # Tìm tóm tắt lịch sử gần nhất nếu có
     latest_summary = None
     for msg in reversed(recent_messages):
@@ -463,7 +470,8 @@ async def run_chatbot_agent_loop(
 
     if page_context:
         import re
-        clean_context = re.sub(r'<svg[\s\S]*?</svg>', '[Biểu đồ sơ đồ SVG đã được lược bớt để tối ưu]', page_context)
+
+        clean_context = re.sub(r"<svg[\s\S]*?</svg>", "[Biểu đồ sơ đồ SVG đã được lược bớt để tối ưu]", page_context)
         messages.append({"role": "system", "content": f"[Ngữ cảnh trang hiện tại của người dùng]\n{clean_context}"})
 
     messages.append({"role": "user", "content": user_message})

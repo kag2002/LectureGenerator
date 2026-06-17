@@ -506,7 +506,7 @@ body.editor-fullscreen .app-main-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 28px;
+  padding: 0 clamp(12px, 3vw, 28px);
   z-index: 40;
   flex-shrink: 0;
   box-shadow: var(--shadow-sm);
@@ -687,7 +687,7 @@ body.editor-fullscreen .app-main-content {
 .app-main-content .roadmap-page,
 .app-main-content .config-page,
 .app-main-content .planner-page {
-  padding: 24px 30px;
+  padding: clamp(12px, 3vh, 24px) clamp(15px, 4vw, 30px);
   min-height: calc(100vh - 64px);
 }
 

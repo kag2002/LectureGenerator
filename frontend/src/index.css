@@ -330,3 +330,71 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .login-title, .roadmap-title, .planner-titl
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ============================================================
+   PREMIUM EMPTY STATE SUGGESTIONS & GUIDANCE SYSTEM
+   ============================================================ */
+.empty-suggestions-box {
+  margin-top: 16px;
+  padding: 16px 20px;
+  background: rgba(197, 168, 128, 0.08); /* warm gold-tinted translucent background */
+  border: 1px solid rgba(197, 168, 128, 0.25);
+  border-radius: 12px;
+  text-align: left;
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s ease;
+}
+
+[data-theme="dark"] .empty-suggestions-box {
+  background: rgba(197, 168, 128, 0.05);
+  border-color: rgba(197, 168, 128, 0.15);
+}
+
+.empty-suggestions-box:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(197, 168, 128, 0.4);
+}
+
+.empty-suggestions-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Lora', serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--warning-color, #c5a880);
+  margin-bottom: 10px;
+}
+
+.empty-suggestions-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty-suggestions-item {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  transition: color 0.2s ease;
+}
+
+.empty-suggestions-item::before {
+  content: "✦";
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: var(--vinuni-gold, #c5a880);
+  font-weight: bold;
+}
+
+.empty-suggestions-item:hover {
+  color: var(--text-primary);
+}

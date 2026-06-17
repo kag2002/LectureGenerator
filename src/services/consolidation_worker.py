@@ -1,6 +1,8 @@
-import gzip
 import base64
+import gzip
+
 from sqlalchemy.orm import Session
+
 from src.database.models import ChatMessage, ChatSession
 from src.utils.llm_client import async_call_llm_json
 
@@ -16,6 +18,7 @@ Hãy trả về một đối tượng JSON có định dạng sau:
 }
 Chỉ trả về JSON hợp lệ."""
 
+
 async def consolidate_session(session_id: int, db: Session) -> dict:
     """
     Hợp nhất phiên chat: Tóm tắt nội dung phiên chat, nén gzip các tin nhắn cũ,
@@ -24,7 +27,7 @@ async def consolidate_session(session_id: int, db: Session) -> dict:
     # 1. Lấy tất cả tin nhắn chưa được archived của phiên
     messages = (
         db.query(ChatMessage)
-        .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)
+        .filter(ChatMessage.session_id == session_id, ChatMessage.is_archived == False)  # noqa: E712
         .order_by(ChatMessage.id.asc())
         .all()
     )
@@ -46,7 +49,7 @@ async def consolidate_session(session_id: int, db: Session) -> dict:
             system_instruction=CONSOLIDATION_SYSTEM_PROMPT,
             temperature=0.0,
             prompt_name="session_consolidator",
-            prompt_version="v1"
+            prompt_version="v1",
         )
         summary_text = summary_res.get("summary", "")
     except Exception as e:
@@ -69,22 +72,22 @@ async def consolidate_session(session_id: int, db: Session) -> dict:
         # Giải phóng các kết quả tool cực kỳ lớn
         if msg.tool_results:
             msg.tool_results = "[Archived tool result to save space]"
-        
+
         # Đánh dấu archived
         msg.is_archived = True
 
     # 4. Lưu lại tin nhắn tóm tắt hệ thống làm mốc lịch sử mới
     last_msg = messages[-1]
-    
+
     db_summary = ChatMessage(
         session_id=session_id,
         role="system",
         content=f"[TÓM TẮT PHIÊN LÀM VIỆC LỊCH SỬ]:\n{summary_text}",
         parent_id=last_msg.id,
-        is_archived=False
+        is_archived=False,
     )
     db.add(db_summary)
-    
+
     session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
     if session:
         session.active_leaf_id = db_summary.id

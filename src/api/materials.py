@@ -104,7 +104,9 @@ def generate_chapter_materials(
 
     # 2. Truy vấn RAG cô lập từ ChromaDB
     query = f"{chapter.title} {chapter.description or ''}"
-    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=4, chapter_id=chapter_id)
+    rag_hits = search_rag_isolated(
+        query, user_id=current_user.id, course_id=chapter.course_id, top_k=4, chapter_id=chapter_id
+    )
 
     # 3. Lọc trùng bằng Cosine Similarity
     rag_hits = deduplicate_rag_hits(rag_hits, threshold=0.75)
@@ -231,10 +233,6 @@ async def generate_chapter_materials_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-
-
-
 
 
 @router.post("/chapters/{chapter_id}/generate-storyboard")
@@ -371,7 +369,9 @@ def get_chapter_rag_references(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
     query = f"{chapter.title} {chapter.description or ''}"
-    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=6, chapter_id=chapter_id)
+    rag_hits = search_rag_isolated(
+        query, user_id=current_user.id, course_id=chapter.course_id, top_k=6, chapter_id=chapter_id
+    )
     return {"references": rag_hits}
 
 
@@ -392,9 +392,6 @@ def delete_chapter_materials(
         db.delete(material)
         db.commit()
     return {"message": "Đã reset/xóa học liệu chương thành công."}
-
-
-
 
 
 @router.post("/chapters/{chapter_id}/append-slide-for-clo")
@@ -418,7 +415,9 @@ def append_slide_for_clo(
 
     # 3. Lấy RAG context
     query = f"{clo.clo_code} {clo.description} {chapter.title}"
-    rag_hits = search_rag_isolated(query, user_id=current_user.id, course_id=chapter.course_id, top_k=3, chapter_id=chapter_id)
+    rag_hits = search_rag_isolated(
+        query, user_id=current_user.id, course_id=chapter.course_id, top_k=3, chapter_id=chapter_id
+    )
     rag_context = ""
     if rag_hits:
         for hit in rag_hits:
@@ -530,10 +529,6 @@ def append_slide_for_clo_stream(
 
 
 # --- API TIỂU HỢP PHÂN RÃ AGENT & REVISION ---
-
-
-
-
 
 
 @router.post("/chapters/{chapter_id}/generate-slides-stream")
@@ -682,6 +677,7 @@ def revise_slides(
         # Lưu vào bộ nhớ trải nghiệm (Episodic Memory)
         try:
             from src.services.memory_service import store_episodic_revision
+
             def extract_layout(text: str) -> str:
                 if not text:
                     return "standard_list"
@@ -698,7 +694,7 @@ def revise_slides(
                 content_before=new_rev.content_before,
                 content_after=new_rev.content_after,
                 layout_before=extract_layout(new_rev.content_before),
-                layout_after=extract_layout(new_rev.content_after)
+                layout_after=extract_layout(new_rev.content_after),
             )
         except Exception as mem_err:
             print(f"[WARNING] Episodic memory store failed in revise_slides: {mem_err}")
@@ -849,6 +845,7 @@ def revise_active_learning(
         # Lưu vào bộ nhớ trải nghiệm (Episodic Memory)
         try:
             from src.services.memory_service import store_episodic_revision
+
             store_episodic_revision(
                 user_id=current_user.id,
                 course_id=chapter.course_id,
@@ -857,7 +854,7 @@ def revise_active_learning(
                 content_before=new_rev.content_before,
                 content_after=new_rev.content_after,
                 layout_before="active_learning",
-                layout_after="active_learning"
+                layout_after="active_learning",
             )
         except Exception as mem_err:
             print(f"[WARNING] Episodic memory store failed in revise_active_learning: {mem_err}")

@@ -5,8 +5,8 @@ from src.services.image_service import fetch_unsplash_image_url, process_markdow
 
 
 class TestImageService(unittest.TestCase):
-    @patch('src.services.image_service.requests.get')
-    @patch('src.services.image_service.os.getenv')
+    @patch("src.services.image_service.requests.get")
+    @patch("src.services.image_service.os.getenv")
     def test_fetch_unsplash_image_url_success(self, mock_getenv, mock_get):
         mock_getenv.return_value = "fake_access_key"
 
@@ -14,13 +14,7 @@ class TestImageService(unittest.TestCase):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "results": [
-                {
-                    "urls": {
-                        "regular": "https://images.unsplash.com/photo-123456"
-                    }
-                }
-            ]
+            "results": [{"urls": {"regular": "https://images.unsplash.com/photo-123456"}}]
         }
         mock_get.return_value = mock_response
 
@@ -30,8 +24,8 @@ class TestImageService(unittest.TestCase):
         self.assertIn("w=800", url)
         mock_get.assert_called_once()
 
-    @patch('src.services.image_service.requests.get')
-    @patch('src.services.image_service.os.getenv')
+    @patch("src.services.image_service.requests.get")
+    @patch("src.services.image_service.os.getenv")
     def test_fetch_unsplash_image_url_no_results(self, mock_getenv, mock_get):
         mock_getenv.return_value = "fake_access_key"
 
@@ -43,7 +37,7 @@ class TestImageService(unittest.TestCase):
         url = fetch_unsplash_image_url("nonexistent_query")
         self.assertEqual(url, "https://images.unsplash.com/photo-placeholder")
 
-    @patch('src.services.image_service.fetch_unsplash_image_url')
+    @patch("src.services.image_service.fetch_unsplash_image_url")
     def test_process_markdown_images(self, mock_fetch):
         mock_fetch.return_value = "https://images.unsplash.com/photo-resolved"
 
@@ -57,7 +51,7 @@ Another text.
         self.assertNotIn("photo-placeholder", processed)
         mock_fetch.assert_called_once_with("business meeting")
 
-    @patch('src.services.image_service.fetch_unsplash_image_url')
+    @patch("src.services.image_service.fetch_unsplash_image_url")
     def test_process_markdown_images_real_unsplash_url(self, mock_fetch):
         # Even if LLM outputs a real Unsplash URL, we want to replace it to avoid duplicates!
         mock_fetch.return_value = "https://images.unsplash.com/photo-new-resolved"

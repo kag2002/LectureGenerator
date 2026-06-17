@@ -158,7 +158,7 @@
 
 /* --- Hero Section --- */
 .landing-hero {
-  padding: 10rem 4rem 6rem;
+  padding: clamp(6rem, 12vh, 10rem) clamp(1.5rem, 5vw, 4rem) clamp(3rem, 8vh, 6rem);
   min-height: 90vh;
   display: flex;
   flex-direction: column;
@@ -191,7 +191,7 @@
 
 .landing-hero-title {
   font-family: 'Lora', serif;
-  font-size: 3.8rem;
+  font-size: clamp(2.2rem, 6vw, 3.8rem);
   font-weight: 700;
   line-height: 1.15;
   color: #0b2545;
@@ -207,7 +207,7 @@
 }
 
 .landing-hero-subtitle {
-  font-size: 1.25rem;
+  font-size: clamp(1rem, 2vw, 1.25rem);
   color: #475569;
   max-width: 680px;
   margin-bottom: 2.5rem;

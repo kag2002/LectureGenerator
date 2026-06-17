@@ -162,7 +162,7 @@
 /* Main Layout Grid */
 .qb-main-grid {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: clamp(300px, 30vw, 380px) 1fr;
   gap: 30px;
   align-items: start;
 }
@@ -547,7 +547,7 @@
   font-weight: 600;
   padding: 4px 12px;
   border-radius: 6px;
-  max-width: 320px;
+  max-width: min(80vw, 320px);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

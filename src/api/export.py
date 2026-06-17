@@ -4,11 +4,11 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 import unicodedata
 import zipfile
 from io import BytesIO
 
+from docx.oxml import parse_xml
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, StreamingResponse
 from pptx import Presentation
@@ -16,7 +16,6 @@ from pptx.dml.color import RGBColor
 from pptx.util import Inches, Pt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from docx.oxml import parse_xml
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
@@ -41,10 +40,7 @@ def export_course_materials(
 
     # 2. Lấy danh sách chương học sắp xếp theo sort_order
     chapters = (
-        db.query(Chapter)
-        .filter(Chapter.course_id == course_id, Chapter.is_active)
-        .order_by(Chapter.sort_order)
-        .all()
+        db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).order_by(Chapter.sort_order).all()
     )
 
     # 3. Tạo nội dung file Markdown tổng hợp
@@ -637,27 +633,66 @@ def export_chapter_pptx_canvas(
 
 
 GREEK_SYMBOLS = {
-    r'\alpha': 'α', r'\beta': 'β', r'\gamma': 'γ', r'\delta': 'δ', r'\epsilon': 'ε',
-    r'\zeta': 'ζ', r'\eta': 'η', r'\theta': 'θ', r'\iota': 'ι', r'\kappa': 'κ',
-    r'\lambda': 'λ', r'\mu': 'μ', r'\nu': 'ν', r'\xi': 'ξ', r'\omicron': 'o',
-    r'\pi': 'π', r'\rho': 'ρ', r'\sigma': 'σ', r'\tau': 'τ', r'\upsilon': 'υ',
-    r'\phi': 'φ', r'\chi': 'χ', r'\psi': 'ψ', r'\omega': 'ω',
-    r'\Delta': 'Δ', r'\Gamma': 'Γ', r'\Theta': 'Θ', r'\Lambda': 'Λ', r'\Xi': 'Ξ',
-    r'\Pi': 'Π', r'\Sigma': 'Σ', r'\Phi': 'Φ', r'\Psi': 'Ψ', r'\Omega': 'Ω',
-    r'\infty': '∞', r'\partial': '∂', r'\nabla': '∇', r'\pm': '±', r'\times': '×',
-    r'\div': '÷', r'\neq': '≠', r'\approx': '≈', r'\le': '≤', r'\ge': '≥',
-    r'\sum': '∑', r'\prod': '∏', r'\int': '∫', r'\cdot': '·'
+    r"\alpha": "α",
+    r"\beta": "β",
+    r"\gamma": "γ",
+    r"\delta": "δ",
+    r"\epsilon": "ε",
+    r"\zeta": "ζ",
+    r"\eta": "η",
+    r"\theta": "θ",
+    r"\iota": "ι",
+    r"\kappa": "κ",
+    r"\lambda": "λ",
+    r"\mu": "μ",
+    r"\nu": "ν",
+    r"\xi": "ξ",
+    r"\omicron": "o",
+    r"\pi": "π",
+    r"\rho": "ρ",
+    r"\sigma": "σ",
+    r"\tau": "τ",
+    r"\upsilon": "υ",
+    r"\phi": "φ",
+    r"\chi": "χ",
+    r"\psi": "ψ",
+    r"\omega": "ω",
+    r"\Delta": "Δ",
+    r"\Gamma": "Γ",
+    r"\Theta": "Θ",
+    r"\Lambda": "Λ",
+    r"\Xi": "Ξ",
+    r"\Pi": "Π",
+    r"\Sigma": "Σ",
+    r"\Phi": "Φ",
+    r"\Psi": "Ψ",
+    r"\Omega": "Ω",
+    r"\infty": "∞",
+    r"\partial": "∂",
+    r"\nabla": "∇",
+    r"\pm": "±",
+    r"\times": "×",
+    r"\div": "÷",
+    r"\neq": "≠",
+    r"\approx": "≈",
+    r"\le": "≤",
+    r"\ge": "≥",
+    r"\sum": "∑",
+    r"\prod": "∏",
+    r"\int": "∫",
+    r"\cdot": "·",
 }
+
 
 def parse_latex(s: str):
     idx = 0
     n = len(s)
-    
+
     def peek():
         if idx < n:
             return s[idx]
         return None
-        
+
     def next_char():
         nonlocal idx
         if idx < n:
@@ -668,150 +703,154 @@ def parse_latex(s: str):
 
     def parse_command():
         nonlocal idx
-        next_char() # consume '\'
+        next_char()  # consume '\'
         cmd = ""
         while idx < n and peek() and peek().isalpha():
             cmd += next_char()
-        
-        if cmd == 'frac':
+
+        if cmd == "frac":
             num = parse_arg()
             den = parse_arg()
-            return ('frac', num, den)
+            return ("frac", num, den)
         else:
             symbol = "\\" + cmd
             unicode_val = GREEK_SYMBOLS.get(symbol, symbol)
-            return ('text', unicode_val)
+            return ("text", unicode_val)
 
     def parse_arg():
         c = peek()
-        if c == '{':
+        if c == "{":
             next_char()
             return parse_group()
-        elif c == '\\':
+        elif c == "\\":
             return parse_command()
         elif c:
             return parse_char()
-        return ('text', '')
+        return ("text", "")
 
     def parse_group():
         nodes = parse_sequence(is_group=True)
         if len(nodes) == 1:
             return nodes[0]
-        return ('group', nodes)
+        return ("group", nodes)
 
     def parse_char():
         c = next_char()
-        return ('text', c)
+        return ("text", c)
 
     def parse_sequence(is_group=False):
         nodes = []
         while idx < n:
             c = peek()
-            if is_group and c == '}':
+            if is_group and c == "}":
                 next_char()
                 break
-            elif c == '{':
+            elif c == "{":
                 next_char()
                 nodes.append(parse_group())
-            elif c == '\\':
+            elif c == "\\":
                 nodes.append(parse_command())
-            elif c == '^':
+            elif c == "^":
                 next_char()
                 sup = parse_arg()
                 if nodes:
                     base = nodes.pop()
-                    nodes.append(('sup', base, sup))
+                    nodes.append(("sup", base, sup))
                 else:
-                    nodes.append(('sup', ('text', ''), sup))
-            elif c == '_':
+                    nodes.append(("sup", ("text", ""), sup))
+            elif c == "_":
                 next_char()
                 sub = parse_arg()
                 if nodes:
                     base = nodes.pop()
-                    nodes.append(('sub', base, sub))
+                    nodes.append(("sub", base, sub))
                 else:
-                    nodes.append(('sub', ('text', ''), sub))
+                    nodes.append(("sub", ("text", ""), sub))
             else:
                 nodes.append(parse_char())
         return nodes
 
     return parse_sequence()
 
+
 def optimize_nodes(nodes):
     optimized = []
     current_text = ""
     for node in nodes:
-        if node[0] == 'text':
+        if node[0] == "text":
             current_text += node[1]
         else:
             if current_text:
-                optimized.append(('text', current_text))
+                optimized.append(("text", current_text))
                 current_text = ""
-            if node[0] == 'group':
-                optimized.append(('group', optimize_nodes(node[1])))
-            elif node[0] == 'frac':
-                optimized.append(('frac', optimize_node(node[1]), optimize_node(node[2])))
-            elif node[0] == 'sup':
-                optimized.append(('sup', optimize_node(node[1]), optimize_node(node[2])))
-            elif node[0] == 'sub':
-                optimized.append(('sub', optimize_node(node[1]), optimize_node(node[2])))
+            if node[0] == "group":
+                optimized.append(("group", optimize_nodes(node[1])))
+            elif node[0] == "frac":
+                optimized.append(("frac", optimize_node(node[1]), optimize_node(node[2])))
+            elif node[0] == "sup":
+                optimized.append(("sup", optimize_node(node[1]), optimize_node(node[2])))
+            elif node[0] == "sub":
+                optimized.append(("sub", optimize_node(node[1]), optimize_node(node[2])))
     if current_text:
-        optimized.append(('text', current_text))
+        optimized.append(("text", current_text))
     return optimized
+
 
 def optimize_node(node):
     if not node:
         return node
-    if node[0] == 'group':
-        return ('group', optimize_nodes(node[1]))
-    elif node[0] == 'frac':
-        return ('frac', optimize_node(node[1]), optimize_node(node[2]))
-    elif node[0] == 'sup':
-        return ('sup', optimize_node(node[1]), optimize_node(node[2]))
-    elif node[0] == 'sub':
-        return ('sub', optimize_node(node[1]), optimize_node(node[2]))
+    if node[0] == "group":
+        return ("group", optimize_nodes(node[1]))
+    elif node[0] == "frac":
+        return ("frac", optimize_node(node[1]), optimize_node(node[2]))
+    elif node[0] == "sup":
+        return ("sup", optimize_node(node[1]), optimize_node(node[2]))
+    elif node[0] == "sub":
+        return ("sub", optimize_node(node[1]), optimize_node(node[2]))
     return node
+
 
 def render_node_to_omml(node) -> str:
     if not node:
         return ""
     ntype = node[0]
-    if ntype == 'text':
+    if ntype == "text":
         val = node[1]
-        val = val.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        return f'<m:r><m:t>{val}</m:t></m:r>'
-    elif ntype == 'group':
+        val = val.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        return f"<m:r><m:t>{val}</m:t></m:r>"
+    elif ntype == "group":
         return "".join(render_node_to_omml(c) for c in node[1])
-    elif ntype == 'frac':
+    elif ntype == "frac":
         num_xml = render_node_to_omml(node[1])
         den_xml = render_node_to_omml(node[2])
-        return f'<m:f><m:num>{num_xml}</m:num><m:den>{den_xml}</m:den></m:f>'
-    elif ntype == 'sup':
+        return f"<m:f><m:num>{num_xml}</m:num><m:den>{den_xml}</m:den></m:f>"
+    elif ntype == "sup":
         base_xml = render_node_to_omml(node[1])
         sup_xml = render_node_to_omml(node[2])
-        return f'<m:sSup><m:e>{base_xml}</m:e><m:sup>{sup_xml}</m:sup></m:sSup>'
-    elif ntype == 'sub':
+        return f"<m:sSup><m:e>{base_xml}</m:e><m:sup>{sup_xml}</m:sup></m:sSup>"
+    elif ntype == "sub":
         base_xml = render_node_to_omml(node[1])
         sub_xml = render_node_to_omml(node[2])
-        return f'<m:sSub><m:e>{base_xml}</m:e><m:sub>{sub_xml}</m:sub></m:sSub>'
+        return f"<m:sSub><m:e>{base_xml}</m:e><m:sub>{sub_xml}</m:sub></m:sSub>"
     return ""
+
 
 def latex_to_omml(latex_str: str, is_block: bool = False) -> str:
     latex_str = latex_str.strip()
-    if latex_str.startswith('$$') and latex_str.endswith('$$'):
+    if latex_str.startswith("$$") and latex_str.endswith("$$"):
         latex_str = latex_str[2:-2].strip()
-    elif latex_str.startswith('$') and latex_str.endswith('$'):
+    elif latex_str.startswith("$") and latex_str.endswith("$"):
         latex_str = latex_str[1:-1].strip()
-        
+
     parsed_nodes = parse_latex(latex_str)
     optimized = optimize_nodes(parsed_nodes)
     inner_xml = "".join(render_node_to_omml(n) for n in optimized)
-    
+
     ns = 'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"'
     if is_block:
-        return f'<m:oMathPara {ns}><m:oMath>{inner_xml}</m:oMath></m:oMathPara>'
+        return f"<m:oMathPara {ns}><m:oMath>{inner_xml}</m:oMath></m:oMathPara>"
     else:
-        return f'<m:oMath {ns}>{inner_xml}</m:oMath>'
+        return f"<m:oMath {ns}>{inner_xml}</m:oMath>"
 
 
 # --- API EXPORT ZIP COURSE PACKAGE ---
@@ -819,9 +858,10 @@ def latex_to_omml(latex_str: str, is_block: bool = False) -> str:
 
 def format_to_gift(question_text: str, options: list, correct_answer: str) -> str:
     """Formats a question into Moodle/Canvas GIFT format."""
+
     def escape_gift(text):
-        for char in ['{', '}', '~', '=', '#', ':', '/']:
-            text = text.replace(char, '\\' + char)
+        for char in ["{", "}", "~", "=", "#", ":", "/"]:
+            text = text.replace(char, "\\" + char)
         return text
 
     q_text = escape_gift(question_text)
@@ -836,16 +876,16 @@ def format_to_gift(question_text: str, options: list, correct_answer: str) -> st
             gift_options.append(f"~{opt_escaped}")
 
     # Fallback if correct_answer was letter matching index (e.g., 'A', 'B', 'C', 'D')
-    has_correct = any(o.startswith('=') for o in gift_options)
+    has_correct = any(o.startswith("=") for o in gift_options)
     if not has_correct and correct_answer in ["A", "B", "C", "D", "a", "b", "c", "d"]:
-        idx = ord(correct_answer.upper()) - ord('A')
+        idx = ord(correct_answer.upper()) - ord("A")
         if idx < len(gift_options):
-            gift_options[idx] = "=" + gift_options[idx].lstrip('~')
+            gift_options[idx] = "=" + gift_options[idx].lstrip("~")
             has_correct = True
 
     # Ultimate fallback: first item
     if not has_correct and gift_options:
-        gift_options[0] = "=" + gift_options[0].lstrip('~')
+        gift_options[0] = "=" + gift_options[0].lstrip("~")
 
     options_str = " ".join(gift_options)
     return f"{q_text} {{{options_str}}}"
@@ -854,12 +894,12 @@ def format_to_gift(question_text: str, options: list, correct_answer: str) -> st
 def sanitize_filename(name: str) -> str:
     """Converts name to standard ASCII alphanumeric string for folder/file names."""
     # Normalize unicode to separate diacritics
-    normalized = unicodedata.normalize('NFKD', name)
-    ascii_encoded = normalized.encode('ascii', 'ignore').decode('ascii')
+    normalized = unicodedata.normalize("NFKD", name)
+    ascii_encoded = normalized.encode("ascii", "ignore").decode("ascii")
     # Filter non-alphanumeric/spaces/hyphens
-    filtered = re.sub(r'[^a-zA-Z0-9_\-\s]', '', ascii_encoded)
+    filtered = re.sub(r"[^a-zA-Z0-9_\-\s]", "", ascii_encoded)
     # Strip and replace spaces/underscores with a single underscore
-    sanitized = re.sub(r'[\s_]+', '_', filtered.strip())
+    sanitized = re.sub(r"[\s_]+", "_", filtered.strip())
     return sanitized or "Chapter"
 
 
@@ -870,7 +910,7 @@ def export_course_zip(
     organization_style: str = "by_chapter",
     theme: str = "warm_academic",
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     # 1. Xác thực môn học
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
@@ -881,10 +921,7 @@ def export_course_zip(
 
     # 2. Lấy dữ liệu chương học, câu hỏi, CLO
     chapters = (
-        db.query(Chapter)
-        .filter(Chapter.course_id == course_id, Chapter.is_active)
-        .order_by(Chapter.sort_order)
-        .all()
+        db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).order_by(Chapter.sort_order).all()
     )
     questions = db.query(Question).filter(Question.course_id == course_id, Question.is_active).all()
     clos = db.query(CLO).filter(CLO.course_id == course_id).all()
@@ -897,18 +934,20 @@ def export_course_zip(
                 f"# ĐỀ CƯƠNG CHI TIẾT MÔN HỌC: {course.course_name.upper()}",
                 f"Mã môn học: {course.course_code}",
                 f"Giảng viên biên soạn: {current_user.full_name or current_user.email}\n",
-                "## 🎯 Chuẩn đầu ra môn học (CLOs)"
+                "## 🎯 Chuẩn đầu ra môn học (CLOs)",
             ]
             if not clos:
                 syllabus_lines.append("* Chưa có chuẩn đầu ra nào được cấu hình.")
             else:
                 for c in clos:
                     syllabus_lines.append(f"- **{c.clo_code}** (Mức Bloom {c.bloom_level}): {c.description}")
-            syllabus_lines.extend([
-                "\n## 📚 Giáo trình & Tài liệu tham khảo",
-                f"- Giáo trình bắt buộc: {course.required_textbooks or 'N/A'}",
-                f"- Tài liệu tham khảo: {course.recommended_readings or 'N/A'}"
-            ])
+            syllabus_lines.extend(
+                [
+                    "\n## 📚 Giáo trình & Tài liệu tham khảo",
+                    f"- Giáo trình bắt buộc: {course.required_textbooks or 'N/A'}",
+                    f"- Tài liệu tham khảo: {course.recommended_readings or 'N/A'}",
+                ]
+            )
             zip_file.writestr("Syllabus.md", "\n".join(syllabus_lines).encode("utf-8"))
 
             # B. Báo cáo Ma trận Coverage Bloom x CLO
@@ -916,7 +955,7 @@ def export_course_zip(
                 "# MA TRẬN ĐỘ PHỦ CHẤT LƯỢNG (CLO x BLOOM LEVEL)",
                 f"Môn học: {course.course_name} ({course.course_code})\n",
                 "| Chuẩn đầu ra (CLO) | Mức Bloom | Số lượng Câu hỏi | Slide bài giảng | Mô tả CLO |",
-                "| :--- | :---: | :---: | :---: | :--- |"
+                "| :--- | :---: | :---: | :---: | :--- |",
             ]
             for c in clos:
                 q_count = len([q for q in questions if q.clo_id == c.id])
@@ -925,7 +964,9 @@ def export_course_zip(
                     mat = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == ch.id).first()
                     if mat and mat.slide_content and c.clo_code in mat.slide_content:
                         slide_count += 1
-                matrix_lines.append(f"| {c.clo_code} | Mức {c.bloom_level} | {q_count} câu | {slide_count} chương | {c.description} |")
+                matrix_lines.append(
+                    f"| {c.clo_code} | Mức {c.bloom_level} | {q_count} câu | {slide_count} chương | {c.description} |"
+                )
             zip_file.writestr("Matrix_Coverage.md", "\n".join(matrix_lines).encode("utf-8"))
 
             # C. Đóng gói các chương
@@ -961,17 +1002,20 @@ def export_course_zip(
                 if material and material.slide_content:
                     zip_file.writestr(slides_source_path, material.slide_content.encode("utf-8"))
                     try:
-                        output_pptx = export_chapter_pptx(chapter_id=ch.id, theme=theme, current_user=current_user, db=db)
+                        output_pptx = export_chapter_pptx(
+                            chapter_id=ch.id, theme=theme, current_user=current_user, db=db
+                        )
                         if hasattr(output_pptx, "path") and os.path.exists(output_pptx.path):
                             with open(output_pptx.path, "rb") as pf:
                                 pptx_data = pf.read()
                             zip_file.writestr(slides_pptx_path, pptx_data)
-                            
+
                             def cleanup_pptx_dir(path_to_clean):
                                 try:
                                     shutil.rmtree(os.path.dirname(os.path.dirname(path_to_clean)))
                                 except Exception:
                                     pass
+
                             background_tasks.add_task(cleanup_pptx_dir, output_pptx.path)
                     except Exception as e:
                         err_content = f"Lỗi sinh PowerPoint cho chương này:\n{str(e)}"
@@ -1013,13 +1057,12 @@ def export_course_zip(
         return StreamingResponse(
             zip_buffer,
             media_type="application/zip",
-            headers={"Content-Disposition": f"attachment; filename=Course_Package_{course.course_code}.zip"}
+            headers={"Content-Disposition": f"attachment; filename=Course_Package_{course.course_code}.zip"},
         )
 
     except Exception as outer_err:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi đóng gói file ZIP: {str(outer_err)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi đóng gói file ZIP: {str(outer_err)}"
         )
 
 
@@ -1044,33 +1087,34 @@ def export_chapter_docx(
     # 2. Lấy học liệu chương học
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     active_learning_script = material.active_learning_script if material else ""
-    
+
     # 3. Khởi tạo Document
     from docx import Document
+
     doc = Document()
-    
+
     # Thiết lập tiêu đề tài liệu
     title_text = "GIÁO ÁN HOẠT ĐỘNG SƯ PHẠM (LESSON PLAN)"
     h_doc = doc.add_heading(level=0)
     h_doc.add_run(title_text)
-    
+
     # Thêm Metadata bảng
     table = doc.add_table(rows=4, cols=2)
-    table.style = 'Table Grid'
-    
+    table.style = "Table Grid"
+
     metadata = [
         ("Môn học:", chapter.course.course_name),
         ("Chương học:", chapter.title),
         ("Giảng viên:", current_user.full_name or current_user.email or "Giảng viên"),
-        ("Thiết kế Sư phạm:", "Tương tác chủ động (Active Learning)")
+        ("Thiết kế Sư phạm:", "Tương tác chủ động (Active Learning)"),
     ]
     for idx, (label, val) in enumerate(metadata):
         row = table.rows[idx]
         row.cells[0].text = label
         row.cells[1].text = val
-        
-    doc.add_paragraph() # Dòng trống
-    
+
+    doc.add_paragraph()  # Dòng trống
+
     # 4. Phân tích active learning script và thêm vào Word
     if not active_learning_script:
         doc.add_paragraph("Chưa biên soạn kịch bản active learning cho chương này.")
@@ -1083,13 +1127,13 @@ def export_chapter_docx(
             parts = active_learning_script.split(marker, 1)
             main_script = parts[0].strip()
             rationale_text = parts[1].strip()
-            
+
         # Helper chèn đoạn văn bản có chứa inline hoặc block math
         def add_paragraph_with_math(text_line: str, style_name=None):
             p = doc.add_paragraph(style=style_name) if style_name else doc.add_paragraph()
-            
+
             # Check for block equation
-            if text_line.strip().startswith('$$') and text_line.strip().endswith('$$'):
+            if text_line.strip().startswith("$$") and text_line.strip().endswith("$$"):
                 eq_content = text_line.strip()[2:-2].strip()
                 try:
                     omml_xml = latex_to_omml(eq_content, is_block=True)
@@ -1098,13 +1142,13 @@ def export_chapter_docx(
                 except Exception:
                     p.add_run(text_line)
                 return p
-                
+
             # Parse inline equation
-            parts = re.split(r'(\$[^\$]+\$)', text_line)
+            parts = re.split(r"(\$[^\$]+\$)", text_line)
             for idx, part in enumerate(parts):
                 if not part:
                     continue
-                if part.startswith('$') and part.endswith('$'):
+                if part.startswith("$") and part.endswith("$"):
                     eq_content = part[1:-1].strip()
                     try:
                         omml_xml = latex_to_omml(eq_content, is_block=False)
@@ -1115,49 +1159,49 @@ def export_chapter_docx(
                 else:
                     # Clean markdown bold markers
                     # Simple bold parsing **text**
-                    sub_parts = re.split(r'(\*\*[^\*]+\*\*)', part)
+                    sub_parts = re.split(r"(\*\*[^\*]+\*\*)", part)
                     for sp in sub_parts:
-                        if sp.startswith('**') and sp.endswith('**'):
+                        if sp.startswith("**") and sp.endswith("**"):
                             p.add_run(sp[2:-2]).bold = True
                         else:
                             p.add_run(sp)
             return p
 
         # Duyệt qua các dòng
-        for line in main_script.split('\n'):
+        for line in main_script.split("\n"):
             line_strip = line.strip()
             if not line_strip:
                 continue
-            
+
             # Tiêu đề
-            if line_strip.startswith('# '):
+            if line_strip.startswith("# "):
                 doc.add_heading(line_strip[2:], level=1)
-            elif line_strip.startswith('## '):
+            elif line_strip.startswith("## "):
                 doc.add_heading(line_strip[3:], level=2)
-            elif line_strip.startswith('### '):
+            elif line_strip.startswith("### "):
                 doc.add_heading(line_strip[4:], level=3)
             # List
-            elif line_strip.startswith('- ') or line_strip.startswith('* '):
-                add_paragraph_with_math(line_strip[2:], style_name='List Bullet')
-            elif re.match(r'^\d+\.\s', line_strip):
-                match = re.match(r'^\d+\.\s(.*)$', line_strip)
-                add_paragraph_with_math(match.group(1), style_name='List Number')
+            elif line_strip.startswith("- ") or line_strip.startswith("* "):
+                add_paragraph_with_math(line_strip[2:], style_name="List Bullet")
+            elif re.match(r"^\d+\.\s", line_strip):
+                match = re.match(r"^\d+\.\s(.*)$", line_strip)
+                add_paragraph_with_math(match.group(1), style_name="List Number")
             # Paragraph
             else:
                 add_paragraph_with_math(line)
-                
+
         # Rationale
         if rationale_text:
             h_rat = doc.add_heading(level=2)
             h_rat.add_run("💡 GIẢI TRÌNH SƯ PHẠM (PEDAGOGICAL RATIONALE)")
-            
+
             # Render rationale
-            for line in rationale_text.split('\n'):
+            for line in rationale_text.split("\n"):
                 line_strip = line.strip()
                 if not line_strip:
                     continue
-                if line_strip.startswith('- ') or line_strip.startswith('* '):
-                    add_paragraph_with_math(line_strip[2:], style_name='List Bullet')
+                if line_strip.startswith("- ") or line_strip.startswith("* "):
+                    add_paragraph_with_math(line_strip[2:], style_name="List Bullet")
                 else:
                     add_paragraph_with_math(line)
 
@@ -1165,15 +1209,8 @@ def export_chapter_docx(
     doc_io = BytesIO()
     doc.save(doc_io)
     doc_io.seek(0)
-    
-    headers = {
-        "Content-Disposition": f"attachment; filename=Giao_an_Chuong_{chapter_id}.docx"
-    }
+
+    headers = {"Content-Disposition": f"attachment; filename=Giao_an_Chuong_{chapter_id}.docx"}
     return StreamingResponse(
-        doc_io,
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers=headers
+        doc_io, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document", headers=headers
     )
-
-
-

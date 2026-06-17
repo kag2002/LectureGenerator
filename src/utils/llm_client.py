@@ -426,6 +426,7 @@ def call_llm_json(
     cache_key = None
     if cache_enabled:
         from .llm_cache import get_cache_key, get_cached_json
+
         cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain")
         cached_res = get_cached_json(cache_key)
         if cached_res is not None:
@@ -450,6 +451,7 @@ def call_llm_json(
 
     if os.environ.get("LLM_MOCK_MODE") == "true":
         from .llm_mock import get_mock_json_response
+
         print("[INFO] LLM Mock Mode is ENABLED. Returning mock JSON response.")
         start_time = datetime.datetime.now(datetime.UTC)
         mock_res = get_mock_json_response(prompt, system_instruction)
@@ -471,6 +473,7 @@ def call_llm_json(
         )
         if cache_enabled and cache_key:
             from .llm_cache import save_cached_json
+
             save_cached_json(cache_key, mock_res)
         return mock_res
 
@@ -480,6 +483,7 @@ def call_llm_json(
 
     if cache_enabled and cache_key:
         from .llm_cache import save_cached_json
+
         save_cached_json(cache_key, res)
 
     return res
@@ -571,8 +575,10 @@ def call_llm_stream(
     cache_key = None
     if cache_enabled:
         from .llm_cache import get_cache_key, get_cached_stream
+
         cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain-stream")
         from pathlib import Path
+
         cache_dir = Path(os.environ.get("LLM_CACHE_DIR", ".llm_cache"))
         if (cache_dir / f"{cache_key}.stream.jsonl").exists():
             print(f"--- [Cache Hit] Returning cached stream for: {cache_key} ---")
@@ -600,6 +606,7 @@ def call_llm_stream(
 
     if os.environ.get("LLM_MOCK_MODE") == "true":
         from .llm_mock import get_mock_stream_content, stream_mock_chunks
+
         print("[INFO] LLM Mock Mode is ENABLED. Returning mock stream.")
         start_time = datetime.datetime.now(datetime.UTC)
         combined_mock = get_mock_stream_content()
@@ -624,6 +631,7 @@ def call_llm_stream(
         )
         if cache_enabled and cache_key and chunks:
             from .llm_cache import save_cached_stream
+
             save_cached_stream(cache_key, chunks)
         return
 
@@ -636,6 +644,7 @@ def call_llm_stream(
 
     if cache_enabled and cache_key and chunks:
         from .llm_cache import save_cached_stream
+
         save_cached_stream(cache_key, chunks)
 
 
@@ -703,6 +712,7 @@ async def async_call_llm_json(
     cache_key = None
     if cache_enabled:
         from .llm_cache import get_cache_key, get_cached_json
+
         cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain-async")
         cached_res = get_cached_json(cache_key)
         if cached_res is not None:
@@ -727,6 +737,7 @@ async def async_call_llm_json(
 
     if os.environ.get("LLM_MOCK_MODE") == "true":
         from .llm_mock import get_mock_json_response
+
         print("[INFO] LLM Mock Mode is ENABLED. Returning mock JSON.")
         start_time = datetime.datetime.now(datetime.UTC)
         mock_res = get_mock_json_response(prompt, system_instruction)
@@ -748,6 +759,7 @@ async def async_call_llm_json(
         )
         if cache_enabled and cache_key:
             from .llm_cache import save_cached_json
+
             save_cached_json(cache_key, mock_res)
         return mock_res
 
@@ -757,6 +769,7 @@ async def async_call_llm_json(
 
     if cache_enabled and cache_key:
         from .llm_cache import save_cached_json
+
         save_cached_json(cache_key, res)
 
     return res
@@ -836,9 +849,11 @@ async def async_call_llm_stream(
     cache_enabled = os.environ.get("LLM_CACHE_ENABLED", "true") == "true"
     cache_key = None
     if cache_enabled:
-        from .llm_cache import get_cache_key, async_get_cached_stream
+        from .llm_cache import async_get_cached_stream, get_cache_key
+
         cache_key = get_cache_key(prompt, system_instruction, temperature, "fallback-chain-async-stream")
         from pathlib import Path
+
         cache_dir = Path(os.environ.get("LLM_CACHE_DIR", ".llm_cache"))
         if (cache_dir / f"{cache_key}.stream.jsonl").exists():
             print(f"--- [Cache Hit] Returning cached async stream for: {cache_key} ---")
@@ -866,6 +881,7 @@ async def async_call_llm_stream(
 
     if os.environ.get("LLM_MOCK_MODE") == "true":
         from .llm_mock import get_mock_stream_content, stream_mock_chunks
+
         print("[INFO] LLM Mock Mode is ENABLED. Returning async mock stream.")
         start_time = datetime.datetime.now(datetime.UTC)
         combined_mock = get_mock_stream_content()
@@ -890,6 +906,7 @@ async def async_call_llm_stream(
         )
         if cache_enabled and cache_key and chunks:
             from .llm_cache import save_cached_stream
+
             save_cached_stream(cache_key, chunks)
         return
 
@@ -902,5 +919,5 @@ async def async_call_llm_stream(
 
     if cache_enabled and cache_key and chunks:
         from .llm_cache import save_cached_stream
-        save_cached_stream(cache_key, chunks)
 
+        save_cached_stream(cache_key, chunks)

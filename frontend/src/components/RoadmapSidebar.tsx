@@ -142,7 +142,18 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
                 {/* 1. CLOs & Syllabus Preview */}
                 {(node.id === 'clos' || node.id === 'syllabus') && (
                   clos.length === 0 ? (
-                    <div className="roadmap-sidebar-empty-text">Chưa có chuẩn đầu ra CLO nào được nạp.</div>
+                    <div className="roadmap-sidebar-empty-text">
+                      Chưa có chuẩn đầu ra CLO nào được nạp.
+                      <div className="empty-suggestions-box">
+                        <div className="empty-suggestions-title">
+                          <span>💡 Gợi ý thực hiện:</span>
+                        </div>
+                        <ul className="empty-suggestions-list">
+                          <li className="empty-suggestions-item">Vào trang chi tiết hoặc Mở rộng Bảng thao tác.</li>
+                          <li className="empty-suggestions-item">Tải lên đề cương Syllabus để AI tự động trích xuất chuẩn đầu ra.</li>
+                        </ul>
+                      </div>
+                    </div>
                   ) : (
                     <div className="roadmap-sidebar-list-scroll">
                       {clos.map((c, idx) => (
@@ -165,7 +176,18 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
                 {/* 2. MCQ Questions Preview */}
                 {node.id.startsWith('questions_') && (
                   chQuestions.length === 0 ? (
-                    <div className="roadmap-sidebar-empty-text">Chưa thiết kế câu hỏi nào cho chương này.</div>
+                    <div className="roadmap-sidebar-empty-text">
+                      Chưa thiết kế câu hỏi nào cho chương này.
+                      <div className="empty-suggestions-box">
+                        <div className="empty-suggestions-title">
+                          <span>💡 Gợi ý thực hiện:</span>
+                        </div>
+                        <ul className="empty-suggestions-list">
+                          <li className="empty-suggestions-item">Mở rộng Bảng thao tác để sử dụng tính năng **AI tự sinh câu hỏi**.</li>
+                          <li className="empty-suggestions-item">Hoặc chọn "Vào trang chi tiết" để chuyển đến Ngân hàng đề thi biên soạn thủ công.</li>
+                        </ul>
+                      </div>
+                    </div>
                   ) : (
                     <div className="roadmap-sidebar-list-scroll-large">
                       {chQuestions.map((q, idx) => {
@@ -203,7 +225,18 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
                 {/* 3. Document Library Preview */}
                 {node.id === 'knowledge_base' && (
                   ragDocs.length === 0 ? (
-                    <div className="roadmap-sidebar-empty-text">Thư viện RAG trống. Hãy nạp tài liệu vào hệ thống.</div>
+                    <div className="roadmap-sidebar-empty-text">
+                      Thư viện RAG trống. Hãy nạp tài liệu vào hệ thống.
+                      <div className="empty-suggestions-box">
+                        <div className="empty-suggestions-title">
+                          <span>💡 Gợi ý thực hiện:</span>
+                        </div>
+                        <ul className="empty-suggestions-list">
+                          <li className="empty-suggestions-item">Mở rộng Bảng thao tác hoặc Vào trang chi tiết RAG.</li>
+                          <li className="empty-suggestions-item">Kéo thả hoặc upload các file tài liệu học liệu (PDF, DOCX, TXT) để làm giàu thư viện RAG.</li>
+                        </ul>
+                      </div>
+                    </div>
                   ) : (
                     <div className="roadmap-sidebar-list-scroll">
                       {ragDocs.map((doc, idx) => (
@@ -219,7 +252,18 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
                 {/* 4. Slide & Active Learning Preview */}
                 {(node.id.startsWith('materials_') || node.id.startsWith('chapter_')) && (
                   (!materialData || (!materialData.slide_content && !materialData.active_learning_script)) ? (
-                    <div className="roadmap-sidebar-empty-text">Chương này chưa có nội dung slide hay kịch bản hoạt động.</div>
+                    <div className="roadmap-sidebar-empty-text">
+                      Chương này chưa có nội dung slide hay kịch bản hoạt động.
+                      <div className="empty-suggestions-box">
+                        <div className="empty-suggestions-title">
+                          <span>💡 Gợi ý thực hiện:</span>
+                        </div>
+                        <ul className="empty-suggestions-list">
+                          <li className="empty-suggestions-item">Mở rộng Bảng thao tác và dùng chức năng **AI gợi ý bài giảng (RAG)**.</li>
+                          <li className="empty-suggestions-item">Hoặc chọn "Vào trang chi tiết" để tự do biên soạn slide/giáo án học phần.</li>
+                        </ul>
+                      </div>
+                    </div>
                   ) : (
                     <div className="roadmap-sidebar-list-scroll-large">
                       <div className="roadmap-sidebar-tabs-row">
@@ -253,7 +297,18 @@ export default function RoadmapSidebar({ node, onClose, onNavigate, clos, questi
                 {/* 5. Matrix Coverage Preview */}
                 {node.id === 'matrix' && (
                   questions.length === 0 ? (
-                    <div className="roadmap-sidebar-empty-text">Chưa thiết kế câu hỏi để thống kê ma trận.</div>
+                    <div className="roadmap-sidebar-empty-text">
+                      Chưa thiết kế câu hỏi để thống kê ma trận.
+                      <div className="empty-suggestions-box">
+                        <div className="empty-suggestions-title">
+                          <span>💡 Gợi ý thực hiện:</span>
+                        </div>
+                        <ul className="empty-suggestions-list">
+                          <li className="empty-suggestions-item">Click vào trang chi tiết để đi đến **Ngân hàng đề thi**.</li>
+                          <li className="empty-suggestions-item">Sinh câu hỏi theo chuẩn đầu ra CLO để hệ thống cập nhật ma trận Bloom x CLO.</li>
+                        </ul>
+                      </div>
+                    </div>
                   ) : (
                     <div className="roadmap-sidebar-list-scroll-align-left">
                       <div className="roadmap-sidebar-matrix-title">

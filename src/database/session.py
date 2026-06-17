@@ -2,6 +2,7 @@ import os
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+
 from ..config import get_settings
 
 settings = get_settings()
@@ -15,11 +16,10 @@ is_sqlite = DATABASE_URL.startswith("sqlite")
 
 if is_sqlite:
     from sqlalchemy.pool import NullPool
+
     db_timeout = getattr(settings, "database_timeout", 15.0)
     engine = create_engine(
-        DATABASE_URL,
-        connect_args={"check_same_thread": False, "timeout": db_timeout},
-        poolclass=NullPool
+        DATABASE_URL, connect_args={"check_same_thread": False, "timeout": db_timeout}, poolclass=NullPool
     )
 
     # Kích hoạt chế độ WAL (Write-Ahead Logging) cho SQLite để tránh Write-Locks khi chạy đa luồng

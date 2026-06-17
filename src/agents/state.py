@@ -30,6 +30,3 @@ class AgentState(TypedDict, total=False):
     latency_ms: float
     summary_history: str
     task_steps: list[str]
-
-
-

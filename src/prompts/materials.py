@@ -236,12 +236,23 @@ Chú ý: Trả về JSON hợp lệ. Không viết thêm văn bản giải thíc
 
 
 def build_storyboard_architect_system_prompt(
-    *, clos_context: str, chapter_title: str, chapter_description: str, rag_context: str = "", session_duration: int = 90, pedagogical_style: str = "interactive", selected_clos: list[str] = None
+    *,
+    clos_context: str,
+    chapter_title: str,
+    chapter_description: str,
+    rag_context: str = "",
+    session_duration: int = 90,
+    pedagogical_style: str = "interactive",
+    selected_clos: list[str] = None,
 ) -> str:
     recommended_slides = max(5, min(30, int(session_duration / 3)))
     rag_section = f"\nTài liệu tham khảo (RAG Context) để lập storyboard:\n{rag_context}\n" if rag_context else ""
 
-    selected_clos_str = f"Hãy tập trung thiết kế các slide bao phủ các chuẩn đầu ra được lựa chọn: {', '.join(selected_clos)}. " if selected_clos else ""
+    selected_clos_str = (
+        f"Hãy tập trung thiết kế các slide bao phủ các chuẩn đầu ra được lựa chọn: {', '.join(selected_clos)}. "
+        if selected_clos
+        else ""
+    )
 
     style_guidelines = ""
     if pedagogical_style == "interactive":
@@ -341,7 +352,11 @@ def build_slide_writer_system_prompt(
     slide_rag_context: str = "",
     learner_level: str = "intermediate",
 ) -> str:
-    previous_section = f"\nCác slide đã được viết trước đó (Bộ nhớ chia sẻ):\n{previous_slides_markdown}\n" if previous_slides_markdown else ""
+    previous_section = (
+        f"\nCác slide đã được viết trước đó (Bộ nhớ chia sẻ):\n{previous_slides_markdown}\n"
+        if previous_slides_markdown
+        else ""
+    )
     rag_context_section = f"\n{slide_rag_context}\n" if slide_rag_context else ""
 
     level_guidelines = ""
@@ -661,5 +676,3 @@ QUY TẮC ĐỒNG BỘ:
   "changes_summary": "Tóm tắt ngắn gọn các hoạt động tương tác đã được cập nhật hoặc chỉnh sửa (tiếng Việt)"
 }}
 Chú ý: Bạn PHẢI trả về JSON hợp lệ. Không viết thêm văn bản giải thích ngoài JSON."""
-
-

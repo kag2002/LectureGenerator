@@ -1,11 +1,11 @@
 import os
 import shutil
 import time
-from pathlib import Path
+
 import pytest
 
-from src.utils.llm_client import call_llm_json, call_llm_stream, async_call_llm_json, async_call_llm_stream
 from src.utils.llm_cache import CACHE_DIR
+from src.utils.llm_client import async_call_llm_json, call_llm_json, call_llm_stream
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +41,7 @@ def test_llm_mock_mode_stream():
     start_time = time.time()
     generator = call_llm_stream("Create outline", system_instruction="test stream")
     chunks = list(generator)
-    duration = time.time() - start_time
+    time.time() - start_time
 
     assert len(chunks) > 0
     assert any("Chương" in chunk or "Chapter" in chunk or "#" in chunk for chunk in chunks)
@@ -57,7 +57,7 @@ def test_llm_caching_json():
 
     # First call: Caches mock fallback output
     res1 = call_llm_json(prompt, system_instruction=sys_inst)
-    
+
     # Check if cache file was created
     assert CACHE_DIR.exists()
     cache_files = list(CACHE_DIR.glob("*.json"))
@@ -66,7 +66,7 @@ def test_llm_caching_json():
     # Disable mock mode so that if it makes a real call it would fail (we have no valid API keys set in test env)
     # But since cache is enabled, it should hit cache instantly and return res1
     os.environ["LLM_MOCK_MODE"] = "false"
-    
+
     start_time = time.time()
     res2 = call_llm_json(prompt, system_instruction=sys_inst)
     duration = time.time() - start_time

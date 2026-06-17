@@ -10,7 +10,7 @@ import tempfile
 # Ensure project root is on path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.utils.parser import extract_text_from_docx, extract_text_from_pdf, parse_document
+from src.utils.parser import parse_document
 
 SAMPLE_TEXT_VI = (
     "CLO1: Giải thích được các khái niệm cơ bản về trí tuệ nhân tạo.\n"
@@ -69,11 +69,7 @@ def _make_pdf(path: str, text: str) -> None:
     )
     stream = f"BT /F1 12 Tf 50 750 Td ({content}) Tj ET"
     stream_bytes = stream.encode("latin-1", errors="replace")
-    pdf_bytes += (
-        f"4 0 obj<</Length {len(stream_bytes)}>>\nstream\n".encode()
-        + stream_bytes
-        + b"\nendstream\nendobj\n"
-    )
+    pdf_bytes += f"4 0 obj<</Length {len(stream_bytes)}>>\nstream\n".encode() + stream_bytes + b"\nendstream\nendobj\n"
     xref_offset = len(pdf_bytes)
     pdf_bytes += (
         b"xref\n0 6\n"
@@ -84,9 +80,7 @@ def _make_pdf(path: str, text: str) -> None:
         b"0000000306 00000 n \n"
         b"0000000250 00000 n \n"
         b"trailer<</Size 6/Root 1 0 R>>\n"
-        b"startxref\n"
-        + str(xref_offset).encode()
-        + b"\n%%EOF"
+        b"startxref\n" + str(xref_offset).encode() + b"\n%%EOF"
     )
     with open(path, "wb") as f:
         f.write(pdf_bytes)
@@ -139,6 +133,7 @@ def _make_unsupported(path: str) -> None:
 # Test functions
 # ──────────────────────────────────────────────────────────────
 
+
 def test_pdf_parsing():
     """Test 1: PDF text-based → phải trích xuất được text."""
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -146,9 +141,9 @@ def test_pdf_parsing():
     try:
         _make_pdf(path, SAMPLE_TEXT_VI)
         result = parse_document(path)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST 1: PDF (.pdf)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  File size : {os.path.getsize(path)} bytes")
         print(f"  Extracted : {len(result)} chars")
         print(f"  Preview   : {result[:120]}...")
@@ -168,9 +163,9 @@ def test_docx_parsing():
     try:
         _make_docx(path, SAMPLE_TEXT_VI)
         result = parse_document(path)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST 2: DOCX (.docx)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  File size : {os.path.getsize(path)} bytes")
         print(f"  Extracted : {len(result)} chars")
         print(f"  Preview   : {result[:120]}...")
@@ -196,9 +191,9 @@ def test_txt_utf8_parsing():
     try:
         _make_txt(path, SAMPLE_TEXT_VI)
         result = parse_document(path)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST 3: TXT UTF-8 (.txt)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  File size : {os.path.getsize(path)} bytes")
         print(f"  Extracted : {len(result)} chars")
         print(f"  Preview   : {result[:120]}...")
@@ -218,9 +213,9 @@ def test_txt_latin1_parsing():
     try:
         _make_txt_latin1(path)
         result = parse_document(path)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST 4: TXT Latin-1 Fallback (.txt)")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  File size : {os.path.getsize(path)} bytes")
         print(f"  Extracted : {len(result)} chars")
         print(f"  Preview   : {result[:120]}...")
@@ -240,9 +235,9 @@ def test_doc_old_format():
     try:
         _make_fake_doc(path, SAMPLE_TEXT_VI)
         result = parse_document(path)
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("TEST 5: DOC cũ (.doc) — Expected: FAIL")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  File size : {os.path.getsize(path)} bytes")
         print(f"  Extracted : {len(result)} chars")
         if result.strip():
@@ -270,9 +265,9 @@ def test_unsupported_extension():
         finally:
             os.unlink(path)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TEST 6: Unsupported Extensions")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     all_rejected = True
     for ext, parsed in results.items():
         status = "❌ PARSED (should reject)" if parsed else "✅ Rejected"
@@ -303,9 +298,9 @@ def test_empty_file():
         finally:
             os.unlink(path)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TEST 7: Empty / Invalid Files")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for ext, result in results.items():
         chars = len(result) if result else 0
         status = "✅ Empty result" if chars == 0 else f"⚠️ Got {chars} chars"
@@ -315,9 +310,9 @@ def test_empty_file():
 def test_nonexistent_file():
     """Test 8: File không tồn tại → phải trả về empty string."""
     result = parse_document("/nonexistent/path/fake_syllabus.pdf")
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TEST 8: Non-existent File")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     if not result:
         print("  ✅ PASS — Trả về empty string cho file không tồn tại")
     else:
@@ -332,8 +327,8 @@ def test_nonexistent_file():
 if __name__ == "__main__":
     print("🧪 PARSER FORMAT TEST SUITE")
     print("=" * 60)
-    print(f"Testing parse_document() from src.utils.parser")
-    print(f"Supported formats theo code: .pdf, .docx, .doc, .txt")
+    print("Testing parse_document() from src.utils.parser")
+    print("Supported formats theo code: .pdf, .docx, .doc, .txt")
     print()
 
     results = {
@@ -347,9 +342,9 @@ if __name__ == "__main__":
     test_empty_file()
     results["Non-existent file"] = test_nonexistent_file()
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("📊 TỔNG KẾT")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     for name, passed in results.items():
         icon = "✅" if passed else "❌"
         print(f"  {icon} {name}")

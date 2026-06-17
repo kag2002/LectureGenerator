@@ -13,6 +13,7 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
     Generator function that runs the syllabus parsing pipeline, saves
     extracted CLOs to the database, and yields SSE event strings.
     """
+
     def send(event: str, data: dict) -> str:
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -23,7 +24,12 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
 
         text_content = parse_document(temp_file_path)
         if not text_content or not text_content.strip():
-            yield send("error", {"message": "Không thể đọc nội dung văn bản từ tài liệu tải lên. Tài liệu có thể là ảnh quét (scanned PDF), tài liệu rỗng, hoặc không có văn bản chọn được. Vui lòng chuyển đổi OCR hoặc sử dụng tệp đề cương định dạng văn bản (text-based) trước khi tải lên."})
+            yield send(
+                "error",
+                {
+                    "message": "Không thể đọc nội dung văn bản từ tài liệu tải lên. Tài liệu có thể là ảnh quét (scanned PDF), tài liệu rỗng, hoặc không có văn bản chọn được. Vui lòng chuyển đổi OCR hoặc sử dụng tệp đề cương định dạng văn bản (text-based) trước khi tải lên."
+                },
+            )
             return
 
         # Stage 2: AI phân tích
@@ -57,7 +63,12 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
 
         raw_clos = analysis_result.get("clos", [])
         if not raw_clos:
-            yield send("error", {"message": "Không tìm thấy chuẩn đầu ra (CLO) nào trong tài liệu. Vui lòng kiểm tra lại file tải lên có đúng là đề cương môn học (Syllabus) chứa các mục CLO1, CLO2... không."})
+            yield send(
+                "error",
+                {
+                    "message": "Không tìm thấy chuẩn đầu ra (CLO) nào trong tài liệu. Vui lòng kiểm tra lại file tải lên có đúng là đề cương môn học (Syllabus) chứa các mục CLO1, CLO2... không."
+                },
+            )
             return
 
         created_clos = []

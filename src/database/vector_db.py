@@ -7,6 +7,9 @@ import re
 
 import chromadb
 from chromadb.utils import embedding_functions
+from sqlalchemy import text
+
+from src.database.session import engine, is_sqlite
 
 # Khởi tạo ChromaDB persistent storage trong thư mục backend/data/chroma_db
 DB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/chroma_db"))
@@ -127,20 +130,16 @@ class LazySentenceTransformerEmbeddingFunction(chromadb.EmbeddingFunction):
 embedding_func = LazySentenceTransformerEmbeddingFunction()
 
 collection = chroma_client.get_or_create_collection(
-    name="lecture_materials",
-    embedding_function=embedding_func,
-    metadata={"hnsw:space": "cosine"}
+    name="lecture_materials", embedding_function=embedding_func, metadata={"hnsw:space": "cosine"}
 )
 
-
-from src.database.session import engine, is_sqlite
-from sqlalchemy import text
 
 # Khởi tạo bảng ảo FTS5 trong SQLite nếu đang dùng SQLite làm cơ sở dữ liệu
 if is_sqlite:
     try:
         with engine.begin() as conn:
-            conn.execute(text("""
+            conn.execute(
+                text("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS fts_document_chunks USING fts5(
                     id,
                     user_id,
@@ -150,7 +149,8 @@ if is_sqlite:
                     page_number,
                     text
                 )
-            """))
+            """)
+            )
             print("[SUCCESS] Da khoi tao virtual table FTS5 cho tai lieu trong SQLite.")
     except Exception as e:
         print(f"[WARNING] Khong the khoi tao virtual table FTS5: {e}")
@@ -162,25 +162,31 @@ def index_fts_chunks(user_id: int, course_id: int, file_name: str, chunks: list[
     try:
         with engine.begin() as conn:
             # Delete old chunks for this file
-            conn.execute(text("""
-                DELETE FROM fts_document_chunks 
+            conn.execute(
+                text("""
+                DELETE FROM fts_document_chunks
                 WHERE user_id = :user_id AND course_id = :course_id AND file_name = :file_name
-            """), {"user_id": user_id, "course_id": course_id, "file_name": file_name})
-            
+            """),
+                {"user_id": user_id, "course_id": course_id, "file_name": file_name},
+            )
+
             # Insert new chunks
             for idx, c in enumerate(chunks):
-                conn.execute(text("""
+                conn.execute(
+                    text("""
                     INSERT INTO fts_document_chunks (id, user_id, course_id, chapter_id, file_name, page_number, text)
                     VALUES (:id, :user_id, :course_id, :chapter_id, :file_name, :page_number, :text)
-                """), {
-                    "id": ids[idx],
-                    "user_id": user_id,
-                    "course_id": course_id,
-                    "chapter_id": c.get("chapter_id", 0) or 0,
-                    "file_name": file_name,
-                    "page_number": c["page_number"],
-                    "text": c["text"]
-                })
+                """),
+                    {
+                        "id": ids[idx],
+                        "user_id": user_id,
+                        "course_id": course_id,
+                        "chapter_id": c.get("chapter_id", 0) or 0,
+                        "file_name": file_name,
+                        "page_number": c["page_number"],
+                        "text": c["text"],
+                    },
+                )
     except Exception as e:
         print(f"[WARNING] Loi khi dong bo SQLite FTS5: {e}")
 
@@ -191,30 +197,38 @@ def delete_fts_chunks(user_id: int, course_id: int, file_name: str = None):
     try:
         with engine.begin() as conn:
             if file_name:
-                conn.execute(text("""
-                    DELETE FROM fts_document_chunks 
+                conn.execute(
+                    text("""
+                    DELETE FROM fts_document_chunks
                     WHERE user_id = :user_id AND course_id = :course_id AND file_name = :file_name
-                """), {"user_id": user_id, "course_id": course_id, "file_name": file_name})
+                """),
+                    {"user_id": user_id, "course_id": course_id, "file_name": file_name},
+                )
             else:
-                conn.execute(text("""
-                    DELETE FROM fts_document_chunks 
+                conn.execute(
+                    text("""
+                    DELETE FROM fts_document_chunks
                     WHERE user_id = :user_id AND course_id = :course_id
-                """), {"user_id": user_id, "course_id": course_id})
+                """),
+                    {"user_id": user_id, "course_id": course_id},
+                )
     except Exception as e:
         print(f"[WARNING] Loi khi xoa SQLite FTS5: {e}")
 
 
-def search_fts_chunks(query: str, user_id: int, course_id: int, top_k: int = 5, chapter_id: int | None = None) -> list[dict]:
+def search_fts_chunks(
+    query: str, user_id: int, course_id: int, top_k: int = 5, chapter_id: int | None = None
+) -> list[dict]:
     if not is_sqlite:
         return []
     try:
-        cleaned_q = re.sub(r'[^\w\s]', ' ', query)
+        cleaned_q = re.sub(r"[^\w\s]", " ", query)
         words = [w.strip() for w in cleaned_q.split() if w.strip()]
         if not words:
             return []
-        
+
         fts_query = " OR ".join(words)
-        
+
         sql_str = """
             SELECT id, text, file_name, page_number, chapter_id
             FROM fts_document_chunks
@@ -222,30 +236,28 @@ def search_fts_chunks(query: str, user_id: int, course_id: int, top_k: int = 5, 
               AND user_id = :user_id
               AND course_id = :course_id
         """
-        params = {
-            "match_q": f"text : ({fts_query})",
-            "user_id": user_id,
-            "course_id": course_id
-        }
-        
+        params = {"match_q": f"text : ({fts_query})", "user_id": user_id, "course_id": course_id}
+
         if chapter_id is not None:
             sql_str += " AND chapter_id IN (0, :chapter_id)"
             params["chapter_id"] = int(chapter_id)
-            
+
         sql_str += " LIMIT 20"
-        
+
         results = []
         with engine.connect() as conn:
             res = conn.execute(text(sql_str), params)
             for row in res:
-                results.append({
-                    "id": row[0],
-                    "text": row[1],
-                    "file_name": row[2],
-                    "page_number": row[3],
-                    "chapter_id": row[4],
-                    "score": 0.0
-                })
+                results.append(
+                    {
+                        "id": row[0],
+                        "text": row[1],
+                        "file_name": row[2],
+                        "page_number": row[3],
+                        "chapter_id": row[4],
+                        "score": 0.0,
+                    }
+                )
         return results
     except Exception as e:
         print(f"[WARNING] Loi khi search SQLite FTS5: {e}")
@@ -255,7 +267,7 @@ def search_fts_chunks(query: str, user_id: int, course_id: int, top_k: int = 5, 
 def reciprocal_rank_fusion(dense_results: list[dict], sparse_results: list[dict], top_k: int = 4) -> list[dict]:
     rrf_scores = {}
     constant = 60
-    
+
     def get_key(hit):
         return f"{hit['file_name']}_p{hit['page_number']}_{hash(hit['text'][:100])}"
 
@@ -276,10 +288,9 @@ def reciprocal_rank_fusion(dense_results: list[dict], sparse_results: list[dict]
         hit = data["hit"]
         hit["score"] = round(data["score"], 4)
         merged_results.append(hit)
-        
+
     merged_results.sort(key=lambda x: x["score"], reverse=True)
     return merged_results[:top_k]
-
 
 
 def chunk_text_by_page(text: str, page_number: int, chunk_size: int = 800, overlap: int = 150) -> list[dict]:
@@ -360,12 +371,12 @@ def clean_and_truncate_references(text_by_pages: list[str]) -> list[str]:
 
     # Define bibliography patterns
     ref_patterns = [
-        r'^\s*#*\s*References\s*$',
-        r'^\s*#*\s*REFERENCES\s*$',
-        r'^\s*#*\s*Bibliography\s*$',
-        r'^\s*#*\s*BIBLIOGRAPHY\s*$',
-        r'^\s*#*\s*Tài liệu tham khảo\s*$',
-        r'^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$'
+        r"^\s*#*\s*References\s*$",
+        r"^\s*#*\s*REFERENCES\s*$",
+        r"^\s*#*\s*Bibliography\s*$",
+        r"^\s*#*\s*BIBLIOGRAPHY\s*$",
+        r"^\s*#*\s*Tài liệu tham khảo\s*$",
+        r"^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$",
     ]
 
     # We only look for references in the last 20% of pages or at least the last 5 pages
@@ -378,7 +389,7 @@ def clean_and_truncate_references(text_by_pages: list[str]) -> list[str]:
 
     for page_idx in range(total_pages - 1, min_page_to_check - 1, -1):
         page_text = text_by_pages[page_idx]
-        lines = page_text.split('\n')
+        lines = page_text.split("\n")
         for line_idx, line in enumerate(lines):
             for pattern in ref_patterns:
                 if re.match(pattern, line.strip(), re.IGNORECASE):
@@ -392,9 +403,9 @@ def clean_and_truncate_references(text_by_pages: list[str]) -> list[str]:
 
     if found_ref_page_idx != -1:
         print(f"[INFO] Phat hien References o trang {found_ref_page_idx + 1}. Dang tien hanh cat bo.")
-        ref_page_lines = text_by_pages[found_ref_page_idx].split('\n')
-        text_by_pages[found_ref_page_idx] = '\n'.join(ref_page_lines[:found_line_idx])
-        return text_by_pages[:found_ref_page_idx + 1]
+        ref_page_lines = text_by_pages[found_ref_page_idx].split("\n")
+        text_by_pages[found_ref_page_idx] = "\n".join(ref_page_lines[:found_line_idx])
+        return text_by_pages[: found_ref_page_idx + 1]
 
     return text_by_pages
 
@@ -407,17 +418,17 @@ def clean_single_text_references(text: str) -> str:
         return text
 
     min_char_idx = int(len(text) * 0.8)
-    lines = text.split('\n')
+    lines = text.split("\n")
     char_count = 0
     ref_line_idx = -1
 
     ref_patterns = [
-        r'^\s*#*\s*References\s*$',
-        r'^\s*#*\s*REFERENCES\s*$',
-        r'^\s*#*\s*Bibliography\s*$',
-        r'^\s*#*\s*BIBLIOGRAPHY\s*$',
-        r'^\s*#*\s*Tài liệu tham khảo\s*$',
-        r'^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$'
+        r"^\s*#*\s*References\s*$",
+        r"^\s*#*\s*REFERENCES\s*$",
+        r"^\s*#*\s*Bibliography\s*$",
+        r"^\s*#*\s*BIBLIOGRAPHY\s*$",
+        r"^\s*#*\s*Tài liệu tham khảo\s*$",
+        r"^\s*#*\s*TÀI LIỆU THAM KHẢO\s*$",
     ]
 
     for idx, line in enumerate(lines):
@@ -432,7 +443,7 @@ def clean_single_text_references(text: str) -> str:
 
     if ref_line_idx != -1:
         print(f"[INFO] Phat hien References o dong {ref_line_idx}. Dang tien hanh cat bo.")
-        return '\n'.join(lines[:ref_line_idx])
+        return "\n".join(lines[:ref_line_idx])
 
     return text
 
@@ -444,23 +455,23 @@ def clean_noise(text: str) -> str:
     if not text:
         return ""
 
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned_lines = []
     for line in lines:
         trimmed = line.strip()
         # Remove lines containing only page numbers
-        if re.match(r'^\d+$', trimmed):
+        if re.match(r"^\d+$", trimmed):
             continue
-        if re.match(r'^(page|trang)\s*\d+$', trimmed, re.IGNORECASE):
+        if re.match(r"^(page|trang)\s*\d+$", trimmed, re.IGNORECASE):
             continue
-        if re.match(r'^(page|trang)\s*\d+\s*(of|trên|/)\s*\d+$', trimmed, re.IGNORECASE):
+        if re.match(r"^(page|trang)\s*\d+\s*(of|trên|/)\s*\d+$", trimmed, re.IGNORECASE):
             continue
         cleaned_lines.append(line)
-    text = '\n'.join(cleaned_lines)
+    text = "\n".join(cleaned_lines)
 
-    text = re.sub(r' {2,}', ' ', text)
-    text = re.sub(r'(\w+)-\s*\n\s*(\w+)', r'\1\2', text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
+    text = re.sub(r" {2,}", " ", text)
+    text = re.sub(r"(\w+)-\s*\n\s*(\w+)", r"\1\2", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
@@ -471,7 +482,7 @@ def add_document_vector(
     course_id: int,
     category: str | None = None,
     tags: str | None = None,
-    chapter_id: int | None = None
+    chapter_id: int | None = None,
 ):
     """
     Nạp toàn bộ tài liệu đã trích xuất theo trang vào ChromaDB.
@@ -508,7 +519,9 @@ def add_document_vector(
         all_chunks.extend(page_chunks)
 
     if not all_chunks or all(not c["text"].strip() for c in all_chunks):
-        raise ValueError("Tài liệu không chứa nội dung văn bản hợp lệ (Có thể là ảnh quét hoặc tài liệu rỗng). Vui lòng chuyển đổi OCR trước.")
+        raise ValueError(
+            "Tài liệu không chứa nội dung văn bản hợp lệ (Có thể là ảnh quét hoặc tài liệu rỗng). Vui lòng chuyển đổi OCR trước."
+        )
 
     # 3. Chuẩn bị dữ liệu nạp và xây dựng Sentence Window Context
     for i, c in enumerate(all_chunks):
@@ -527,7 +540,7 @@ def add_document_vector(
             "course_id": course_id,
             "file_name": file_name,
             "page_number": c["page_number"],
-            "window_text": c["window_text"]
+            "window_text": c["window_text"],
         }
         if category:
             meta["category"] = category
@@ -538,7 +551,9 @@ def add_document_vector(
 
     # 4. Nạp vào ChromaDB
     collection.add(documents=documents, metadatas=metadatas, ids=ids)
-    print(f"[INFO] Da nap thanh cong {len(all_chunks)} vector chunks tu file '{file_name}' (Course: {course_id}) kem metadata category={category}, tags={tags}, chapter_id={chapter_id}.")
+    print(
+        f"[INFO] Da nap thanh cong {len(all_chunks)} vector chunks tu file '{file_name}' (Course: {course_id}) kem metadata category={category}, tags={tags}, chapter_id={chapter_id}."
+    )
 
     # Đồng bộ hóa sang SQLite FTS5
     try:
@@ -572,7 +587,9 @@ def migrate_vector_db_metadata():
         print(f"[WARNING] Loi khi migrate ChromaDB metadata: {e}")
 
 
-def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4, chapter_id: int | None = None) -> list[dict]:
+def search_rag_isolated(
+    query: str, user_id: int, course_id: int, top_k: int = 4, chapter_id: int | None = None
+) -> list[dict]:
     """
     Truy vấn RAG cô lập tuyệt đối dựa trên Metadata filtering.
     Nếu chapter_id được cung cấp, lọc các tài liệu thuộc chương này HOẶC dùng chung (chapter_id = 0).
@@ -580,12 +597,7 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
     Hỗ trợ Sentence Window Retrieval (lấy window_text từ metadata).
     """
     try:
-        where_cond = {
-            "$and": [
-                {"user_id": {"$eq": user_id}},
-                {"course_id": {"$eq": course_id}}
-            ]
-        }
+        where_cond = {"$and": [{"user_id": {"$eq": user_id}}, {"course_id": {"$eq": course_id}}]}
         if chapter_id is not None:
             where_cond["$and"].append({"chapter_id": {"$in": [0, int(chapter_id)]}})
 
@@ -601,7 +613,7 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
         }
         query_lower = query.lower()
         for ac, expansions in acronym_map.items():
-            if re.search(r'\b' + re.escape(ac) + r'\b', query_lower):
+            if re.search(r"\b" + re.escape(ac) + r"\b", query_lower):
                 for exp in expansions:
                     if exp not in queries:
                         queries.append(exp)
@@ -610,19 +622,18 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
         if os.environ.get("TESTING") != "1" and os.environ.get("DISABLE_QUERY_EXPANSION") != "true":
             try:
                 from src.utils.llm_client import call_llm_json
+
                 expansion_prompt = (
                     "Bạn là trợ lý AI chuyên về RAG. Hãy phân tích câu hỏi/truy vấn của người dùng "
                     "và tạo ra đúng 2 biến thể truy vấn tìm kiếm khác bằng tiếng Việt nhằm tối ưu hóa việc tìm kiếm tài liệu học tập. "
                     "Hãy bao gồm từ đồng nghĩa, từ chuyên ngành tiếng Anh tương ứng hoặc làm rõ các từ viết tắt chuyên ngành. "
                     "Định dạng trả về là JSON hợp lệ có dạng:\n"
                     "{\n"
-                    "  \"expanded_queries\": [\"biến thể 1\", \"biến thể 2\"]\n"
+                    '  "expanded_queries": ["biến thể 1", "biến thể 2"]\n'
                     "}"
                 )
                 res = call_llm_json(
-                    prompt=f"Truy vấn gốc: '{query}'",
-                    system_instruction=expansion_prompt,
-                    temperature=0.3
+                    prompt=f"Truy vấn gốc: '{query}'", system_instruction=expansion_prompt, temperature=0.3
                 )
                 if res and "expanded_queries" in res:
                     for eq in res["expanded_queries"]:
@@ -666,11 +677,7 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
                         if semantic_score > unique_chunks[chunk_id]["semantic_score"]:
                             unique_chunks[chunk_id]["semantic_score"] = semantic_score
                     else:
-                        unique_chunks[chunk_id] = {
-                            "text": text,
-                            "meta": meta,
-                            "semantic_score": semantic_score
-                        }
+                        unique_chunks[chunk_id] = {"text": text, "meta": meta, "semantic_score": semantic_score}
 
         # 4. Tính toán điểm Rerank lai dựa trên truy vấn gốc của người dùng
         query_clean = query.lower().strip()
@@ -713,7 +720,7 @@ def search_rag_isolated(query: str, user_id: int, course_id: int, top_k: int = 4
                     "file_name": meta.get("file_name", "N/A"),
                     "page_number": meta.get("page_number", 0),
                     "score": round(final_score, 4),
-                    "semantic_score": round(semantic_score, 4)
+                    "semantic_score": round(semantic_score, 4),
                 }
             )
 

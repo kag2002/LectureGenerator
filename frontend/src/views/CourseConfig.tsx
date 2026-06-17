@@ -492,6 +492,18 @@ export default function CourseConfig({
             <div className="course-config-empty-state">
               <p>Chưa cấu hình Chuẩn đầu ra môn học.</p>
               <p className="course-config-empty-desc">Hãy upload Syllabus ở bên trái để AI tự động trích xuất.</p>
+              
+              <div className="empty-suggestions-box">
+                <div className="empty-suggestions-title">
+                  <span>💡 Hướng dẫn & Gợi ý thực hiện:</span>
+                </div>
+                <ul className="empty-suggestions-list">
+                  <li className="empty-suggestions-item">Tải lên file đề cương môn học (Syllabus) dạng PDF, DOCX, TXT bằng cách kéo thả hoặc click chọn file trong khung <strong>"Nạp Tri Thức Đề Cương"</strong> bên trái.</li>
+                  <li className="empty-suggestions-item">Hoặc chọn tab <strong>"Dán Văn Bản Thô"</strong> để dán trực tiếp nội dung đề cương môn học.</li>
+                  <li className="empty-suggestions-item">Bấm <strong>"Bắt đầu phân tích Syllabus (AI)"</strong> để hệ thống tự động sinh chuẩn đầu ra CLOs & mức Bloom.</li>
+                  <li className="empty-suggestions-item">Bạn cũng có thể tự thêm thủ công bằng cách click nút <strong>"Thêm CLO"</strong> ở phía trên bên phải.</li>
+                </ul>
+              </div>
             </div>
           ) : clos.length === 0 && loading ? (
             <div className="course-config-loading-state">

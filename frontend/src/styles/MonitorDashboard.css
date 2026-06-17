@@ -5,7 +5,7 @@
   background: var(--bg-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   color: var(--text-primary);
-  padding: 40px;
+  padding: clamp(20px, 4vw, 40px);
   line-height: 1.65;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -113,7 +113,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 20px 24px;
+  padding: clamp(12px, 3vh, 20px) clamp(16px, 3vw, 24px);
   display: flex;
   align-items: center;
   gap: 20px;

@@ -1,16 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-import asyncio
 import json
 import re
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, Course, User
 from src.database.session import get_db
 from src.models.schemas import ChapterCreate, ChapterResponse
-from src.utils.llm_client import call_llm_json, langfuse, async_call_llm_stream
+from src.utils.llm_client import async_call_llm_stream, call_llm_json, langfuse
 
 router = APIRouter(prefix="/api/courses", tags=["outline"])
 
@@ -27,10 +27,7 @@ def get_course_chapters(course_id: int, current_user: User = Depends(get_current
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
     chapters = (
-        db.query(Chapter)
-        .filter(Chapter.course_id == course_id, Chapter.is_active)
-        .order_by(Chapter.sort_order)
-        .all()
+        db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).order_by(Chapter.sort_order).all()
     )
     return chapters
 
@@ -246,9 +243,7 @@ Trả về JSON đúng định dạng:
 
 @router.post("/{course_id}/generate-outline-stream")
 async def generate_outline_stream(
-    course_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Sinh cấu trúc chương học bằng AI và stream kết quả từng chương về client qua SSE.
@@ -285,6 +280,7 @@ async def generate_outline_stream(
     async def event_generator():
         # Xóa outline cũ
         from src.database.session import SessionLocal
+
         session = SessionLocal()
         try:
             session.query(Chapter).filter(Chapter.course_id == course_id).delete()
@@ -299,42 +295,39 @@ async def generate_outline_stream(
 
         async for chunk in async_call_llm_stream(prompt, system_instruction=system_prompt, temperature=0.2):
             buffer += chunk
-            
+
             while True:
                 match = re.search(r"<chapter>(.*?)</chapter>", buffer, re.DOTALL | re.IGNORECASE)
                 if not match:
                     break
-                
+
                 chapter_block = match.group(1).strip()
-                buffer = buffer[match.end():]
-                
+                buffer = buffer[match.end() :]
+
                 title_match = re.search(r"<title>(.*?)</title>", chapter_block, re.DOTALL | re.IGNORECASE)
                 desc_match = re.search(r"<description>(.*?)</description>", chapter_block, re.DOTALL | re.IGNORECASE)
-                
+
                 title = title_match.group(1).strip() if title_match else f"Chương {chapter_index}"
                 description = desc_match.group(1).strip() if desc_match else ""
-                
+
                 title = re.sub(r"<.*?>", "", title).strip()
                 description = re.sub(r"<.*?>", "", description).strip()
-                
+
                 # Lưu vào database
                 db_session = SessionLocal()
                 try:
                     new_ch = Chapter(
-                        course_id=course_id,
-                        sort_order=chapter_index,
-                        title=title,
-                        description=description
+                        course_id=course_id, sort_order=chapter_index, title=title, description=description
                     )
                     db_session.add(new_ch)
                     db_session.commit()
                     db_session.refresh(new_ch)
-                    
+
                     payload = {
                         "id": new_ch.id,
                         "sort_order": new_ch.sort_order,
                         "title": new_ch.title,
-                        "description": new_ch.description
+                        "description": new_ch.description,
                     }
                     yield f"event: chapter\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
                     chapter_index += 1
@@ -342,8 +335,8 @@ async def generate_outline_stream(
                     print(f"[ERROR] Error saving chapter: {e}")
                 finally:
                     db_session.close()
-        
-        yield "event: done\ndata: {\"status\": \"complete\"}\n\n"
+
+        yield 'event: done\ndata: {"status": "complete"}\n\n'
 
     return StreamingResponse(
         event_generator(),
@@ -366,7 +359,7 @@ def reorder_chapters(
     course_id: int,
     req: ChapterReorderRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Sắp xếp lại thứ tự hàng loạt cho các chương học.
@@ -376,7 +369,7 @@ def reorder_chapters(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền chỉnh sửa."
         )
-        
+
     for item in req.chapters:
         db.query(Chapter).filter(Chapter.id == item.id, Chapter.course_id == course_id).update(
             {"sort_order": item.sort_order}
@@ -396,7 +389,7 @@ def generate_single_chapter(
     course_id: int,
     req: ChapterInsertRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Chèn một chương mới và nhờ AI tự động sinh mô tả bám sát ngữ cảnh chương trước và chương sau.
@@ -408,22 +401,25 @@ def generate_single_chapter(
         )
 
     # Đẩy sort_order của các chương đứng sau lên để nhường chỗ
-    db.query(Chapter).filter(
-        Chapter.course_id == course_id, 
-        Chapter.sort_order >= req.sort_order
-    ).update({Chapter.sort_order: Chapter.sort_order + 1})
+    db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.sort_order >= req.sort_order).update(
+        {Chapter.sort_order: Chapter.sort_order + 1}
+    )
     db.commit()
 
     # Lấy thông tin chương trước và chương sau làm ngữ cảnh
-    prev_ch = db.query(Chapter).filter(
-        Chapter.course_id == course_id, 
-        Chapter.sort_order < req.sort_order
-    ).order_by(Chapter.sort_order.desc()).first()
-    
-    next_ch = db.query(Chapter).filter(
-        Chapter.course_id == course_id, 
-        Chapter.sort_order > req.sort_order + 1
-    ).order_by(Chapter.sort_order.asc()).first()
+    prev_ch = (
+        db.query(Chapter)
+        .filter(Chapter.course_id == course_id, Chapter.sort_order < req.sort_order)
+        .order_by(Chapter.sort_order.desc())
+        .first()
+    )
+
+    next_ch = (
+        db.query(Chapter)
+        .filter(Chapter.course_id == course_id, Chapter.sort_order > req.sort_order + 1)
+        .order_by(Chapter.sort_order.asc())
+        .first()
+    )
 
     context_prompt = ""
     if prev_ch:
@@ -438,11 +434,11 @@ def generate_single_chapter(
         "Đảm bảo mô tả kết nối mạch kiến thức logic mượt mà giữa chương trước và chương sau.\n"
         "Trả về định dạng JSON duy nhất:\n"
         "{\n"
-        "  \"description\": \"Nội dung mô tả chương học ở đây...\"\n"
+        '  "description": "Nội dung mô tả chương học ở đây..."\n'
         "}"
     )
     prompt = f"Môn học: {course.course_name}\nTên chương mới: {req.title}\nNgữ cảnh:\n{context_prompt}"
-    
+
     desc_val = ""
     try:
         res_json = call_llm_json(prompt, system_instruction=system_prompt, temperature=0.3)
@@ -451,12 +447,7 @@ def generate_single_chapter(
         print(f"[WARNING] AI failed to generate single chapter description: {e}")
         desc_val = req.context_desc or "Nội dung chương học bổ trợ cho môn học."
 
-    new_chapter = Chapter(
-        course_id=course_id,
-        sort_order=req.sort_order,
-        title=req.title,
-        description=desc_val
-    )
+    new_chapter = Chapter(course_id=course_id, sort_order=req.sort_order, title=req.title, description=desc_val)
     db.add(new_chapter)
     db.commit()
     db.refresh(new_chapter)

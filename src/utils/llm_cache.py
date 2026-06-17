@@ -8,18 +8,19 @@ import hashlib
 import json
 import os
 import time
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
-from typing import Any, AsyncGenerator, Generator, List, Optional
+from typing import Any
 
 CACHE_DIR = Path(os.environ.get("LLM_CACHE_DIR", ".llm_cache"))
 
 
 def get_cache_key(
     prompt: Any,
-    system_instruction: Optional[str] = None,
+    system_instruction: str | None = None,
     temperature: float = 0.2,
-    model_name: Optional[str] = None,
-    schema: Optional[Any] = None,
+    model_name: str | None = None,
+    schema: Any | None = None,
 ) -> str:
     """Compute a SHA-256 hash representing the cache key for an LLM request."""
     # Serialize prompt if list or other type
@@ -53,12 +54,12 @@ def get_cache_key(
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
-def get_cached_json(cache_key: str) -> Optional[dict]:
+def get_cached_json(cache_key: str) -> dict | None:
     """Retrieve cached JSON response if exists, else None."""
     cache_file = CACHE_DIR / f"{cache_key}.json"
     if cache_file.exists():
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
+            with open(cache_file, encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             print(f"[WARNING] Error reading cache file {cache_file}: {e}")
@@ -81,7 +82,7 @@ def get_cached_stream(cache_key: str, delay: float = 0.01) -> Generator[str, Non
     cache_file = CACHE_DIR / f"{cache_key}.stream.jsonl"
     if cache_file.exists():
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
+            with open(cache_file, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         chunk = json.loads(line)
@@ -97,7 +98,7 @@ async def async_get_cached_stream(cache_key: str, delay: float = 0.01) -> AsyncG
     cache_file = CACHE_DIR / f"{cache_key}.stream.jsonl"
     if cache_file.exists():
         try:
-            with open(cache_file, "r", encoding="utf-8") as f:
+            with open(cache_file, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         chunk = json.loads(line)
@@ -108,7 +109,7 @@ async def async_get_cached_stream(cache_key: str, delay: float = 0.01) -> AsyncG
             print(f"[WARNING] Error reading cached stream {cache_file}: {e}")
 
 
-def save_cached_stream(cache_key: str, chunks: List[str]) -> None:
+def save_cached_stream(cache_key: str, chunks: list[str]) -> None:
     """Save streamed chunks to a JSON lines cache file."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_file = CACHE_DIR / f"{cache_key}.stream.jsonl"

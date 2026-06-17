@@ -65,7 +65,7 @@
   position: absolute;
   bottom: 95px;
   right: 0;
-  width: 420px;
+  width: min(95vw, 420px);
   background: #0f172a;
   border: 4px solid #ffffff;
   box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.5);
@@ -275,7 +275,7 @@
 /* Small Screens / Mobile adjustments */
 @media (max-width: 576px) {
   .mascot-bubble {
-    width: 360px;
+    width: min(95vw, 360px);
     right: 0;
     bottom: 85px;
   }
@@ -352,7 +352,7 @@
 
 /* Scrollable container for message body and dynamic action buttons */
 .mascot-bubble-scroll-container {
-  max-height: 340px;
+  max-height: min(45vh, 340px);
   overflow-y: auto;
   padding-right: 4px;
   margin-bottom: 10px;

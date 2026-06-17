@@ -4,11 +4,7 @@ import re
 def escape_xml(s: str) -> str:
     """Helper function to escape XML special characters."""
     return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&apos;")
+        s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace("'", "&apos;")
     )
 
 
@@ -98,9 +94,7 @@ def render_slide_to_svg(s: dict, theme: str, idx: int) -> str:
 
     svg_lines = []
     svg_lines.append('<?xml version="1.0" encoding="UTF-8"?>')
-    svg_lines.append(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">'
-    )
+    svg_lines.append('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">')
 
     # Background with gradient
     svg_lines.append("  <defs>")
@@ -243,9 +237,7 @@ def render_slide_to_svg(s: dict, theme: str, idx: int) -> str:
 
     elif slide_layout == "visual_highlight":
         # Centered large text
-        all_text = " ".join(
-            escape_xml(it.get("raw_text", "").replace("**", "").strip()) for it in text_items
-        )
+        all_text = " ".join(escape_xml(it.get("raw_text", "").replace("**", "").strip()) for it in text_items)
         hl_font = 28 if len(all_text) < 100 else (22 if len(all_text) < 200 else 18)
         max_chars = max(30, int(1060 / (hl_font * 0.45)))
         words = all_text.split()

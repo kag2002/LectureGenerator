@@ -182,11 +182,37 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
               <div className="workspace-preview-content">
                 {materialTab === 'slides' ? (
                   <div className="workspace-preview-text-monospace">
-                    {localSlideContent || <span className="roadmap-sidebar-empty-text">Nội dung Slide bài giảng đang trống. Hãy nhập nội dung ở bên trái để xem trước.</span>}
+                    {localSlideContent || (
+                      <span className="roadmap-sidebar-empty-text">
+                        Nội dung Slide bài giảng đang trống. Hãy nhập nội dung ở bên trái để xem trước.
+                        <div className="empty-suggestions-box" style={{ marginTop: '12px' }}>
+                          <div className="empty-suggestions-title">
+                            <span>💡 Gợi ý thực hiện:</span>
+                          </div>
+                          <ul className="empty-suggestions-list">
+                            <li className="empty-suggestions-item">Nhập nội dung slide theo cú pháp Markdown ở cột soạn thảo bên trái.</li>
+                            <li className="empty-suggestions-item">Hoặc bấm nút <strong>"AI gợi ý bài giảng (RAG)"</strong> để AI tự động thiết kế slide dựa trên tài liệu nguồn.</li>
+                          </ul>
+                        </div>
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div className="workspace-preview-text">
-                    {localActiveScript || <span className="roadmap-sidebar-empty-text">Nội dung kịch bản tương tác đang trống. Hãy nhập nội dung ở bên trái để xem trước.</span>}
+                    {localActiveScript || (
+                      <span className="roadmap-sidebar-empty-text">
+                        Nội dung kịch bản tương tác đang trống. Hãy nhập nội dung ở bên trái để xem trước.
+                        <div className="empty-suggestions-box" style={{ marginTop: '12px' }}>
+                          <div className="empty-suggestions-title">
+                            <span>💡 Gợi ý thực hiện:</span>
+                          </div>
+                          <ul className="empty-suggestions-list">
+                            <li className="empty-suggestions-item">Nhập kịch bản hoạt động lớp học, thảo luận nhóm ở cột bên trái.</li>
+                            <li className="empty-suggestions-item">Hoặc sử dụng <strong>"AI gợi ý bài giảng (RAG)"</strong> để tham khảo ý tưởng lớp học năng động.</li>
+                          </ul>
+                        </div>
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -229,6 +255,15 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
               {localQuestions.length === 0 ? (
                 <div className="workspace-empty-state">
                   Chưa có câu hỏi nào trong chương này. Hãy tạo một câu hỏi mới.
+                  <div className="empty-suggestions-box" style={{ marginTop: '12px' }}>
+                    <div className="empty-suggestions-title">
+                      <span>💡 Gợi ý thực hiện:</span>
+                    </div>
+                    <ul className="empty-suggestions-list">
+                      <li className="empty-suggestions-item">Bấm nút <strong>"AI tự sinh 5 câu hỏi"</strong> ở góc trên để sinh câu hỏi trắc nghiệm tự động.</li>
+                      <li className="empty-suggestions-item">Hoặc bấm <strong>"Tạo câu hỏi mới"</strong> để bắt đầu tự tay soạn thảo các câu hỏi cho chương này.</li>
+                    </ul>
+                  </div>
                 </div>
               ) : (
                 <div className="workspace-cards-list">
@@ -410,6 +445,16 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
                     <span className="workspace-preview-empty-text">
                       Chọn biểu tượng bút chì bên danh sách câu hỏi để chỉnh sửa, hoặc nhấn <strong>"Tạo câu hỏi mới"</strong> để bắt đầu soạn thảo.
                     </span>
+                    <div className="empty-suggestions-box" style={{ maxWidth: '400px', margin: '20px auto 0' }}>
+                      <div className="empty-suggestions-title">
+                        <span>💡 Hướng dẫn Form soạn thảo:</span>
+                      </div>
+                      <ul className="empty-suggestions-list">
+                        <li className="empty-suggestions-item">Điền nội dung câu hỏi trắc nghiệm và gán chuẩn đầu ra CLO mục tiêu.</li>
+                        <li className="empty-suggestions-item">Điền 4 phương án lựa chọn A, B, C, D. Click vào nhãn chữ cái (A, B, C, D) bên cạnh để đánh dấu đáp án đúng.</li>
+                        <li className="empty-suggestions-item">Nhấn <strong>Lưu câu hỏi</strong> để cập nhật trực tiếp vào chương học.</li>
+                      </ul>
+                    </div>
                   </div>
                 )}
               </div>
@@ -449,6 +494,15 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
             {localClos.length === 0 ? (
               <div style={{ color: '#64748b', fontStyle: 'italic', textAlign: 'center', padding: '30px 0' }}>
                 Chưa cấu hình chuẩn đầu ra nào.
+                <div className="empty-suggestions-box" style={{ maxWidth: '600px', margin: '20px auto 0' }}>
+                  <div className="empty-suggestions-title">
+                    <span>💡 Gợi ý thực hiện:</span>
+                  </div>
+                  <ul className="empty-suggestions-list">
+                    <li className="empty-suggestions-item">Bấm nút <strong>"AI gợi ý CLOs"</strong> ở góc trên để AI tự đề xuất chuẩn đầu ra từ Syllabus môn học.</li>
+                    <li className="empty-suggestions-item">Hoặc bấm nút <strong>"Thêm chuẩn đầu ra CLO"</strong> để tự định nghĩa chuẩn đầu ra môn học của bạn.</li>
+                  </ul>
+                </div>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '30px' }}>
@@ -584,7 +638,16 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
                 {localRagDocs.length === 0 ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: '12px' }}>
                     <Library size={32} />
-                    <span style={{ fontSize: '13.5px', fontStyle: 'italic' }}>Thư viện RAG trống. Hãy tải lên tài liệu tham khảo ở bên trái.</span>
+                    <span style={{ fontSize: '13.5px', fontStyle: 'italic', marginBottom: '8px' }}>Thư viện RAG trống. Hãy tải lên tài liệu tham khảo ở bên trái.</span>
+                    <div className="empty-suggestions-box" style={{ width: '90%', margin: '0 auto' }}>
+                      <div className="empty-suggestions-title">
+                        <span>💡 Gợi ý thực hiện:</span>
+                      </div>
+                      <ul className="empty-suggestions-list">
+                        <li className="empty-suggestions-item">Chọn tệp tin học liệu dạng PDF, DOCX, TXT ở khung kéo thả bên trái.</li>
+                        <li className="empty-suggestions-item">Bấm <strong>Tải lên thư viện RAG</strong> để AI tự động phân tách và nạp vector dữ liệu.</li>
+                      </ul>
+                    </div>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
