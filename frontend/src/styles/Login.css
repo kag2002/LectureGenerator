@@ -270,3 +270,51 @@
   justify-content: center;
   gap: 8px;
 }
+
+/* Google Sign-In & Divider Styling */
+.login-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+  width: 100%;
+}
+
+.login-divider-line {
+  flex: 1;
+  height: 1px;
+  background: rgba(197, 168, 128, 0.2);
+}
+
+[data-theme="light"] .login-divider-line,
+[data-theme="academic"] .login-divider-line {
+  background: rgba(11, 37, 69, 0.15);
+}
+
+.login-divider-text {
+  padding: 0 15px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+[data-theme="light"] .login-divider-text,
+[data-theme="academic"] .login-divider-text {
+  color: var(--text-secondary);
+}
+
+.login-google-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 5px;
+}
+
+#google-signin-btn {
+  width: 100%;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#google-signin-btn:hover {
+  transform: translateY(-1px);
+}

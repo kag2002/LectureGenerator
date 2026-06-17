@@ -20,10 +20,20 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cors_origins: str = "http://localhost:3000"
     jwt_secret_key: str = "lecture_generator_super_secret_key"
+    google_client_id: str = ""
     database_timeout: float = 15.0
     llm_local_timeout: int = 30
     gemini_api_keys: str = ""
     disable_query_expansion: bool = True
+    admin_emails: str = ""
+
+    # DevOps Alerting & Webhooks
+    slack_webhook_url: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    enable_alerting: bool = False
+    alert_cpu_threshold: float = 85.0
+    alert_ram_threshold: float = 90.0
 
     # LLM
     openai_api_key: str = ""

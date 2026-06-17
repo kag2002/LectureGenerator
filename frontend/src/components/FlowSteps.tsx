@@ -5,7 +5,7 @@ const STEPS = [
   { id: 'syllabus', label: 'Cấu hình CLOs', view: 'course_config', icon: <ClipboardList size={14} aria-hidden="true" /> },
   { id: 'rag', label: 'Thư viện RAG', view: 'knowledge_base', icon: <Library size={14} aria-hidden="true" /> },
   { id: 'slides', label: 'Soạn Bài giảng', view: 'lesson_planner', icon: <BookOpen size={14} aria-hidden="true" /> },
-  { id: 'questions', label: 'Ngân hàng MCQ', view: 'question_bank', icon: <HelpCircle size={14} aria-hidden="true" /> },
+  { id: 'questions', label: 'Ngân hàng Đề thi', view: 'question_bank', icon: <HelpCircle size={14} aria-hidden="true" /> },
   { id: 'matrix', label: 'Ma trận Bloom', view: 'matrix_dashboard', icon: <BarChart2 size={14} aria-hidden="true" /> }
 ];
 

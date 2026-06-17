@@ -925,6 +925,62 @@ export function useLessonPlannerState({
     return regex.test(slideContent) || regex.test(stream.aiSlideProposal);
   };
 
+  // Chapter CRUD handlers for sidebar edit/delete
+  const handleUpdateChapter = async (chapterId: number, title: string, description: string, sortOrder: number) => {
+    try {
+      const res = await client.put(`/api/courses/chapters/${chapterId}`, {
+        title,
+        description,
+        sort_order: sortOrder
+      });
+      setChapters(prev => prev.map(c => c.id === chapterId ? res.data : c).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)));
+      // Update selectedChapter if it's the one being edited
+      if (selectedChapter?.id === chapterId) {
+        setSelectedChapter(res.data);
+      }
+      setMessage('Đã cập nhật thông tin chương học thành công.');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
+      return res.data;
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Lỗi khi cập nhật chương học.');
+      throw err;
+    }
+  };
+
+  const handleDeleteChapter = async (chapterId: number) => {
+    if (!window.confirm(
+      'Bạn có chắc chắn muốn xóa chương học này?\n\n' +
+      '⚠️ Hành động này sẽ:\n' +
+      '• Xóa toàn bộ slide bài giảng đã soạn\n' +
+      '• Xóa kịch bản hoạt động tương tác\n' +
+      '• Các câu hỏi trắc nghiệm thuộc chương này sẽ mất liên kết\n\n' +
+      'Thao tác không thể hoàn tác.'
+    )) return;
+    try {
+      await client.delete(`/api/courses/chapters/${chapterId}`);
+      const remaining = chapters.filter(c => c.id !== chapterId);
+      setChapters(remaining);
+      // Auto-select next chapter or clear
+      if (selectedChapter?.id === chapterId) {
+        if (remaining.length > 0) {
+          handleSelectChapter(remaining[0]);
+        } else {
+          setSelectedChapter(null);
+          setSlideContent('');
+          setActiveLearningScript('');
+          setSavedSlideContent('');
+          setSavedScript('');
+        }
+      }
+      setMessage('Đã xóa chương học thành công.');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Lỗi khi xóa chương học.');
+    }
+  };
+
   useEffect(() => {
     const handleDbChanged = () => {
       loadInitialData();
@@ -1106,6 +1162,8 @@ export function useLessonPlannerState({
     handleLoadFullDocument,
     parseActiveLearningScript,
     isCloCovered,
+    handleUpdateChapter,
+    handleDeleteChapter,
 
     // Sub-hooks
     stream,

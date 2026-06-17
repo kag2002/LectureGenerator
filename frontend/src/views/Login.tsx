@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import client from '../api/client';
 import { LogIn, UserPlus } from 'lucide-react';
 import { User } from '@/types';
@@ -11,11 +11,85 @@ export interface LoginProps {
 
 export default function Login({ onLoginSuccess, onBackToLanding }: LoginProps) {
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('prof.khatkhe@vinuni.edu.vn');
-  const [password, setPassword] = useState('VinUni2026!#');
-  const [fullName, setFullName] = useState('GS. Nguyen Khat Khe');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const handleGoogleLogin = async (response: any) => {
+    setError('');
+    setLoading(true);
+    try {
+      const idToken = response.credential;
+      const res = await client.post('/api/auth/google', {
+        id_token: idToken,
+      });
+      const { access_token, user } = res.data;
+      localStorage.setItem('token', access_token);
+      localStorage.setItem('user', JSON.stringify(user));
+      onLoginSuccess(user);
+    } catch (err: any) {
+      console.error(err);
+      setError(
+        err.response?.data?.detail || 
+        'Đăng nhập bằng Google thất bại. Vui lòng thử lại.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const initGoogleSignIn = () => {
+      const g = (window as any).google;
+      if (typeof window !== 'undefined' && g?.accounts?.id) {
+        try {
+          const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || 'your-google-client-id-here.apps.googleusercontent.com';
+          
+          g.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleLogin,
+            cancel_on_tap_outside: true,
+          });
+
+          const buttonParent = document.getElementById('google-signin-btn');
+          if (buttonParent) {
+            g.accounts.id.renderButton(buttonParent, {
+              theme: 'outline',
+              size: 'large',
+              width: '100%',
+              text: 'signin_with',
+              shape: 'rectangular',
+              logo_alignment: 'left',
+            });
+          }
+        } catch (err) {
+          console.error('Lỗi khi khởi tạo Google Sign-in:', err);
+        }
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      const g = (window as any).google;
+      if (g?.accounts?.id) {
+        initGoogleSignIn();
+      } else {
+        let attempts = 0;
+        const interval = setInterval(() => {
+          attempts++;
+          const currentG = (window as any).google;
+          if (currentG?.accounts?.id) {
+            initGoogleSignIn();
+            clearInterval(interval);
+          } else if (attempts > 15) {
+            clearInterval(interval);
+          }
+        }, 300);
+        return () => clearInterval(interval);
+      }
+    }
+  }, [isRegister]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,12 +163,12 @@ export default function Login({ onLoginSuccess, onBackToLanding }: LoginProps) {
           )}
 
           <div className="login-input-group">
-            <label className="login-label" htmlFor="login-email">Email trường học</label>
+            <label className="login-label" htmlFor="login-email">Email giảng viên / Trường học</label>
             <input
               id="login-email"
               name="email"
               type="email"
-              placeholder="username@vinuni.edu.vn"
+              placeholder="username@domain.com hoặc email trường"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="login-input"
@@ -133,6 +207,16 @@ export default function Login({ onLoginSuccess, onBackToLanding }: LoginProps) {
             )}
           </button>
         </form>
+
+        <div className="login-divider">
+          <span className="login-divider-line"></span>
+          <span className="login-divider-text">Hoặc</span>
+          <span className="login-divider-line"></span>
+        </div>
+
+        <div className="login-google-container">
+          <div id="google-signin-btn"></div>
+        </div>
 
         <div className="login-footer">
           <p className="login-footer-text">

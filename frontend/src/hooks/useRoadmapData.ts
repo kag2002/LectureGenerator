@@ -172,7 +172,7 @@ export function useRoadmapData(course: Course) {
     if (!workspaceNode) return;
     setWorkspaceSaving(true);
     setWorkspaceError('');
-    setWorkspaceMessage('AI đang lập ngân hàng câu hỏi MCQ và thực hiện giải chéo lỗi (Self-Correction)…');
+    setWorkspaceMessage('AI đang lập ngân hàng câu hỏi trắc nghiệm và thực hiện giải chéo lỗi (Self-Correction)…');
     const chapterId = parseInt(workspaceNode.id.split('_')[1]);
     try {
       await client.post(`/api/courses/${course.id}/questions/generate`, {
@@ -182,7 +182,7 @@ export function useRoadmapData(course: Course) {
       const qRes = await client.get(`/api/courses/${course.id}/questions`);
       setQuestions(qRes.data || []);
       setLocalQuestions((qRes.data || []).filter((q: any) => q.chapter_id === chapterId));
-      setWorkspaceMessage('AI đã sinh thành công 5 câu hỏi MCQ trắc nghiệm!');
+      setWorkspaceMessage('AI đã sinh thành công 5 câu hỏi trắc nghiệm!');
     } catch (err: any) {
       console.error(err);
       setWorkspaceError(err.response?.data?.detail || 'Lỗi khi AI sinh câu hỏi.');
@@ -414,7 +414,58 @@ export function useRoadmapData(course: Course) {
     }
   };
 
+  const handleCreateChapter = async (title: string, description: string) => {
+    try {
+      const nextSortOrder = chapters.length > 0
+        ? Math.max(...chapters.map((c: any) => c.sort_order || 0)) + 1
+        : 1;
+      const res = await client.post(`/api/courses/${course.id}/chapters`, {
+        title,
+        description,
+        sort_order: nextSortOrder
+      });
+      setChapters(prev => [...prev, res.data].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)));
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
+      return res.data;
+    } catch (err: any) {
+      console.error(err);
+      throw new Error(err.response?.data?.detail || 'Lỗi khi tạo chương học.');
+    }
+  };
+
+  const handleUpdateChapter = async (chapterId: number, title: string, description: string, sortOrder: number) => {
+    try {
+      const res = await client.put(`/api/courses/chapters/${chapterId}`, {
+        title,
+        description,
+        sort_order: sortOrder
+      });
+      setChapters(prev => prev.map(c => c.id === chapterId ? res.data : c).sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0)));
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
+      return res.data;
+    } catch (err: any) {
+      console.error(err);
+      throw new Error(err.response?.data?.detail || 'Lỗi khi cập nhật chương học.');
+    }
+  };
+
+  const handleDeleteChapter = async (chapterId: number) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa chương học này? Toàn bộ slide bài soạn, kịch bản tương tác và câu hỏi thuộc chương này cũng sẽ bị xóa.')) return;
+    try {
+      await client.delete(`/api/courses/chapters/${chapterId}`);
+      setChapters(prev => prev.filter(c => c.id !== chapterId));
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.detail || 'Lỗi khi xóa chương học.');
+    }
+  };
+
   return {
+    handleCreateChapter,
+    handleUpdateChapter,
+    handleDeleteChapter,
+
     // Core data
     clos, chapters, questions, materialsMap, matrixData, loading,
     selectedNode, setSelectedNode,

@@ -1755,7 +1755,7 @@ function MatrixCoverageWidget({ data }: { data: any }) {
               <th className="chatbot-widget-table-header-cell">CLO</th>
               <th className="chatbot-widget-table-header-cell">Bloom mục tiêu</th>
               <th className="chatbot-widget-table-header-cell">Số Slide</th>
-              <th className="chatbot-widget-table-header-cell">Số Câu hỏi (MCQ)</th>
+              <th className="chatbot-widget-table-header-cell">Số Câu hỏi trắc nghiệm</th>
             </tr>
           </thead>
           <tbody>
@@ -1768,7 +1768,7 @@ function MatrixCoverageWidget({ data }: { data: any }) {
                   </span>
                 </td>
                 <td className="chatbot-widget-text-blue">{info.material_slide_count || 0} slide(s)</td>
-                <td className="chatbot-widget-text-green">{info.question_count || 0} MCQ(s)</td>
+                <td className="chatbot-widget-text-green">{info.question_count || 0} câu</td>
               </tr>
             ))}
           </tbody>

@@ -24,6 +24,7 @@ export interface Chapter {
   weekly_lessons?: number;
   hours?: number;
   description?: string;
+  sort_order?: number;
 }
 
 export interface CLO {

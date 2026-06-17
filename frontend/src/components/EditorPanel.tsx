@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import client from '../api/client';
 import SlideProposalPreview from './SlideProposalPreview';
 import { MarkdownPreview } from '../utils/markdown';
+import { trackAIFeedback, trackClick } from '../utils/telemetryHelper';
 import { THEMES, parseMarkdownToSlidesJS } from '../utils/slideParser';
 import { Chapter } from '@/types';
 import { 
@@ -107,6 +108,14 @@ export default function EditorPanel({
   const [revSuccess, setRevSuccess] = useState('');
   const [showRevisions, setShowRevisions] = useState(false);
   
+  const [aiProposal, setAiProposal] = useState<{
+    prompt: string;
+    proposed_content: string;
+    type: 'slides' | 'script';
+  } | null>(null);
+  const [rating, setRating] = useState<number | null>(null);
+  const [feedbackText, setFeedbackText] = useState('');
+  
   // Warnings from last revision
   const [warnings, setWarnings] = useState<string[]>([]);
   const [consistencyIssues, setConsistencyIssues] = useState<ConsistencyIssueType[]>([]);
@@ -211,6 +220,15 @@ export default function EditorPanel({
         model: data.usage?.model_name,
         status: 'success'
       });
+
+      // Save AI proposal trace details
+      setAiProposal({
+        prompt: revPrompt,
+        proposed_content: activeWorkTab === 'slides' ? data.slide_content : data.active_learning_script,
+        type: activeWorkTab === 'slides' ? 'slides' : 'script'
+      });
+      setRating(null);
+      setFeedbackText('');
     } catch (err: any) {
       console.error(err);
       setRevError(err.response?.data?.detail || 'Lỗi khi gửi yêu cầu chỉnh sửa đến AI.');
@@ -245,6 +263,71 @@ export default function EditorPanel({
       setRevError('Không thể khôi phục phiên bản.');
     } finally {
       setRevising(false);
+    }
+  };
+
+  const handleRateProposal = async (selectedRating: number) => {
+    setRating(selectedRating);
+    if (selectedChapter) {
+      trackClick('rate-ai-stars', selectedChapter.course_id, { rating: selectedRating });
+    }
+    // Gửi telemetry feedback tức thời khi bấm sao
+    if (aiProposal && selectedChapter) {
+      const currentContent = aiProposal.type === 'slides' ? slideContent : activeLearningScript;
+      await trackAIFeedback({
+        course_id: selectedChapter.course_id,
+        chapter_id: selectedChapter.id,
+        prompt: aiProposal.prompt,
+        proposed_content: aiProposal.proposed_content,
+        edited_content: currentContent,
+        rating: selectedRating,
+        feedback: feedbackText || undefined
+      });
+    }
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (aiProposal && selectedChapter && rating) {
+      const currentContent = aiProposal.type === 'slides' ? slideContent : activeLearningScript;
+      await trackAIFeedback({
+        course_id: selectedChapter.course_id,
+        chapter_id: selectedChapter.id,
+        prompt: aiProposal.prompt,
+        proposed_content: aiProposal.proposed_content,
+        edited_content: currentContent,
+        rating: rating,
+        feedback: feedbackText
+      });
+      setAiProposal(null);
+      setRating(null);
+      setFeedbackText('');
+      setRevSuccess('Cảm ơn bạn đã gửi phản hồi và đóng góp dữ liệu cải tiến AI!');
+    }
+  };
+
+  const handleSaveWithTelemetry = async () => {
+    if (selectedChapter) {
+      trackClick('save-editor-materials', selectedChapter.course_id);
+    }
+    if (handleSaveMaterials) {
+      handleSaveMaterials();
+    }
+    
+    // Gửi trace telemetry thu thập DPO/SFT
+    if (aiProposal && selectedChapter) {
+      const currentContent = aiProposal.type === 'slides' ? slideContent : activeLearningScript;
+      await trackAIFeedback({
+        course_id: selectedChapter.course_id,
+        chapter_id: selectedChapter.id,
+        prompt: aiProposal.prompt,
+        proposed_content: aiProposal.proposed_content,
+        edited_content: currentContent,
+        rating: rating || undefined,
+        feedback: feedbackText || undefined
+      });
+      setAiProposal(null);
+      setRating(null);
+      setFeedbackText('');
     }
   };
 
@@ -294,6 +377,77 @@ export default function EditorPanel({
 
         {revError && <div className="editor-revision-message-error"><AlertTriangle size={12} /> {revError}</div>}
         {revSuccess && <div className="editor-revision-message-success"><Check size={12} /> {revSuccess}</div>}
+
+        {revSuccess && aiProposal && (
+          <div className="editor-revision-feedback-stars" style={{ 
+            marginTop: '10px', 
+            background: 'rgba(255,255,255,0.02)', 
+            padding: '12px', 
+            borderRadius: '8px', 
+            border: '1px solid rgba(255,255,255,0.05)' 
+          }}>
+            <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>
+              Đánh giá chất lượng chỉnh sửa của AI:
+            </span>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => handleRateProposal(star)}
+                  style={{ 
+                    background: 'none', 
+                    border: 'none', 
+                    cursor: 'pointer', 
+                    color: star <= (rating || 0) ? '#fbbf24' : '#475569', 
+                    fontSize: '20px', 
+                    padding: 0,
+                    transition: 'transform 0.1s'
+                  }}
+                  title={`${star} sao`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+            {rating !== null && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Góp ý thêm cho AI (không bắt buộc)..."
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  style={{ 
+                    flex: 1, 
+                    background: 'rgba(15, 23, 42, 0.6)', 
+                    border: '1px solid rgba(255,255,255,0.1)', 
+                    color: '#f8fafc', 
+                    padding: '6px 10px', 
+                    borderRadius: '6px', 
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleSubmitFeedback}
+                  style={{ 
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                    border: 'none', 
+                    color: '#fff', 
+                    padding: '6px 12px', 
+                    borderRadius: '6px', 
+                    fontSize: '12px', 
+                    fontWeight: 600,
+                    cursor: 'pointer' 
+                  }}
+                >
+                  Gửi góp ý
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {warnings.length > 0 && (
           <div className="editor-revision-warnings">
@@ -399,7 +553,7 @@ export default function EditorPanel({
 
             {handleSaveMaterials && (
               <button 
-                onClick={handleSaveMaterials} 
+                onClick={handleSaveWithTelemetry} 
                 disabled={saving || isAIGenerating || (slideContent === savedSlideContent && activeLearningScript === savedScript)} 
                 className="planner-save-btn" 
                 title={isAIGenerating ? "Không thể lưu khi AI đang sinh slide" : saving ? "Đang lưu thay đổi…" : (slideContent === savedSlideContent && activeLearningScript === savedScript) ? "Tất cả thay đổi đã được tự động lưu" : "Lưu thay đổi bài soạn thảo hiện tại lên đám mây"}

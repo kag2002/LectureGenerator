@@ -19,11 +19,13 @@ const WELCOME_MESSAGES = [
 ];
 
 interface MascotAvatarProps {
-  onClick: () => void;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onTouchStart: (e: React.TouchEvent) => void;
   hasNotification: boolean;
+  isDragging: boolean;
 }
 
-function MascotAvatar({ onClick, hasNotification }: MascotAvatarProps) {
+function MascotAvatar({ onMouseDown, onTouchStart, hasNotification, isDragging }: MascotAvatarProps) {
   const [frame, setFrame] = useState(1);
 
   useEffect(() => {
@@ -36,11 +38,13 @@ function MascotAvatar({ onClick, hasNotification }: MascotAvatarProps) {
   return (
     <div
       className="mascot-avatar-wrapper"
-      onClick={onClick}
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
       title="Trợ lý ảo Falcon AI(Đang thử nghiệm)"
+      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
       <img
-        src={`/mascot_frame${frame}.png`}
+        src={`/mascot_frame${frame}.png?v=penguin`}
         alt="AI Assistant Mascot"
         className="mascot-avatar-image"
       />
@@ -70,6 +74,187 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
   const [extractedClos, setExtractedClos] = useState<any[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dragging states for the mascot companion
+  const [isDraggingMascot, setIsDraggingMascot] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isMounted, setIsMounted] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+
+  const clampPosition = (x: number, y: number, isBubbleOpen: boolean) => {
+    const margin = 16;
+    const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 768;
+    const avatarWidth = viewportWidth <= 576 ? 70 : 80;
+    const avatarHeight = viewportWidth <= 576 ? 70 : 80;
+    const bubbleGapOffset = viewportWidth <= 576 ? 85 : 95;
+
+    let minX = margin;
+    let maxX = viewportWidth - avatarWidth - margin;
+    let minY = margin;
+    let maxY = viewportHeight - avatarHeight - margin;
+
+    if (isBubbleOpen && bubbleRef.current) {
+      const bubbleWidth = bubbleRef.current.offsetWidth;
+      const bubbleHeight = bubbleRef.current.offsetHeight;
+      const gap = bubbleGapOffset - avatarHeight;
+
+      // Determine alignment based on x coordinate
+      const isLeftAligned = x < viewportWidth / 2;
+
+      if (isLeftAligned) {
+        minX = margin;
+        maxX = Math.min(maxX, viewportWidth - bubbleWidth - margin);
+      } else {
+        minX = Math.max(minX, bubbleWidth - avatarWidth + margin);
+        maxX = viewportWidth - avatarWidth - margin;
+      }
+
+      minY = Math.max(minY, bubbleHeight + gap + margin);
+    }
+
+    return {
+      x: Math.max(minX, Math.min(maxX, x)),
+      y: Math.max(minY, Math.min(maxY, y))
+    };
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startPosX = position.x;
+    const startPosY = position.y;
+    let moved = false;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        if (!moved) {
+          setIsDraggingMascot(true);
+          moved = true;
+        }
+      }
+
+      if (moved) {
+        const targetX = startPosX + dx;
+        const targetY = startPosY + dy;
+        const clamped = clampPosition(targetX, targetY, isOpen);
+        setPosition(clamped);
+      }
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      setIsDraggingMascot(false);
+
+      if (!moved) {
+        handleAvatarClick();
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    const startPosX = position.x;
+    const startPosY = position.y;
+    let moved = false;
+
+    const handleTouchMove = (moveEvent: TouchEvent) => {
+      const touchMove = moveEvent.touches[0];
+      const dx = touchMove.clientX - startX;
+      const dy = touchMove.clientY - startY;
+
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        if (!moved) {
+          setIsDraggingMascot(true);
+          moved = true;
+        }
+      }
+
+      if (moved) {
+        const targetX = startPosX + dx;
+        const targetY = startPosY + dy;
+        const clamped = clampPosition(targetX, targetY, isOpen);
+        setPosition(clamped);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      setIsDraggingMascot(false);
+
+      if (!moved) {
+        handleAvatarClick();
+      }
+    };
+
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
+  };
+
+  // Initialize position and load from localStorage
+  useEffect(() => {
+    setIsMounted(true);
+    const saved = localStorage.getItem('mascot-position');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
+          setPosition(clampPosition(parsed.x, parsed.y, false));
+          return;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    // Default: bottom-right corner
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const avatarWidth = viewportWidth <= 576 ? 70 : 80;
+    const avatarHeight = viewportWidth <= 576 ? 70 : 80;
+    setPosition({
+      x: viewportWidth - avatarWidth - 24,
+      y: viewportHeight - avatarHeight - 24
+    });
+  }, []);
+
+  // Save position to localStorage
+  useEffect(() => {
+    if (isMounted) {
+      localStorage.setItem('mascot-position', JSON.stringify(position));
+    }
+  }, [position, isMounted]);
+
+  // Adjust on screen resize
+  useEffect(() => {
+    if (!isMounted) return;
+    const handleResize = () => {
+      setPosition(current => clampPosition(current.x, current.y, isOpen));
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isOpen, isMounted]);
+
+  // Adjust position when bubble opens or changes content
+  useEffect(() => {
+    if (isOpen && isMounted) {
+      const timer = setTimeout(() => {
+        setPosition(current => clampPosition(current.x, current.y, true));
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, message, pendingAction, uploadingFile, isMounted]);
 
   useEffect(() => {
     const handleDispatchAction = (e: Event) => {
@@ -342,18 +527,37 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
 
   const hasActions = showPedagogical || showMatrix || showQuestions || showSyllabus;
 
+  const isLeftAligned = isMounted && position.x < window.innerWidth / 2;
+  const avatarSize = isMounted ? (window.innerWidth <= 576 ? 70 : 80) : 80;
+
   return (
-    <div className="mascot-companion-container">
+    <div 
+      className="mascot-companion-container"
+      style={isMounted ? {
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        bottom: 'auto',
+        right: 'auto',
+        width: `${avatarSize}px`,
+        height: `${avatarSize}px`,
+        opacity: 1,
+      } : {
+        opacity: 0,
+      }}
+    >
       {/* Floating Avatar */}
       <MascotAvatar
-        onClick={handleAvatarClick}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
         hasNotification={hasNotification}
+        isDragging={isDraggingMascot}
       />
 
       {/* Speech Bubble / Drawer */}
       {isOpen && (
         <div 
-          className="mascot-bubble"
+          ref={bubbleRef}
+          className={`mascot-bubble ${isLeftAligned ? 'bubble-left-aligned' : 'bubble-right-aligned'}`}
           onDragOver={handleDragOver}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}

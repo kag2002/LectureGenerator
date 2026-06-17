@@ -700,7 +700,7 @@ export default function Landing({ user, onNavigate }: LandingProps) {
                 <input
                   type="email"
                   className="landing-form-input"
-                  placeholder="username@vinuni.edu.vn"
+                  placeholder="username@domain.com hoặc email trường"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required

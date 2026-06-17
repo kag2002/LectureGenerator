@@ -652,6 +652,14 @@
   box-shadow: var(--shadow-sm);
 }
 
+.planner-chapter-order-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .planner-chapter-order {
   background: var(--bg-secondary);
   color: var(--text-secondary);
@@ -664,6 +672,188 @@
   font-size: 13.5px;
   font-weight: 800;
   border: 1px solid var(--border-color);
+}
+
+.chapter-action-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.planner-chapter-card:hover .chapter-action-btns,
+.planner-active-chapter-card:hover .chapter-action-btns {
+  opacity: 1;
+}
+
+.chapter-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  line-height: 1;
+}
+
+.chapter-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.chapter-action-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger-color);
+}
+
+/* Edit Chapter Modal */
+.chapter-edit-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeInOverlay 0.2s ease;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.chapter-edit-modal-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 28px;
+  width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  animation: slideUpModal 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpModal {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.chapter-edit-modal-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 20px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chapter-edit-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.chapter-edit-modal-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.chapter-edit-modal-input {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14.5px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.chapter-edit-modal-input:focus {
+  border-color: var(--vinuni-gold);
+}
+
+.chapter-edit-modal-textarea {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  line-height: 1.5;
+}
+
+.chapter-edit-modal-textarea:focus {
+  border-color: var(--vinuni-gold);
+}
+
+.chapter-edit-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.chapter-edit-modal-cancel {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chapter-edit-modal-cancel:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.chapter-edit-modal-save {
+  background: var(--accent-gradient);
+  border: none;
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chapter-edit-modal-save:hover {
+  opacity: 0.92;
+}
+
+.chapter-edit-modal-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .planner-chapter-title {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Chapter, CLO } from '@/types';
-import { BookOpen, FileText, ClipboardList, HelpCircle, Sparkles, Upload, Search, Trash2, Check, X, RefreshCw, ChevronLeft, EyeOff, Library, ArrowRight } from 'lucide-react';
+import { BookOpen, FileText, ClipboardList, HelpCircle, Sparkles, Upload, Search, Trash2, Check, X, RefreshCw, ChevronLeft, EyeOff, Library, ArrowRight, Pencil } from 'lucide-react';
 
 export interface SearchResultType {
   accepted: Array<{ title: string; url: string }>;
@@ -49,6 +49,8 @@ export interface LessonPlannerSidebarProps {
   ragReferences?: Array<{ file_name: string; page_number: number; text: string }>;
   onCitationClick?: (citation: { file_name: string; page_number: number; text: string }) => void;
   generatingChapterId?: number | null;
+  onEditChapter?: (chapter: Chapter) => void;
+  onDeleteChapter?: (chapterId: number) => void;
 }
 
 export default function LessonPlannerSidebar({
@@ -76,7 +78,9 @@ export default function LessonPlannerSidebar({
   onClose,
   ragReferences = [],
   onCitationClick,
-  generatingChapterId = null
+  generatingChapterId = null,
+  onEditChapter,
+  onDeleteChapter
 }: LessonPlannerSidebarProps) {
   return (
     <aside className="planner-sidebar">
@@ -103,7 +107,7 @@ export default function LessonPlannerSidebar({
           onClick={() => setActiveLeftTab('mcqs')}
           className={`sidebar-tab-btn ${activeLeftTab === 'mcqs' ? 'active' : 'inactive'}`}
         >
-          <span className="sidebar-tab-btn-content"><HelpCircle size={12} aria-hidden="true" /> MCQs Đề thi</span>
+          <span className="sidebar-tab-btn-content"><HelpCircle size={12} aria-hidden="true" /> Trắc nghiệm</span>
         </button>
         <button 
           onClick={() => setActiveLeftTab('citations')}
@@ -191,13 +195,39 @@ export default function LessonPlannerSidebar({
                     onClick={() => handleSelectChapter(ch)}
                     className={selectedChapter?.id === ch.id ? "planner-active-chapter-card" : "planner-chapter-card"}
                   >
-                    <span className="planner-chapter-order">
-                      {generatingChapterId === ch.id ? (
-                        <RefreshCw size={12} className="planner-sidebar-spinner-pulse" style={{ color: 'var(--accent-color, #818cf8)', display: 'inline-block' }} aria-hidden="true" />
-                      ) : (
-                        idx + 1
-                      )}
-                    </span>
+                    <div className="planner-chapter-order-col">
+                      <span className="planner-chapter-order">
+                        {generatingChapterId === ch.id ? (
+                          <RefreshCw size={12} className="planner-sidebar-spinner-pulse" style={{ color: 'var(--accent-color, #818cf8)', display: 'inline-block' }} aria-hidden="true" />
+                        ) : (
+                          idx + 1
+                        )}
+                      </span>
+                      <div className="chapter-action-btns">
+                        {onEditChapter && (
+                          <button
+                            type="button"
+                            className="chapter-action-btn"
+                            title="Sửa chương học"
+                            aria-label="Sửa chương học"
+                            onClick={(e) => { e.stopPropagation(); onEditChapter(ch); }}
+                          >
+                            <Pencil size={11} />
+                          </button>
+                        )}
+                        {onDeleteChapter && (
+                          <button
+                            type="button"
+                            className="chapter-action-btn delete"
+                            title="Xóa chương học"
+                            aria-label="Xóa chương học"
+                            onClick={(e) => { e.stopPropagation(); onDeleteChapter(ch.id); }}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                     <div className="sidebar-chapter-info">
                       <div className="planner-chapter-title">{ch.title}</div>
                       <div className="planner-chapter-desc">{ch.description || 'Chưa có mô tả.'}</div>
@@ -384,7 +414,7 @@ export default function LessonPlannerSidebar({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
             <div>
               <h4 className="planner-sub-title sidebar-sub-header">
-                <HelpCircle size={16} aria-hidden="true" /> MCQs Đề thi học phần
+                <HelpCircle size={16} aria-hidden="true" /> Câu hỏi trắc nghiệm
               </h4>
               <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: '0 0 15px 0', lineHeight: '1.4' }}>
                 Danh sách câu hỏi trắc nghiệm của chương này dùng để đối chiếu thiết kế CLO & Bloom.

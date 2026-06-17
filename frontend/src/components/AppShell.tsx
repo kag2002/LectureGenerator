@@ -17,7 +17,8 @@ import {
   User as UserIcon,
   Home,
   Activity,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from 'lucide-react';
 import { Course } from '@/types';
 import FlowSteps from './FlowSteps';
@@ -41,6 +42,7 @@ export default function AppShell({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark' | 'academic'>('light');
   const [username, setUsername] = useState('Giảng viên');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Load theme and user on mount
   useEffect(() => {
@@ -55,6 +57,10 @@ export default function AppShell({
         const u = JSON.parse(savedUser);
         if (u && u.full_name) setUsername(u.full_name);
         else if (u && u.username) setUsername(u.username);
+        
+        if (u && u.role === 'admin') {
+          setIsAdmin(true);
+        }
       } catch (e) {
         console.error(e);
       }
@@ -96,16 +102,19 @@ export default function AppShell({
     }
   };
 
-  const menuItems = [
+  const baseMenuItems = [
     { view: 'course_roadmap', label: 'Lộ trình Môn học', icon: <Map size={18} /> },
     { view: 'course_config', label: 'Bóc tách Syllabus', icon: <FileText size={18} /> },
     { view: 'lesson_planner', label: 'Soạn Bài giảng', icon: <BookOpen size={18} /> },
     { view: 'question_bank', label: 'Ngân hàng Đề thi', icon: <HelpCircle size={18} /> },
     { view: 'matrix_dashboard', label: 'Ma trận CLO-Bloom', icon: <BarChart2 size={18} /> },
     { view: 'knowledge_base', label: 'Thư viện RAG', icon: <Library size={18} /> },
-    process.env.NEXT_PUBLIC_HIDE_CHAT !== 'true' && { view: 'chatbot', label: 'Trợ lý AI Support', icon: <MessageSquare size={18} /> },
     { view: 'ai_monitor', label: 'Giám sát AI', icon: <Activity size={18} /> },
-  ].filter(Boolean) as { view: string; label: string; icon: React.ReactNode }[];
+  ];
+
+  const menuItems = isAdmin 
+    ? [...baseMenuItems, { view: 'admin_dashboard', label: 'Quản trị hệ thống', icon: <Shield size={18} /> }]
+    : baseMenuItems;
 
   return (
     <div className="app-shell">
@@ -158,7 +167,7 @@ export default function AppShell({
                 </div>
                 <div className="user-info">
                   <span className="username">{username}</span>
-                  <span className="user-role">Giảng viên</span>
+                  <span className="user-role">{isAdmin ? 'Quản trị viên' : 'Giảng viên'}</span>
                 </div>
               </div>
               <div className="sidebar-actions-row">

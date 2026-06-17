@@ -17,6 +17,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
+    role = Column(String(50), default="user", nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     # Quan hệ
@@ -233,6 +234,52 @@ class SystemRule(Base):
 
     # Quan hệ
     course = relationship("Course")
+
+
+class UserEvent(Base):
+    """Lưu vết hành vi clickstream của người dùng."""
+
+    __tablename__ = "user_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    event_type = Column(String(50), nullable=False)  # click | edit | view | session
+    element_id = Column(String(100), nullable=True)  # ví dụ: "btn-generate-slides"
+    payload = Column(Text, nullable=True)  # JSON metadata (browser info, extra metrics)
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    user = relationship("User")
+    course = relationship("Course")
+
+
+class AIGenerationTrace(Base):
+    """Lưu vết Prompt sư phạm, slide AI gợi ý và slide người dùng chỉnh sửa hoàn thiện (SFT Data)."""
+
+    __tablename__ = "ai_generation_traces"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    clo_id = Column(Integer, ForeignKey("clos.id", ondelete="SET NULL"), nullable=True, index=True)
+    bloom_level = Column(Integer, nullable=True)
+    
+    prompt = Column(Text, nullable=False)
+    proposed_content = Column(Text, nullable=True)  # Nội dung slide AI tạo ra ban đầu
+    edited_content = Column(Text, nullable=True)  # Nội dung slide người dùng sửa lại
+    
+    rating = Column(Integer, nullable=True)  # 1-5 sao
+    feedback = Column(Text, nullable=True)  # Lý do từ chối/góp ý
+    
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    user = relationship("User")
+    course = relationship("Course")
+    chapter = relationship("Chapter")
+    clo = relationship("CLO")
 
 
 # --- Soft-Delete Event Hooks & Monkeypatching ---

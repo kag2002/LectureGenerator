@@ -14,7 +14,7 @@ import {
   ArrowLeft, BookOpen, ClipboardList, Plus, AlertTriangle, 
   Scissors, Loader2, Lightbulb, Search, Presentation, 
   Activity, Eye, X, ChevronUp, ChevronDown, Palette, 
-  History, Save, Trash2, Download, FileText, Check, Printer, HelpCircle, Sparkles 
+  History, Save, Trash2, Download, FileText, Check, Printer, HelpCircle, Sparkles, Pencil 
 } from 'lucide-react';
 import { Course, CLO, Chapter } from '@/types';
 import '../styles/LessonPlanner.css';
@@ -150,6 +150,8 @@ export default function LessonPlanner({
     handleLoadFullDocument,
     parseActiveLearningScript,
     isCloCovered,
+    handleUpdateChapter,
+    handleDeleteChapter,
 
     // Sub-hooks
     stream,
@@ -171,6 +173,13 @@ export default function LessonPlanner({
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [reverting, setReverting] = useState(false);
+
+  // Chapter edit modal state
+  const [showEditChapterModal, setShowEditChapterModal] = useState(false);
+  const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
+  const [editChapterTitle, setEditChapterTitle] = useState('');
+  const [editChapterDesc, setEditChapterDesc] = useState('');
+  const [savingChapter, setSavingChapter] = useState(false);
 
   useEffect(() => {
     setPortalTarget(document.getElementById('app-header-portal-slot'));
@@ -202,6 +211,32 @@ export default function LessonPlanner({
       setError('Không thể khôi phục phiên bản.');
     } finally {
       setReverting(false);
+    }
+  };
+
+  const handleOpenEditChapter = (chapter: Chapter) => {
+    setEditingChapter(chapter);
+    setEditChapterTitle(chapter.title);
+    setEditChapterDesc(chapter.description || '');
+    setShowEditChapterModal(true);
+  };
+
+  const handleSaveEditChapter = async () => {
+    if (!editingChapter || !editChapterTitle.trim()) return;
+    setSavingChapter(true);
+    try {
+      await handleUpdateChapter(
+        editingChapter.id,
+        editChapterTitle.trim(),
+        editChapterDesc.trim(),
+        editingChapter.sort_order || 1
+      );
+      setShowEditChapterModal(false);
+      setEditingChapter(null);
+    } catch (err) {
+      // Error handled in hook
+    } finally {
+      setSavingChapter(false);
     }
   };
 
@@ -578,7 +613,7 @@ export default function LessonPlanner({
               title="Thiết kế bộ câu hỏi trắc nghiệm kiểm tra độ hiểu bài"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
             >
-              <HelpCircle size={13} /> Tạo Đề kiểm tra MCQ
+              <HelpCircle size={13} /> Tạo Đề kiểm tra trắc nghiệm
             </button>
           </div>
         </div>
@@ -631,6 +666,8 @@ export default function LessonPlanner({
             ragReferences={ragReferences}
             onCitationClick={(ref) => handleCitationClick(`${ref.file_name} - Page: ${ref.page_number}`)}
             generatingChapterId={generatingChapterId}
+            onEditChapter={handleOpenEditChapter}
+            onDeleteChapter={handleDeleteChapter}
           />
 
         <AIProposalPanel
@@ -777,6 +814,60 @@ export default function LessonPlanner({
                 className="history-modal-close-btn"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Chapter Edit Modal */}
+      {showEditChapterModal && editingChapter && typeof document !== 'undefined' && createPortal(
+        <div className="chapter-edit-modal-overlay" onClick={() => setShowEditChapterModal(false)}>
+          <div className="chapter-edit-modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="chapter-edit-modal-title">
+              <Pencil size={18} /> Sửa chương học
+            </h3>
+            <div className="chapter-edit-modal-field">
+              <label className="chapter-edit-modal-label">Tên chương</label>
+              <input
+                type="text"
+                className="chapter-edit-modal-input"
+                value={editChapterTitle}
+                onChange={(e) => setEditChapterTitle(e.target.value)}
+                placeholder="Nhập tên chương học..."
+                autoFocus
+              />
+            </div>
+            <div className="chapter-edit-modal-field">
+              <label className="chapter-edit-modal-label">Mô tả</label>
+              <textarea
+                className="chapter-edit-modal-textarea"
+                value={editChapterDesc}
+                onChange={(e) => setEditChapterDesc(e.target.value)}
+                placeholder="Mô tả nội dung chương học..."
+                rows={3}
+              />
+            </div>
+            <div className="chapter-edit-modal-actions">
+              <button
+                type="button"
+                className="chapter-edit-modal-cancel"
+                onClick={() => setShowEditChapterModal(false)}
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                className="chapter-edit-modal-save"
+                onClick={handleSaveEditChapter}
+                disabled={savingChapter || !editChapterTitle.trim()}
+              >
+                {savingChapter ? (
+                  <><Loader2 size={14} className="animate-spin" /> Đang lưu…</>
+                ) : (
+                  <><Check size={14} /> Lưu thay đổi</>
+                )}
               </button>
             </div>
           </div>

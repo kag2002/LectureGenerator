@@ -7,7 +7,7 @@ import {
   HelpCircle, BarChart2, Library, ClipboardList, Target, 
   ArrowLeft, MessageSquare, LogOut,
   Plus, Minus, X, Check, Download, ListTodo,
-  Printer, Pencil, Network
+  Printer, Pencil, Network, Trash2
 } from 'lucide-react';
 import { Course, CLO, Chapter } from '@/types';
 import { useRoadmapData } from '../hooks/useRoadmapData';
@@ -77,11 +77,57 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
   const {
     clos, chapters, questions, materialsMap, loading,
     selectedNode, setSelectedNode,
+    handleCreateChapter, handleUpdateChapter, handleDeleteChapter,
   } = roadmapData;
 
   const [viewMode, setViewMode] = useState<'mindmap' | 'checklist'>('checklist');
   const [downloadingChapterId, setDownloadingChapterId] = useState<number | null>(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
+
+  // Chapter administration modal states
+  const [chapterModalOpen, setChapterModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+  const [editingChapterObj, setEditingChapterObj] = useState<any | null>(null);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalDescription, setModalDescription] = useState('');
+  const [modalSaving, setModalSaving] = useState(false);
+
+  const handleOpenCreateModal = () => {
+    setModalMode('create');
+    setEditingChapterObj(null);
+    setModalTitle('');
+    setModalDescription('');
+    setChapterModalOpen(true);
+  };
+
+  const handleOpenEditModal = (chapter: any) => {
+    setModalMode('edit');
+    setEditingChapterObj(chapter);
+    setModalTitle(chapter.title || '');
+    setModalDescription(chapter.description || '');
+    setChapterModalOpen(true);
+  };
+
+  const handleSaveChapter = async () => {
+    if (!modalTitle.trim()) {
+      alert('Vui lòng nhập tên chương học.');
+      return;
+    }
+    setModalSaving(true);
+    try {
+      if (modalMode === 'create') {
+        await handleCreateChapter(modalTitle, modalDescription);
+      } else {
+        await handleUpdateChapter(editingChapterObj.id, modalTitle, modalDescription, editingChapterObj.sort_order || 0);
+      }
+      setChapterModalOpen(false);
+    } catch (err: any) {
+      alert(err.message || 'Lỗi khi lưu chương học.');
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
 
   // Direct export handlers
   const handleExportPPTX = async (chapterId: number) => {
@@ -228,7 +274,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
             detail: `${chQuestions.length} câu`,
             status: hasQ ? 'done' : 'pending',
             targetView: 'question_bank',
-            description: `Ngân hàng câu hỏi trắc nghiệm MCQ cho chương "${ch.title}". Câu hỏi được sinh bởi AI với Self-Correction (Generator + Solver) và gán tag CLO + mức Bloom.`,
+            description: `Ngân hàng câu hỏi trắc nghiệm cho chương "${ch.title}". Câu hỏi được sinh bởi AI với Self-Correction (Generator + Solver) và gán tag CLO + mức Bloom.`,
             stats: [{ value: chQuestions.length, label: 'Tổng câu hỏi' }],
           },
         ],
@@ -486,11 +532,30 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
               </div>
             </div>
             <p className="checklist-summary-desc">
-              Hệ thống đã chuẩn hóa đầu ra theo chuẩn học thuật VinUni. Bạn có thể theo dõi tiến độ hoàn thiện của từng chương và tải trực tiếp các tệp tin bài giảng (.pptx), kịch bản giảng dạy active learning và bộ câu hỏi MCQ bên dưới.
+              Hệ thống đã chuẩn hóa đầu ra theo chuẩn học thuật VinUni. Bạn có thể theo dõi tiến độ hoàn thiện của từng chương và tải trực tiếp các tệp tin bài giảng (.pptx), kịch bản giảng dạy active learning và bộ câu hỏi trắc nghiệm bên dưới.
             </p>
           </div>
 
           {/* Chapter Table */}
+          <div className="checklist-table-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', marginTop: '24px' }}>
+            <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Cấu trúc chương học chi tiết</h3>
+            <button 
+              onClick={handleOpenCreateModal}
+              className="checklist-bulk-btn zip-package" 
+              style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '6px',
+                background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                color: 'white',
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)'
+              }}
+            >
+              <Plus size={14} /> Thêm chương học mới
+            </button>
+          </div>
+
           <div className="checklist-table-wrapper">
             <table className="checklist-table">
               <thead>
@@ -498,7 +563,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                   <th>Chương học</th>
                   <th>Slide bài giảng (.pptx)</th>
                   <th>Giáo án Active Learning</th>
-                  <th>Ngân hàng Đề thi (MCQ)</th>
+                  <th>Ngân hàng Đề thi</th>
                   <th>Gợi ý hành động tiếp theo</th>
                 </tr>
               </thead>
@@ -515,13 +580,13 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                         </div>
                         <ul className="empty-suggestions-list">
                           <li className="empty-suggestions-item">
-                            Bước 1: Click <strong>"Nạp Đề Cương (Syllabus)"</strong> bằng cách chọn Sơ đồ tư duy bên cạnh, hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để tải lên Syllabus của bạn.
+                            Cách 1: Click nút <strong>"Thêm chương học mới"</strong> ở trên để tự tạo chương thủ công.
                           </li>
                           <li className="empty-suggestions-item">
-                            Bước 2: Click vào mục <strong>Soạn bài giảng</strong> (hoặc hỏi Trợ lý ảo Falcon AI) và chọn <strong>"Gợi ý Dàn ý chương học"</strong> để AI tự động sinh cấu trúc các chương học.
+                            Cách 2: Click <strong>"Nạp Đề Cương (Syllabus)"</strong> bằng cách chọn Sơ đồ tư duy bên cạnh, hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để tải lên Syllabus của bạn.
                           </li>
                           <li className="empty-suggestions-item">
-                            Sau khi các chương học được khởi tạo, danh sách sẽ hiển thị ở đây để bạn theo dõi tiến độ và tải trọn bộ tài liệu PowerPoint, Giáo án & Đề thi.
+                            Cách 3: Click vào mục <strong>Soạn bài giảng</strong> (hoặc hỏi Trợ lý ảo Falcon AI) và chọn <strong>"Gợi ý Dàn ý chương học"</strong> để AI tự động sinh cấu trúc các chương học.
                           </li>
                         </ul>
                       </div>
@@ -558,7 +623,25 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                       <tr key={ch.id}>
                         <td className="col-chapter">
                           <div className="chapter-order">Chương {idx + 1}</div>
-                          <div className="chapter-title" title={ch.title}>{ch.title}</div>
+                          <div className="chapter-title-container">
+                            <div className="chapter-title" title={ch.title}>{ch.title}</div>
+                            <div className="chapter-admin-actions" style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                onClick={() => handleOpenEditModal(ch)}
+                                className="chapter-icon-btn edit"
+                                title="Sửa tên/mô tả chương"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteChapter(ch.id)}
+                                className="chapter-icon-btn delete"
+                                title="Xóa chương học"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
                         </td>
                         
                         <td className="col-slides">
@@ -728,6 +811,54 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
         course={course}
         {...roadmapData}
       />
+
+      {chapterModalOpen && (
+        <div className="chapter-modal-overlay" onClick={() => setChapterModalOpen(false)}>
+          <div className="chapter-modal-card" onClick={(e) => e.stopPropagation()}>
+            <h3 className="chapter-modal-title">
+              {modalMode === 'create' ? 'Thêm chương học mới' : 'Chỉnh sửa chương học'}
+            </h3>
+            
+            <div className="chapter-modal-field">
+              <label className="chapter-modal-label">Tên chương học</label>
+              <input
+                type="text"
+                className="chapter-modal-input"
+                value={modalTitle}
+                onChange={(e) => setModalTitle(e.target.value)}
+                placeholder="Ví dụ: Chương 1: Tổng quan về thuật toán nhị phân"
+              />
+            </div>
+
+            <div className="chapter-modal-field">
+              <label className="chapter-modal-label">Mô tả chương học</label>
+              <textarea
+                className="chapter-modal-textarea"
+                value={modalDescription}
+                onChange={(e) => setModalDescription(e.target.value)}
+                placeholder="Mô tả nội dung giảng dạy chính trong chương học này..."
+              />
+            </div>
+
+            <div className="chapter-modal-actions">
+              <button
+                className="chapter-modal-btn secondary"
+                onClick={() => setChapterModalOpen(false)}
+                disabled={modalSaving}
+              >
+                Hủy bỏ
+              </button>
+              <button
+                className="chapter-modal-btn primary"
+                onClick={handleSaveChapter}
+                disabled={modalSaving}
+              >
+                {modalSaving ? 'Đang lưu...' : 'Lưu chương học'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,8 +11,9 @@ import QuestionBank from './views/QuestionBank';
 import MatrixDashboard from './views/MatrixDashboard';
 import KnowledgeBase from './views/KnowledgeBase';
 import ChatBot from './views/ChatBot';
-import MonitorDashboard from './views/MonitorDashboard';
 import AppShell from './components/AppShell';
+import MonitorDashboard from './views/MonitorDashboard';
+import AdminDashboard from './views/AdminDashboard';
 import { User, Course, QueueItem } from '@/types';
 import { Zap, X, Play, Pause, Check, Loader2, Maximize2, Minimize2, Cpu } from 'lucide-react';
 import MascotCompanion from './components/MascotCompanion';
@@ -595,17 +596,17 @@ export default function App() {
           onSelectCourse={handleSelectCourse}
         />
       )}
-      {selectedCourse && ['course_roadmap', 'course_config', 'lesson_planner', 'question_bank', 'matrix_dashboard', 'knowledge_base', 'chatbot', 'ai_monitor'].includes(activeView) && (
+      {(selectedCourse || activeView === 'admin_dashboard') && ['course_roadmap', 'course_config', 'lesson_planner', 'question_bank', 'matrix_dashboard', 'knowledge_base', 'chatbot', 'ai_monitor', 'admin_dashboard'].includes(activeView) && (
         <AppShell
-          key={selectedCourse.id}
-          course={selectedCourse}
+          key={selectedCourse?.id || 0}
+          course={selectedCourse || { id: 0, course_code: 'SYS', course_name: 'Hệ thống Quản trị' } as any}
           activeView={activeView}
           onNavigate={(view) => handleNavigate(view)}
           onLogout={handleLogout}
         >
           <div style={{ display: activeView === 'chatbot' ? 'block' : 'none' }}>
             <ChatBot
-              course={selectedCourse}
+              course={selectedCourse!}
               onGoBack={() => handleNavigate('course_roadmap')}
               activeView={activeView}
               isActive={activeView === 'chatbot'}
@@ -613,7 +614,7 @@ export default function App() {
           </div>
           <div style={{ display: activeView === 'course_roadmap' ? 'block' : 'none' }}>
             <CourseRoadmap
-              course={selectedCourse}
+              course={selectedCourse!}
               onBack={() => handleNavigate('dashboard')}
               onLogout={handleLogout}
               onNavigate={handleNavigate}
@@ -621,7 +622,7 @@ export default function App() {
           </div>
           <div style={{ display: activeView === 'course_config' ? 'block' : 'none' }}>
             <CourseConfig
-              course={selectedCourse}
+              course={selectedCourse!}
               onBack={() => handleNavigate('course_roadmap')}
               onNavigate={handleNavigate}
               onStartPlanning={() => handleNavigate('lesson_planner')}
@@ -632,7 +633,7 @@ export default function App() {
           </div>
           <div style={{ display: activeView === 'lesson_planner' ? 'block' : 'none' }}>
             <LessonPlanner
-              course={selectedCourse}
+              course={selectedCourse!}
               initialChapterId={activeChapterId}
               initialCloId={activeCloId}
               initialCloCode={activeCloCode}
@@ -650,7 +651,7 @@ export default function App() {
           </div>
           <div style={{ display: activeView === 'question_bank' ? 'block' : 'none' }}>
             <QuestionBank
-              course={selectedCourse}
+              course={selectedCourse!}
               initialChapterId={activeChapterId}
               initialCloId={activeCloId}
               initialBloomLevel={activeBloomLevel}
@@ -665,7 +666,7 @@ export default function App() {
           </div>
           <div style={{ display: activeView === 'matrix_dashboard' ? 'block' : 'none' }}>
             <MatrixDashboard
-              course={selectedCourse}
+              course={selectedCourse!}
               onBack={() => handleNavigate('course_roadmap')}
               onNavigate={handleNavigate}
               queue={queue}
@@ -684,7 +685,7 @@ export default function App() {
           </div>
           <div style={{ display: activeView === 'knowledge_base' ? 'block' : 'none' }}>
             <KnowledgeBase
-              course={selectedCourse}
+              course={selectedCourse!}
               onBack={() => handleNavigate('course_roadmap')}
               onLogout={handleLogout}
               onNavigate={(view) => handleNavigate(view)}
@@ -700,6 +701,14 @@ export default function App() {
                 onClearStats={onClearMonitorStats}
                 onBack={() => handleNavigate('course_roadmap')}
                 isActive={activeView === 'ai_monitor'}
+              />
+            )}
+          </div>
+          <div style={{ display: activeView === 'admin_dashboard' ? 'block' : 'none' }}>
+            {activeView === 'admin_dashboard' && (
+              <AdminDashboard
+                onBack={() => handleNavigate(selectedCourse ? 'course_roadmap' : 'dashboard')}
+                isActive={activeView === 'admin_dashboard'}
               />
             )}
           </div>
@@ -1212,7 +1221,7 @@ export default function App() {
                     {pendingAction.action === 'generate_outline' && 'Thiết kế cấu trúc Outline môn học'}
                     {pendingAction.action === 'generate_storyboard' && 'Thiết kế dàn ý (Storyboard)'}
                     {pendingAction.action === 'generate_materials' && 'Tạo slide bài giảng & giáo án'}
-                    {pendingAction.action === 'generate_questions' && 'Tạo câu hỏi trắc nghiệm MCQ'}
+                    {pendingAction.action === 'generate_questions' && 'Tạo câu hỏi trắc nghiệm'}
                   </strong>
                 </div>
 
