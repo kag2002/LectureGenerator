@@ -1,7 +1,13 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, func
-from sqlalchemy.orm import relationship
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, func, CheckConstraint, event
+from sqlalchemy.orm import relationship, Session, with_loader_criteria, Query
+from datetime import datetime, timezone
 
 from src.database.session import Base
+
+
+class SoftDeleteMixin:
+    deleted_at = Column(DateTime, nullable=True)
+    is_deleted = Column(Boolean, default=False, server_default="false")
 
 
 class User(Base):
@@ -17,7 +23,7 @@ class User(Base):
     courses = relationship("Course", back_populates="user", cascade="all, delete-orphan")
 
 
-class Course(Base):
+class Course(Base, SoftDeleteMixin):
     __tablename__ = "courses"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -37,6 +43,9 @@ class Course(Base):
 
 class CLO(Base):
     __tablename__ = "clos"
+    __table_args__ = (
+        CheckConstraint("bloom_level BETWEEN 1 AND 6", name="check_bloom_level_range"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -49,7 +58,7 @@ class CLO(Base):
     questions = relationship("Question", back_populates="clo")
 
 
-class Chapter(Base):
+class Chapter(Base, SoftDeleteMixin):
     __tablename__ = "chapters"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -81,8 +90,11 @@ class ChapterMaterial(Base):
     chapter = relationship("Chapter", back_populates="materials")
 
 
-class Question(Base):
+class Question(Base, SoftDeleteMixin):
     __tablename__ = "questions"
+    __table_args__ = (
+        CheckConstraint("bloom_level BETWEEN 1 AND 6", name="check_bloom_level_range"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -221,3 +233,46 @@ class SystemRule(Base):
 
     # Quan hệ
     course = relationship("Course")
+
+
+# --- Soft-Delete Event Hooks & Monkeypatching ---
+
+@event.listens_for(Session, "do_orm_execute")
+def _add_soft_delete_filter(execute_state):
+    # Automatically filter out soft-deleted records globally for SELECT queries
+    if execute_state.is_select and not execute_state.execution_options.get("skip_filter", False):
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(
+                SoftDeleteMixin,
+                lambda cls: cls.is_deleted.is_(False),
+                include_aliases=True,
+            )
+        )
+
+@event.listens_for(Session, "before_flush")
+def _intercept_deletes(session, flush_context, instances):
+    # Intercept session.delete() and convert to soft-delete
+    for obj in list(session.deleted):
+        if isinstance(obj, SoftDeleteMixin):
+            session.add(obj)  # Add back to session as persistent/dirty
+            obj.is_deleted = True
+            obj.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+# Monkeypatch Query.delete to convert bulk deletes to bulk updates
+_original_delete = Query.delete
+
+def _soft_delete_query(self, synchronize_session="evaluate"):
+    if self.column_descriptions:
+        model = self.column_descriptions[0]["type"]
+        if model and isinstance(model, type) and issubclass(model, SoftDeleteMixin):
+            return self.update(
+                {
+                    "is_deleted": True,
+                    "deleted_at": datetime.now(timezone.utc).replace(tzinfo=None),
+                },
+                synchronize_session=synchronize_session,
+            )
+    return _original_delete(self, synchronize_session=synchronize_session)
+
+Query.delete = _soft_delete_query
+

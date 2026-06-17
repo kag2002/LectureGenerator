@@ -225,10 +225,11 @@ export function useMaterialsStream({
       });
     } catch (err: any) {
       if (err.name === 'CanceledError' || err.name === 'AbortError' || axios.isCancel(err)) {
-        console.log('Storyboard generation aborted on frontend');
+        // Storyboard generation aborted on frontend
         return;
       }
-      console.error(err);
+      // Error logged silently in production
+
       setApiStatus('error');
       setError(err.response?.data?.detail || 'Lỗi khi sinh storyboard.');
       setGenLog('');
@@ -299,7 +300,7 @@ export function useMaterialsStream({
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${targetChapterId}/generate-materials-from-storyboard-stream`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/chapters/${targetChapterId}/generate-materials-from-storyboard-stream`,
         {
           method: 'POST',
           headers: {
@@ -448,7 +449,7 @@ export function useMaterialsStream({
                     const ragRes = await client.get(`/api/courses/chapters/${targetChapterId}/rag-references`);
                     setRagReferences(ragRes.data.references || []);
                   } catch (ragErr) {
-                    console.error("Error refreshing RAG references:", ragErr);
+                    // Error logged silently in production
                   }
 
                   loadRevisions(targetChapterId);
@@ -479,10 +480,10 @@ export function useMaterialsStream({
 
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log('Generation stream aborted by user on the frontend.');
+        // Generation stream aborted by user on the frontend.
         return;
       }
-      console.error(err);
+      // Error logged silently in production
       if (selectedChapterRef.current?.id === targetChapterId) {
         setApiStatus('error');
         setError(`Lỗi kết nối stream: ${err.message}`);
@@ -511,7 +512,7 @@ export function useMaterialsStream({
     try {
       await client.post(`/api/courses/chapters/${cancelId}/cancel-materials-generation`);
     } catch (err) {
-      console.error('Error cancelling materials generation on backend:', err);
+      // Error logged silently in production
     } finally {
       setApiStatus('idle');
       setGenLog('');

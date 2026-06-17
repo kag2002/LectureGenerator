@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
     langfuse_host: str = ""
+
+    @model_validator(mode="after")
+    def check_jwt_secret_in_production(self) -> 'Settings':
+        if self.app_env == "production" and self.jwt_secret_key == "lecture_generator_super_secret_key":
+            raise ValueError(
+                "Security Risk: Default weak JWT secret key is not allowed in production environment."
+            )
+        return self
 
 
 @lru_cache

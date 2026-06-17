@@ -214,7 +214,7 @@ export default function App() {
         if (mode === 'questions') {
           // Sinh câu hỏi qua SSE Stream
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${courseId}/questions/generate-stream`,
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/${courseId}/questions/generate-stream`,
             {
               method: 'POST',
               headers: {
@@ -279,7 +279,7 @@ export default function App() {
           }
 
           const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${chId}/append-slide-for-clo-stream`,
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/chapters/${chId}/append-slide-for-clo-stream`,
             {
               method: 'POST',
               headers: {

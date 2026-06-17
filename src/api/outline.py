@@ -19,7 +19,13 @@ router = APIRouter(prefix="/api/courses", tags=["outline"])
 
 
 @router.get("/{course_id}/chapters", response_model=list[ChapterResponse])
-def get_course_chapters(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_course_chapters(
+    course_id: int,
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     # Xác thực quyền sở hữu môn học
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
     if not course:
@@ -27,7 +33,12 @@ def get_course_chapters(course_id: int, current_user: User = Depends(get_current
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
     chapters = (
-        db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).order_by(Chapter.sort_order).all()
+        db.query(Chapter)
+        .filter(Chapter.course_id == course_id, Chapter.is_active)
+        .order_by(Chapter.sort_order)
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
     )
     return chapters
 

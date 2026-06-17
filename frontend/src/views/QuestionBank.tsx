@@ -179,7 +179,7 @@ export default function QuestionBank({
 
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/questions/generate-stream`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/${course.id}/questions/generate-stream`,
         {
           method: 'POST',
           headers: {

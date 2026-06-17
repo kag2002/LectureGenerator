@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+import logging
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
@@ -24,6 +25,8 @@ from src.prompts.questions import (
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
 from src.utils.parser import safe_parse_bloom_level
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/courses", tags=["questions"])
 
 
@@ -31,14 +34,26 @@ router = APIRouter(prefix="/api/courses", tags=["questions"])
 
 
 @router.get("/{course_id}/questions", response_model=list[QuestionResponse])
-def get_course_questions(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_course_questions(
+    course_id: int,
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     # Xác thực quyền sở hữu môn học
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
-    return db.query(Question).filter(Question.course_id == course_id, Question.is_active).all()
+    return (
+        db.query(Question)
+        .filter(Question.course_id == course_id, Question.is_active)
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.post("/{course_id}/questions", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
@@ -312,7 +327,7 @@ def generate_questions(
                             current_question = corrected_data
                 except Exception as e:
                     # Nếu Solver lỗi, fallback chấp nhận câu hỏi gốc
-                    print(f"[ERROR] Solver validation exception: {str(e)}")
+                    logger.error(f"[ERROR] Solver validation exception: {str(e)}")
                     correct = True
 
             # --- Langfuse: Gửi Eval Scores cho câu hỏi này ---

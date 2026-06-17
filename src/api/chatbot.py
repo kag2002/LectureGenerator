@@ -71,7 +71,11 @@ def create_chat_session(
 
 @router.get("/sessions")
 def get_chat_sessions(
-    course_id: int | None = None, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    course_id: int | None = None,
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Lấy danh sách các phiên chat của giảng viên (lọc theo course_id nếu có)."""
     query = db.query(ChatSession)
@@ -84,7 +88,7 @@ def get_chat_sessions(
         user_course_ids = [c.id for c in current_user.courses]
         query = query.filter(ChatSession.course_id.in_(user_course_ids))
 
-    sessions = query.order_by(ChatSession.created_at.desc()).all()
+    sessions = query.order_by(ChatSession.created_at.desc()).offset((page - 1) * limit).limit(limit).all()
     return [
         {
             "id": s.id,
@@ -526,9 +530,14 @@ async def trigger_chatbot_eval(
 
 
 @router.get("/eval/history")
-def get_chatbot_eval_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_chatbot_eval_history(
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Lấy danh sách các lượt đánh giá đã thực hiện trong quá khứ."""
-    runs = db.query(ChatEvalRun).order_by(ChatEvalRun.run_at.desc()).all()
+    runs = db.query(ChatEvalRun).order_by(ChatEvalRun.run_at.desc()).offset((page - 1) * limit).limit(limit).all()
 
     formatted_runs = []
     for r in runs:
@@ -560,7 +569,13 @@ def get_chatbot_eval_history(current_user: User = Depends(get_current_user), db:
 
 
 @router.get("/courses/{course_id}/rules")
-def get_course_rules(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_course_rules(
+    course_id: int,
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Lấy danh sách các quy tắc tự học (approved & pending) của khóa học."""
     # Xác thực quyền sở hữu môn học
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
@@ -569,7 +584,14 @@ def get_course_rules(course_id: int, current_user: User = Depends(get_current_us
 
     from src.database.models import SystemRule
 
-    rules = db.query(SystemRule).filter(SystemRule.course_id == course_id).order_by(SystemRule.created_at.desc()).all()
+    rules = (
+        db.query(SystemRule)
+        .filter(SystemRule.course_id == course_id)
+        .order_by(SystemRule.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
 
     return [
         {

@@ -487,7 +487,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
         setCurrentSessionId(response.data[0].id);
       }
     } catch (err) {
-      console.error('Error fetching sessions:', err);
+      // Error logged silently in production
     }
   };
 
@@ -503,7 +503,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
       setMessages([]);
       resetTelemetry();
     } catch (err) {
-      console.error('Error creating session:', err);
+      // Error logged silently in production
     }
   };
 
@@ -534,7 +534,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
         resetTelemetry();
       }
     } catch (err) {
-      console.error('Error fetching messages:', err);
+      // Error logged silently in production
     }
   };
 
@@ -544,7 +544,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
       const response = await client.get('/api/chatbot/eval/history');
       setEvalHistory(response.data);
     } catch (err) {
-      console.error('Error fetching eval history:', err);
+      // Error logged silently in production
     }
   };
 
@@ -734,10 +734,10 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log('Chatbot generation aborted by user on the frontend.');
+        // Chatbot generation aborted by user on the frontend
         return;
       }
-      console.error('Streaming error:', err);
+      // Streaming error logged silently
     } finally {
       if (chatbotAbortRef.current === controller) {
         chatbotAbortRef.current = null;
@@ -757,7 +757,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
       window.dispatchEvent(new CustomEvent('db-state-changed'));
       await fetchMessages(currentSessionId);
     } catch (err) {
-      console.error('Error switching branch:', err);
+      // Error switching branch logged silently
       alert('Có lỗi xảy ra khi chuyển nhánh hội thoại.');
     } finally {
       setLoading(false);
@@ -899,10 +899,10 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
       }
     } catch (err: any) {
       if (err.name === 'AbortError') {
-        console.log('Edit stream aborted by user.');
+        // Edit stream aborted by user
         return;
       }
-      console.error('Streaming error during edit:', err);
+      // Streaming error during edit logged silently
     } finally {
       if (chatbotAbortRef.current === controller) {
         chatbotAbortRef.current = null;
@@ -922,7 +922,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
     try {
       await client.post(`/api/chatbot/sessions/${currentSessionId}/cancel`);
     } catch (err) {
-      console.error('Error cancelling response:', err);
+      // Error cancelling response logged silently
     } finally {
       fetchMessages(currentSessionId);
     }
@@ -936,7 +936,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
       setEvalResult(response.data);
       fetchEvalHistory();
     } catch (err) {
-      console.error(err);
+      // Error logged silently
       alert('Chạy Evaluation gặp lỗi hệ thống.');
     } finally {
       setEvalLoading(false);

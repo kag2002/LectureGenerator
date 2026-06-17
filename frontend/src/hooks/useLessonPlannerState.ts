@@ -365,7 +365,7 @@ export function useLessonPlannerState({
         const hasChanges = sCont !== savedSCont || aScript !== savedSc;
         if (hasChanges) {
           const token = localStorage.getItem('token');
-          fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${ch.id}/materials`, {
+          fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/chapters/${ch.id}/materials`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -691,7 +691,7 @@ export function useLessonPlannerState({
   const handleExportLessonPlan = () => {
     if (!selectedChapter) return;
     const token = localStorage.getItem('token');
-    window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${selectedChapter.id}/export-lesson-plan?token=${token}`, '_blank');
+    window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/chapters/${selectedChapter.id}/export-lesson-plan?token=${token}`, '_blank');
   };
 
   const handleAutoSplitSlide = (slideIndex: number) => {
@@ -769,7 +769,7 @@ export function useLessonPlannerState({
       
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/chapters/${selectedChapter.id}/export-pptx-canvas`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/chapters/${selectedChapter.id}/export-pptx-canvas`,
         {
           method: 'POST',
           headers: {

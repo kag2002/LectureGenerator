@@ -29,9 +29,14 @@ router = APIRouter(prefix="/api/courses", tags=["courses"])
 
 
 @router.get("", response_model=list[CourseResponse])
-def get_courses(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_courses(
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     # Lấy các môn học thuộc về duy nhất giảng viên hiện tại (Isolation)
-    courses = db.query(Course).filter(Course.user_id == current_user.id).all()
+    courses = db.query(Course).filter(Course.user_id == current_user.id).offset((page - 1) * limit).limit(limit).all()
     return courses
 
 
@@ -95,14 +100,20 @@ def delete_course(course_id: int, current_user: User = Depends(get_current_user)
 
 
 @router.get("/{course_id}/clos", response_model=list[CLOResponse])
-def get_course_clos(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_course_clos(
+    course_id: int,
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     # Kiểm tra quyền sở hữu môn học trước
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
     if not course:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
-    clos = db.query(CLO).filter(CLO.course_id == course_id).all()
+    clos = db.query(CLO).filter(CLO.course_id == course_id).offset((page - 1) * limit).limit(limit).all()
     return clos
 
 
@@ -533,7 +544,13 @@ async def get_document_progress(
 
 
 @router.get("/{course_id}/documents")
-def get_course_documents(course_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_course_documents(
+    course_id: int,
+    page: int = 1,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     # Kiểm tra quyền môn học trước
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
     if not course:
@@ -545,6 +562,8 @@ def get_course_documents(course_id: int, current_user: User = Depends(get_curren
         docs = (
             db.query(RAGDocument)
             .filter(RAGDocument.course_id == course_id, RAGDocument.user_id == current_user.id)
+            .offset((page - 1) * limit)
+            .limit(limit)
             .all()
         )
 

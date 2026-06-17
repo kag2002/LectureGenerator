@@ -115,7 +115,7 @@ export default function CourseConfig({
       formData.append('file', finalFile);
 
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'}/api/courses/${course.id}/parse-syllabus-stream`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/${course.id}/parse-syllabus-stream`,
         {
           method: 'POST',
           headers: {
