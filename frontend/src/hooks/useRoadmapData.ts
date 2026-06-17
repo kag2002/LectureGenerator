@@ -507,14 +507,16 @@ export function useRoadmapData(course: Course) {
         return;
       }
       
-      let content = `# ĐỀ THI TRẮC NGHIỆM - CHƯƠNG: ${(chapterTitle || '').toUpperCase()}\n`;
-      content += `Môn học: ${course.course_name} (${course.course_code})\n`;
-      content += `Số lượng câu hỏi: ${chQuestions.length} câu\n`;
-      content += `Sinh tự động bởi AI Lecture Assistant (G02-Team023)\n\n`;
-      content += `--------------------------------------------------------\n\n`;
+      const escapeGift = (text: string) => {
+        return text.replace(/[{}[\]~=#:\/]/g, '\\$&');
+      };
+
+      let content = `// Ngân hàng câu hỏi trắc nghiệm - Chương: ${chapterTitle || ''}\n`;
+      content += `// Môn học: ${course.course_name} (${course.course_code})\n`;
+      content += `// Số lượng câu hỏi: ${chQuestions.length} câu\n\n`;
       
-      chQuestions.forEach((q, idx) => {
-        content += `Câu ${idx + 1}: ${q.question_text || ''}\n`;
+      chQuestions.forEach((q) => {
+        const qText = escapeGift(q.question_text || '');
         let opts: string[] = [];
         if (q.options_json) {
           try {
@@ -524,22 +526,37 @@ export function useRoadmapData(course: Course) {
           }
         }
         
-        const labels = ["A", "B", "C", "D"];
-        opts.forEach((opt, oIdx) => {
-          content += `${labels[oIdx]}. ${opt}\n`;
+        const giftOptions = opts.map(opt => {
+          const optEscaped = escapeGift(opt);
+          if (opt.trim().toLowerCase() === q.correct_answer.trim().toLowerCase()) {
+            return `=${optEscaped}`;
+          }
+          return `~${optEscaped}`;
         });
-        
-        content += `\n* Đáp án đúng: ${q.correct_answer || ''}\n`;
-        const clo = clos.find(c => c.id === q.clo_id);
-        content += `* Phân loại: [${clo ? (clo.clo_code || clo.code) : 'N/A'}] - Bloom level: ${q.bloom_level}\n\n`;
-        content += `----------------\n\n`;
+
+        // Fallback if correct_answer was letter matching index (e.g., 'A', 'B', 'C', 'D')
+        const hasCorrect = giftOptions.some(o => o.startsWith('='));
+        if (!hasCorrect && ['A', 'B', 'C', 'D', 'a', 'b', 'c', 'd'].includes(q.correct_answer.trim())) {
+          const idx = q.correct_answer.trim().toUpperCase().charCodeAt(0) - 65;
+          if (idx < giftOptions.length) {
+            giftOptions[idx] = '=' + giftOptions[idx].slice(1);
+          }
+        }
+
+        // Ultimate fallback
+        const hasCorrectFinal = giftOptions.some(o => o.startsWith('='));
+        if (!hasCorrectFinal && giftOptions.length > 0) {
+          giftOptions[0] = '=' + giftOptions[0].slice(1);
+        }
+
+        content += `${qText} {${giftOptions.join(' ')}}` + '\n\n';
       });
       
-      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `De_thi_${course.course_code}_Chuong_${chapterId}.md`);
+      link.setAttribute("download", `De_thi_${course.course_code}_Chuong_${chapterId}.gift`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

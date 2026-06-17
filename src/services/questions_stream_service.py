@@ -126,6 +126,7 @@ def generate_questions_stream_generator(
                     correct_answer=q.get("correct_answer", ""),
                     bloom_level=safe_parse_bloom_level(q.get("bloom_level", bloom_level), bloom_level),
                     clo_id=clo_id,
+                    created_by="odin_autopilot",
                 )
                 new_db.add(new_q_obj)
                 new_db.commit()
@@ -242,6 +243,7 @@ def generate_questions_stream_generator(
                     correct_answer=current_q.get("correct_answer", ""),
                     bloom_level=safe_parse_bloom_level(current_q.get("bloom_level", bloom_level), bloom_level),
                     clo_id=clo_id,
+                    created_by="odin_autopilot",
                 )
                 new_db.add(new_q_obj)
                 new_db.commit()
@@ -268,6 +270,23 @@ def generate_questions_stream_generator(
 
     finally:
         new_db.close()
+
+    # Thêm log hành động để hoàn tác
+    if saved_questions:
+        log_db = SessionLocal()
+        try:
+            from src.database.models import OdinActionLog
+            action_log = OdinActionLog(
+                course_id=course_id,
+                action_type="generate_questions",
+                affected_ids=json.dumps({"questions": [q.id for q in saved_questions]})
+            )
+            log_db.add(action_log)
+            log_db.commit()
+        except Exception as log_err:
+            print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
+        finally:
+            log_db.close()
 
     yield send(
         "done",

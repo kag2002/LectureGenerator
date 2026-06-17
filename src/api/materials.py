@@ -67,6 +67,9 @@ def save_chapter_materials(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
+
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     processed_slides = process_markdown_images(material_data.slide_content)
     if not material:
@@ -74,11 +77,13 @@ def save_chapter_materials(
             chapter_id=chapter_id,
             slide_content=processed_slides,
             active_learning_script=material_data.active_learning_script,
+            created_by="user",
         )
         db.add(material)
     else:
         material.slide_content = processed_slides
         material.active_learning_script = material_data.active_learning_script
+        material.created_by = "user"
 
     db.commit()
     db.refresh(material)
@@ -101,6 +106,9 @@ def generate_chapter_materials(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     # 2. Truy vấn RAG cô lập từ ChromaDB
     query = f"{chapter.title} {chapter.description or ''}"
@@ -170,14 +178,32 @@ def generate_chapter_materials(
         material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
         if not material:
             material = ChapterMaterial(
-                chapter_id=chapter_id, slide_content=slide_content, active_learning_script=active_learning_script
+                chapter_id=chapter_id,
+                slide_content=slide_content,
+                active_learning_script=active_learning_script,
+                created_by="odin_autopilot",
             )
             db.add(material)
         else:
             material.slide_content = slide_content
             material.active_learning_script = active_learning_script
+            material.created_by = "odin_autopilot"
 
         db.commit()
+        db.refresh(material)
+
+        # Thêm log hành động để hoàn tác
+        try:
+            from src.database.models import OdinActionLog
+            action_log = OdinActionLog(
+                course_id=chapter.course_id,
+                action_type="generate_materials",
+                affected_ids=json.dumps({"materials": [material.id]})
+            )
+            db.add(action_log)
+            db.commit()
+        except Exception as log_err:
+            print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
 
         return {
             "message": "AI sinh học liệu thành công.",
@@ -206,6 +232,9 @@ async def generate_chapter_materials_stream(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     chapter_title = chapter.title
     chapter_description = chapter.description or ""
@@ -320,6 +349,9 @@ async def generate_materials_from_storyboard_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
+
     chapter_title = chapter.title
     chapter_description = chapter.description or ""
     course_id = chapter.course_id
@@ -386,6 +418,9 @@ def delete_chapter_materials(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
+
     # 2. Tìm bản ghi học liệu và xóa
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     if material:
@@ -407,6 +442,9 @@ def append_slide_for_clo(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     # 2. Xác thực CLO
     clo = db.query(CLO).filter(CLO.id == req.clo_id, CLO.course_id == chapter.course_id).first()
@@ -496,6 +534,9 @@ def append_slide_for_clo_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
+
     # 2. Xác thực CLO
     clo = db.query(CLO).filter(CLO.id == req.clo_id, CLO.course_id == chapter.course_id).first()
     if not clo:
@@ -545,6 +586,9 @@ def generate_slides_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
+
     course_id = chapter.course_id
     chapter_title = chapter.title
     chapter_description = chapter.description or ""
@@ -579,6 +623,9 @@ def generate_active_learning_stream(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     if not material or not material.slide_content:
@@ -621,6 +668,9 @@ def revise_slides(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     if not material or not material.slide_content:
@@ -789,6 +839,9 @@ def revise_active_learning(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
+
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     if not material or not material.active_learning_script:
         raise HTTPException(
@@ -895,6 +948,9 @@ def reconcile_active_learning(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     if not material or not material.active_learning_script:
@@ -1008,6 +1064,9 @@ def revert_chapter_revision(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    from src.api.autopilot import check_context_lock
+    check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     revision = (
         db.query(MaterialRevision)

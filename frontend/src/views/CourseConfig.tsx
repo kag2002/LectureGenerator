@@ -24,10 +24,10 @@ export interface CourseConfigProps {
   isActive?: boolean;
 }
 
-export default function CourseConfig({ 
-  course, 
-  onBack, 
-  onNavigate, 
+export default function CourseConfig({
+  course,
+  onBack,
+  onNavigate,
   onStartPlanning,
   onRecordAIUsage,
   setAIProcessingStatus,
@@ -43,10 +43,10 @@ export default function CourseConfig({
   const [file, setFile] = useState<File | null>(null);
   const [rawText, setRawText] = useState('');
   const [useTextarea, setUseTextarea] = useState(false);
-  
+
   const [requiredTextbooks, setRequiredTextbooks] = useState(course.description || ''); // maps description or textbooks
   const [recommendedReadings, setRecommendedReadings] = useState('');
-  
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -160,7 +160,7 @@ export default function CourseConfig({
           } else if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
-              
+
               if (currentEvent === 'stage') {
                 setStreamStage(data.stage);
                 setStreamLog(data.message);
@@ -185,6 +185,14 @@ export default function CourseConfig({
                 setStreamStage(0);
                 setAIProcessingStatus(false);
 
+                window.dispatchEvent(new CustomEvent('programmatic-syllabus-parsed', {
+                  detail: {
+                    courseId: course.id,
+                    closCount: data.clos ? data.clos.length : 0,
+                    fileName: finalFile.name
+                  }
+                }));
+
                 // Đồng bộ tin nhắn chatbot
                 try {
                   let sessionId = null;
@@ -194,7 +202,7 @@ export default function CourseConfig({
                   } else {
                     const createRes = await client.post('/api/chatbot/sessions', {
                       course_id: course.id,
-                      title: "Trò chuyện với Falcon Companion"
+                      title: "Trò chuyện với ODIN Companion"
                     });
                     sessionId = createRes.data.id;
                   }
@@ -323,23 +331,23 @@ export default function CourseConfig({
         required_textbooks: requiredTextbooks,
         recommended_readings: recommendedReadings
       });
-      
+
       const textData = JSON.stringify({ clos: clos });
       const blob = new Blob([`{"clos": ${textData}}`], { type: 'text/plain' });
       const jsonFile = new File([blob], 'syllabus_updated.txt', { type: 'text/plain' });
-      
+
       const formData = new FormData();
       formData.append('file', jsonFile);
-      
+
       const response = await client.post(`/api/courses/${course.id}/parse-syllabus`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       if (response.data && response.data.course) {
         setRequiredTextbooks(response.data.course.required_textbooks || '');
         setRecommendedReadings(response.data.course.recommended_readings || '');
       }
-      
+
       setMessage('Đã lưu danh sách CLO và tài liệu tham khảo môn học thành công!');
       fetchClos();
     } catch (err: any) {
@@ -383,14 +391,14 @@ export default function CourseConfig({
         <section className="course-config-upload-card">
           <h3 className="course-config-section-title">Nạp Tri Thức Đề Cương</h3>
           <div className="course-config-tab-header">
-            <button 
-              onClick={() => setUseTextarea(false)} 
+            <button
+              onClick={() => setUseTextarea(false)}
               className={!useTextarea ? "course-config-active-tab" : "course-config-inactive-tab"}
             >
               Tải File Lên
             </button>
-            <button 
-              onClick={() => setUseTextarea(true)} 
+            <button
+              onClick={() => setUseTextarea(true)}
               className={useTextarea ? "course-config-active-tab" : "course-config-inactive-tab"}
             >
               Dán Văn Bản Thô
@@ -481,7 +489,7 @@ export default function CourseConfig({
           {loading && streamStage > 0 && (
             <div className="course-config-progress-container">
               <div className="course-config-progressbar-wrapper">
-                <div 
+                <div
                   className={`course-config-progressbar ${streamStage === 4 ? 'course-config-progressbar--success' : ''}`}
                   style={{ width: `${(streamStage / 4) * 100}%` }}
                 />
@@ -512,7 +520,7 @@ export default function CourseConfig({
             <div className="course-config-empty-state">
               <p>Chưa cấu hình Chuẩn đầu ra môn học.</p>
               <p className="course-config-empty-desc">Hãy upload Syllabus ở bên trái để AI tự động trích xuất.</p>
-              
+
               <div className="empty-suggestions-box">
                 <div className="empty-suggestions-title">
                   <span>💡 Hướng dẫn & Gợi ý thực hiện:</span>
@@ -562,8 +570,8 @@ export default function CourseConfig({
                     <option value={5}>Đánh giá (B5)</option>
                     <option value={6}>Sáng tạo (B6)</option>
                   </select>
-                  <button 
-                    onClick={() => handleRemoveRow(index)} 
+                  <button
+                    onClick={() => handleRemoveRow(index)}
                     className="course-config-row-delete-btn"
                     title="Xóa CLO"
                   >
@@ -571,7 +579,7 @@ export default function CourseConfig({
                   </button>
                 </div>
               ))}
-              
+
               <div className="course-config-save-container">
                 <button onClick={handleSaveClos} disabled={saving} className="course-config-save-btn">
                   {saving ? 'Đang lưu...' : (

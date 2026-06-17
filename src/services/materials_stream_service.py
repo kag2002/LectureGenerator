@@ -224,11 +224,12 @@ async def generate_chapter_materials_stream_generator(
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
             if not material:
                 material = ChapterMaterial(
-                    chapter_id=chapter_id, slide_content=slide_content, active_learning_script=""
+                    chapter_id=chapter_id, slide_content=slide_content, active_learning_script="", created_by="odin_autopilot"
                 )
                 new_db.add(material)
             else:
                 material.slide_content = slide_content
+                material.created_by = "odin_autopilot"
             new_db.commit()
         except Exception as e:
             new_db.rollback()
@@ -294,13 +295,31 @@ async def generate_chapter_materials_stream_generator(
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
             if not material:
                 material = ChapterMaterial(
-                    chapter_id=chapter_id, slide_content=slide_content, active_learning_script=active_learning_script
+                    chapter_id=chapter_id,
+                    slide_content=slide_content,
+                    active_learning_script=active_learning_script,
+                    created_by="odin_autopilot",
                 )
                 new_db.add(material)
             else:
                 material.slide_content = slide_content
                 material.active_learning_script = active_learning_script
+                material.created_by = "odin_autopilot"
             new_db.commit()
+            new_db.refresh(material)
+
+            # Thêm log hành động để hoàn tác
+            try:
+                from src.database.models import OdinActionLog
+                action_log = OdinActionLog(
+                    course_id=course_id,
+                    action_type="generate_materials",
+                    affected_ids=json.dumps({"materials": [material.id]})
+                )
+                new_db.add(action_log)
+                new_db.commit()
+            except Exception as log_err:
+                print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
         except Exception as e:
             new_db.rollback()
             yield send("error", {"message": f"Lỗi lưu cơ sở dữ liệu: {str(e)}"})
@@ -525,11 +544,12 @@ async def generate_materials_from_storyboard_stream_generator(
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
             if not material:
                 material = ChapterMaterial(
-                    chapter_id=chapter_id, slide_content=slide_content, active_learning_script=""
+                    chapter_id=chapter_id, slide_content=slide_content, active_learning_script="", created_by="odin_autopilot"
                 )
                 new_db.add(material)
             else:
                 material.slide_content = slide_content
+                material.created_by = "odin_autopilot"
             new_db.commit()
         except Exception as e:
             new_db.rollback()
@@ -594,13 +614,31 @@ async def generate_materials_from_storyboard_stream_generator(
             material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
             if not material:
                 material = ChapterMaterial(
-                    chapter_id=chapter_id, slide_content=slide_content, active_learning_script=active_learning_script
+                    chapter_id=chapter_id,
+                    slide_content=slide_content,
+                    active_learning_script=active_learning_script,
+                    created_by="odin_autopilot",
                 )
                 new_db.add(material)
             else:
                 material.slide_content = slide_content
                 material.active_learning_script = active_learning_script
+                material.created_by = "odin_autopilot"
             new_db.commit()
+            new_db.refresh(material)
+
+            # Thêm log hành động để hoàn tác
+            try:
+                from src.database.models import OdinActionLog
+                action_log = OdinActionLog(
+                    course_id=course_id,
+                    action_type="generate_materials",
+                    affected_ids=json.dumps({"materials": [material.id]})
+                )
+                new_db.add(action_log)
+                new_db.commit()
+            except Exception as log_err:
+                print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
         except Exception as e:
             new_db.rollback()
             yield send("error", {"message": f"Lỗi lưu DB: {str(e)}"})
@@ -796,11 +834,31 @@ async def generate_slides_stream_generator(
     try:
         material = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
         if not material:
-            material = ChapterMaterial(chapter_id=chapter_id, slide_content=slide_content, active_learning_script="")
+            material = ChapterMaterial(
+                chapter_id=chapter_id,
+                slide_content=slide_content,
+                active_learning_script="",
+                created_by="odin_autopilot",
+            )
             new_db.add(material)
         else:
             material.slide_content = slide_content
+            material.created_by = "odin_autopilot"
         new_db.commit()
+        new_db.refresh(material)
+
+        # Thêm log hành động để hoàn tác
+        try:
+            from src.database.models import OdinActionLog
+            action_log = OdinActionLog(
+                course_id=course_id,
+                action_type="generate_materials",
+                affected_ids=json.dumps({"materials": [material.id]})
+            )
+            new_db.add(action_log)
+            new_db.commit()
+        except Exception as log_err:
+            print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
     except Exception as e:
         new_db.rollback()
         yield send("error", {"message": f"Lỗi lưu DB: {str(e)}"})
@@ -887,7 +945,22 @@ async def generate_active_learning_stream_generator(
         mat = new_db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
         if mat:
             mat.active_learning_script = active_learning_script
+            mat.created_by = "odin_autopilot"
             new_db.commit()
+            new_db.refresh(mat)
+
+            # Thêm log hành động để hoàn tác
+            try:
+                from src.database.models import OdinActionLog
+                action_log = OdinActionLog(
+                    course_id=course_id,
+                    action_type="generate_materials",
+                    affected_ids=json.dumps({"materials": [mat.id]})
+                )
+                new_db.add(action_log)
+                new_db.commit()
+            except Exception as log_err:
+                print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
     except Exception as e:
         new_db.rollback()
         yield send("error", {"message": f"Lỗi lưu DB: {str(e)}"})

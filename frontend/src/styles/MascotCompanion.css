@@ -293,6 +293,16 @@
   }
 }
 
+@keyframes mascotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.04); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Small Screens / Mobile adjustments */
 @media (max-width: 576px) {
   .mascot-bubble {

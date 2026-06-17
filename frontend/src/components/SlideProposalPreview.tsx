@@ -14,6 +14,7 @@ export interface SlideProposalPreviewProps {
   onInsertSlide?: (slideMarkdown: string) => void;
   chapterId?: number;
   onSaveRevisedSlide?: (slideIndex: number, newSlideMarkdown: string) => void;
+  created_by?: string | null;
 }
 
 export default function SlideProposalPreview({ 
@@ -24,7 +25,8 @@ export default function SlideProposalPreview({
   isFullscreen = false, 
   onInsertSlide,
   chapterId,
-  onSaveRevisedSlide
+  onSaveRevisedSlide,
+  created_by
 }: SlideProposalPreviewProps) {
   const slides = parseMarkdownToSlidesJS(mdContent);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -558,7 +560,15 @@ export default function SlideProposalPreview({
   };
 
   return (
-    <div className={`slide-proposal-wrapper ${viewMode === 'grid' ? 'grid-view' : ''}`}>
+    <div 
+      className={`slide-proposal-wrapper ${viewMode === 'grid' ? 'grid-view' : ''}`}
+      style={created_by === 'odin_autopilot' ? {
+        border: '2px dashed var(--vinuni-gold)',
+        borderRadius: '8px',
+        position: 'relative',
+        margin: '2px',
+      } : undefined}
+    >
       <div className="slide-proposal-toolbar">
         <div className="slide-view-mode-group">
           <button 
@@ -575,6 +585,26 @@ export default function SlideProposalPreview({
           >
             <LayoutGrid size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Tổng quan ({slides.length})
           </button>
+          {created_by === 'odin_autopilot' && (
+            <div style={{
+              background: 'var(--vinuni-gold)',
+              color: '#000',
+              fontSize: '9px',
+              fontWeight: '800',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              pointerEvents: 'none',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}>
+              <Sparkles size={8} />
+              AI Autopilot
+            </div>
+          )}
         </div>
 
         {viewMode === 'slideshow' && (

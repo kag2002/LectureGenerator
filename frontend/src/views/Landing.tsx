@@ -151,6 +151,12 @@ export default function Landing({ user, onNavigate }: LandingProps) {
 
   return (
     <div className="landing-body">
+      {/* Background decoration bubbles */}
+      <div className="landing-bubble-1"></div>
+      <div className="landing-bubble-2"></div>
+      <div className="landing-bubble-3"></div>
+      <div className="landing-bubble-4"></div>
+
       {/* Navigation Bar */}
       <nav className={`landing-nav ${scrolled ? 'scrolled' : ''} ${mobileMenuOpen ? 'menu-open' : ''}`}>
         <div className="landing-logo-container" onClick={() => { setMobileMenuOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
@@ -314,100 +320,120 @@ export default function Landing({ user, onNavigate }: LandingProps) {
           </p>
         </div>
 
-        <div className="landing-glossary-grid-static">
+        <div className="landing-glossary-zigzag-container">
           {/* Card 0: Syllabus */}
-          <div className="landing-glossary-static-card item-syllabus">
-            <div className="landing-glossary-card-header">
-              <span className="landing-glossary-badge-type pedagogy">LỘ TRÌNH KHUNG</span>
-              <h3 className="landing-glossary-title-static">Syllabus (Kế hoạch môn học)</h3>
+          <div className="landing-glossary-row">
+            <div className="landing-glossary-static-card item-syllabus">
+              <div className="landing-glossary-card-header">
+                <span className="landing-glossary-badge-type pedagogy">LỘ TRÌNH KHUNG</span>
+                <h3 className="landing-glossary-title-static">Syllabus (Kế hoạch môn học)</h3>
+              </div>
+              <div className="landing-glossary-card-body">
+                <p className="landing-glossary-desc-static">
+                  Là bản mô tả toàn bộ lộ trình học tập của một môn học, liệt kê rõ các chủ đề học tập từng tuần, danh mục tài liệu nghiên cứu bắt buộc, và các bài thi đánh giá.
+                </p>
+                <div className="landing-glossary-easy-explain">
+                  <span className="easy-label">Định nghĩa trực quan:</span>
+                  <p>Đóng vai trò như một "bản cam kết học tập" minh bạch giữa giảng viên, nhà trường và học viên trước khi bắt đầu khóa học.</p>
+                </div>
+                <div className="landing-glossary-example-static">
+                  <span className="example-label">Tại sao cần đánh giá?</span>
+                  <p>Đánh giá kế hoạch giúp đảm bảo nội dung giảng dạy thực tế bám sát đúng khung chương trình chuẩn quốc tế, phân bổ thời lượng hợp lý và không bị quá tải.</p>
+                </div>
+                <div className="landing-glossary-app">
+                  <strong>Hỗ trợ từ AI:</strong> Tự động phân tích file đề cương PDF để phác thảo sơ đồ chương học và phân bổ thời lượng giảng dạy chỉ trong vài giây.
+                </div>
+              </div>
             </div>
-            <div className="landing-glossary-card-body">
-              <p className="landing-glossary-desc-static">
-                Là bản mô tả toàn bộ lộ trình học tập của một môn học, liệt kê rõ các chủ đề học tập từng tuần, danh mục tài liệu nghiên cứu bắt buộc, và các bài thi đánh giá.
-              </p>
-              <div className="landing-glossary-easy-explain">
-                <span className="easy-label">Định nghĩa trực quan:</span>
-                <p>Đóng vai trò như một "bản cam kết học tập" minh bạch giữa giảng viên, nhà trường và học viên trước khi bắt đầu khóa học.</p>
-              </div>
-              <div className="landing-glossary-example-static">
-                <span className="example-label">Tại sao cần đánh giá?</span>
-                <p>Đánh giá kế hoạch giúp đảm bảo nội dung giảng dạy thực tế bám sát đúng khung chương trình chuẩn quốc tế, phân bổ thời lượng hợp lý và không bị quá tải.</p>
-              </div>
-              <div className="landing-glossary-app">
-                <strong>Hỗ trợ từ AI:</strong> Tự động phân tích file đề cương PDF để phác thảo sơ đồ chương học và phân bổ thời lượng giảng dạy chỉ trong vài giây.
-              </div>
+            <div className="landing-glossary-image-wrapper">
+              <img src="/syllabus_illustration.png" alt="Syllabus Illustration" className="landing-glossary-image" />
             </div>
           </div>
 
           {/* Card 1: CLO */}
-          <div className="landing-glossary-static-card item-clo">
-            <div className="landing-glossary-card-header">
-              <span className="landing-glossary-badge-type pedagogy">NĂNG LỰC ĐẠT ĐƯỢC</span>
-              <h3 className="landing-glossary-title-static">CLO (Kỹ năng thực tế sau khóa học)</h3>
+          <div className="landing-glossary-row">
+            <div className="landing-glossary-static-card item-clo">
+              <div className="landing-glossary-card-header">
+                <span className="landing-glossary-badge-type pedagogy">NĂNG LỰC ĐẠT ĐƯỢC</span>
+                <h3 className="landing-glossary-title-static">CLO (Kỹ năng thực tế sau khóa học)</h3>
+              </div>
+              <div className="landing-glossary-card-body">
+                <p className="landing-glossary-desc-static">
+                  Là những kỹ năng, kiến thức và năng lực thực tế mà học viên chắc chắn sẽ sở hữu (chứ không chỉ là ghi nhớ lý thuyết) sau khi hoàn thành khóa học.
+                </p>
+                <div className="landing-glossary-easy-explain">
+                  <span className="easy-label">Định nghĩa trực quan:</span>
+                  <p>Trực quan hóa giá trị của việc học: "Học xong môn này, bạn có thể tự tay làm ra sản phẩm gì hoặc giải quyết được vấn đề gì?".</p>
+                </div>
+                <div className="landing-glossary-example-static">
+                  <span className="example-label">Tại sao cần đánh giá?</span>
+                  <p>Để đảm bảo đề thi và bài giảng luôn tập trung vào việc thực hành thực tế, tránh việc học lý thuyết suông thiếu tính ứng dụng.</p>
+                </div>
+                <div className="landing-glossary-app">
+                  <strong>Hỗ trợ từ AI:</strong> Tự động rà soát slide bài giảng và ngân hàng câu hỏi để kiểm tra xem đã giúp người học rèn luyện đúng kỹ năng thực tế chưa.
+                </div>
+              </div>
             </div>
-            <div className="landing-glossary-card-body">
-              <p className="landing-glossary-desc-static">
-                Là những kỹ năng, kiến thức và năng lực thực tế mà học viên chắc chắn sẽ sở hữu (chứ không chỉ là ghi nhớ lý thuyết) sau khi hoàn thành khóa học.
-              </p>
-              <div className="landing-glossary-easy-explain">
-                <span className="easy-label">Định nghĩa trực quan:</span>
-                <p>Trực quan hóa giá trị của việc học: "Học xong môn này, bạn có thể tự tay làm ra sản phẩm gì hoặc giải quyết được vấn đề gì?".</p>
-              </div>
-              <div className="landing-glossary-example-static">
-                <span className="example-label">Tại sao cần đánh giá?</span>
-                <p>Để đảm bảo đề thi và bài giảng luôn tập trung vào việc thực hành thực tế, tránh việc học lý thuyết suông thiếu tính ứng dụng.</p>
-              </div>
-              <div className="landing-glossary-app">
-                <strong>Hỗ trợ từ AI:</strong> Tự động rà soát slide bài giảng và ngân hàng câu hỏi để kiểm tra xem đã giúp người học rèn luyện đúng kỹ năng thực tế chưa.
-              </div>
+            <div className="landing-glossary-image-wrapper">
+              <img src="/clo_illustration.png" alt="CLO Illustration" className="landing-glossary-image" />
             </div>
           </div>
 
           {/* Card 2: Bloom */}
-          <div className="landing-glossary-static-card item-bloom">
-            <div className="landing-glossary-card-header">
-              <span className="landing-glossary-badge-type pedagogy">ĐỘ KHÓ TƯ DUY</span>
-              <h3 className="landing-glossary-title-static">Thang đo Bloom (Mức độ thử thách tư duy)</h3>
+          <div className="landing-glossary-row">
+            <div className="landing-glossary-static-card item-bloom">
+              <div className="landing-glossary-card-header">
+                <span className="landing-glossary-badge-type pedagogy">ĐỘ KHÓ TƯ DUY</span>
+                <h3 className="landing-glossary-title-static">Thang đo Bloom (Mức độ thử thách tư duy)</h3>
+              </div>
+              <div className="landing-glossary-card-body">
+                <p className="landing-glossary-desc-static">
+                  Là hệ thống phân cấp độ tư duy từ dễ đến khó: đi từ việc ghi nhớ lý thuyết cơ bản, thấu hiểu bản chất, vận dụng thực tế, cho đến phân tích sâu và sáng tạo giải pháp.
+                </p>
+                <div className="landing-glossary-easy-explain">
+                  <span className="easy-label">Định nghĩa trực quan:</span>
+                  <p>Thước đo chiều sâu nhận thức của học viên, giúp phát triển tư duy độc lập và phản biện.</p>
+                </div>
+                <div className="landing-glossary-example-static">
+                  <span className="example-label">Tại sao cần đánh giá?</span>
+                  <p>Giúp giảng viên thiết kế đề thi có độ phân hóa tốt, tránh việc đề thi quá dễ (chỉ học vẹt) hoặc quá khó (vượt ngoài kiến thức bài học).</p>
+                </div>
+                <div className="landing-glossary-app">
+                  <strong>Hỗ trợ từ AI:</strong> AI tự động điều chỉnh và làm mới câu hỏi trắc nghiệm theo các mức thử thách tư duy mong muốn của giảng viên.
+                </div>
+              </div>
             </div>
-            <div className="landing-glossary-card-body">
-              <p className="landing-glossary-desc-static">
-                Là hệ thống phân cấp độ tư duy từ dễ đến khó: đi từ việc ghi nhớ lý thuyết cơ bản, thấu hiểu bản chất, vận dụng thực tế, cho đến phân tích sâu và sáng tạo giải pháp.
-              </p>
-              <div className="landing-glossary-easy-explain">
-                <span className="easy-label">Định nghĩa trực quan:</span>
-                <p>Thước đo chiều sâu nhận thức của học viên, giúp phát triển tư duy độc lập và phản biện.</p>
-              </div>
-              <div className="landing-glossary-example-static">
-                <span className="example-label">Tại sao cần đánh giá?</span>
-                <p>Giúp giảng viên thiết kế đề thi có độ phân hóa tốt, tránh việc đề thi quá dễ (chỉ học vẹt) hoặc quá khó (vượt ngoài kiến thức bài học).</p>
-              </div>
-              <div className="landing-glossary-app">
-                <strong>Hỗ trợ từ AI:</strong> AI tự động điều chỉnh và làm mới câu hỏi trắc nghiệm theo các mức thử thách tư duy mong muốn của giảng viên.
-              </div>
+            <div className="landing-glossary-image-wrapper">
+              <img src="/bloom_illustration.png" alt="Bloom Illustration" className="landing-glossary-image" />
             </div>
           </div>
 
           {/* Card 3: RAG */}
-          <div className="landing-glossary-static-card item-rag">
-            <div className="landing-glossary-card-header">
-              <span className="landing-glossary-badge-type tech">CÔNG NGHỆ CHỐNG ẢO TƯỞNG</span>
-              <h3 className="landing-glossary-title-static">RAG (AI tra cứu tài liệu & Chống ảo tưởng)</h3>
+          <div className="landing-glossary-row">
+            <div className="landing-glossary-static-card item-rag">
+              <div className="landing-glossary-card-header">
+                <span className="landing-glossary-badge-type tech">CÔNG NGHỆ CHỐNG ẢO TƯỞNG</span>
+                <h3 className="landing-glossary-title-static">RAG (AI tra cứu tài liệu & Chống ảo tưởng)</h3>
+              </div>
+              <div className="landing-glossary-card-body">
+                <p className="landing-glossary-desc-static">
+                  Là công nghệ giúp AI tự động tra cứu, đánh giá và trích xuất thông tin trực tiếp từ các tài liệu, sách giáo trình uy tín được tải lên trước khi tạo nội dung.
+                </p>
+                <div className="landing-glossary-easy-explain">
+                  <span className="easy-label">Định nghĩa trực quan:</span>
+                  <p>Hoạt động như một trợ lý mở đúng cuốn sách giáo khoa được chỉ định để trả lời, triệt tiêu hoàn toàn hiện tượng AI tự bịa đặt thông tin (ảo tưởng).</p>
+                </div>
+                <div className="landing-glossary-example-static">
+                  <span className="example-label">Tại sao cần thiết?</span>
+                  <p>Giúp tra cứu nhanh và đánh giá độ tin cậy của tài liệu tham khảo chính thống, đảm bảo bài giảng và đề kiểm tra luôn có nguồn gốc chuẩn học thuật uy tín.</p>
+                </div>
+                <div className="landing-glossary-app">
+                  <strong>Hỗ trợ từ AI:</strong> Đối chiếu bài viết với giáo trình và tài liệu nghiên cứu chuẩn để tự động biên soạn nội dung giảng dạy có trích dẫn nguồn rõ ràng.
+                </div>
+              </div>
             </div>
-            <div className="landing-glossary-card-body">
-              <p className="landing-glossary-desc-static">
-                Là công nghệ giúp AI tự động tra cứu, đánh giá và trích xuất thông tin trực tiếp từ các tài liệu, sách giáo trình uy tín được tải lên trước khi tạo nội dung.
-              </p>
-              <div className="landing-glossary-easy-explain">
-                <span className="easy-label">Định nghĩa trực quan:</span>
-                <p>Hoạt động như một trợ lý mở đúng cuốn sách giáo khoa được chỉ định để trả lời, triệt tiêu hoàn toàn hiện tượng AI tự bịa đặt thông tin (ảo tưởng).</p>
-              </div>
-              <div className="landing-glossary-example-static">
-                <span className="example-label">Tại sao cần thiết?</span>
-                <p>Giúp tra cứu nhanh và đánh giá độ tin cậy của tài liệu tham khảo chính thống, đảm bảo bài giảng và đề kiểm tra luôn có nguồn gốc chuẩn học thuật uy tín.</p>
-              </div>
-              <div className="landing-glossary-app">
-                <strong>Hỗ trợ từ AI:</strong> Đối chiếu bài viết với giáo trình và tài liệu nghiên cứu chuẩn để tự động biên soạn nội dung giảng dạy có trích dẫn nguồn rõ ràng.
-              </div>
+            <div className="landing-glossary-image-wrapper">
+              <img src="/rag_illustration.png" alt="RAG Illustration" className="landing-glossary-image" />
             </div>
           </div>
         </div>
@@ -595,10 +621,10 @@ export default function Landing({ user, onNavigate }: LandingProps) {
             </p>
 
             <div className="landing-mission-logos">
-              <span style={{ fontSize: '13px', color: '#64748b' }}>Đồng hành phát triển:</span>
+              <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Đồng hành phát triển:</span>
               <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                <div style={{ fontWeight: 'bold', color: '#0b2545', fontSize: '14px', letterSpacing: '1px' }}>VINUNI</div>
-                <div style={{ fontWeight: 'normal', color: '#8c1d40', fontSize: '14px', fontStyle: 'italic' }}>VINGROUP</div>
+                <div style={{ fontWeight: 'bold', color: '#ffffff', fontSize: '14px', letterSpacing: '1px' }}>VINUNI</div>
+                <div style={{ fontWeight: 'bold', color: '#c5a880', fontSize: '14px', fontStyle: 'italic' }}>VINGROUP</div>
               </div>
             </div>
           </div>

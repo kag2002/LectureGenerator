@@ -2390,3 +2390,140 @@
   gap: 12px;
   width: 100%;
 }
+
+/* ============================================================
+   ZIP Export Preview Modal & File Tree Styling
+   ============================================================ */
+
+.zip-preview-card {
+  width: 620px !important;
+  max-width: 95% !important;
+}
+
+.zip-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+.zip-preview-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.zip-preview-close:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.zip-preview-tree {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 13.5px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 18px;
+  max-height: 350px;
+  overflow-y: auto;
+  text-align: left;
+}
+
+.zip-preview-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  line-height: 1.4;
+}
+
+.zip-preview-children {
+  margin-left: 6px;
+  border-left: 1px dashed var(--border-color);
+  padding-left: 14px;
+}
+
+.zip-preview-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.zip-preview-icon.folder {
+  color: #fbbf24; /* Amber yellow */
+}
+
+.zip-preview-icon.folder-chapter {
+  color: #d97706; /* Dark amber */
+}
+
+.zip-preview-icon.file-md {
+  color: #3b82f6; /* Blue for MD documentation */
+}
+
+.zip-preview-icon.file-pptx {
+  color: #ef4444; /* Red for PowerPoint standard */
+}
+
+.zip-preview-icon.file-gift {
+  color: #a855f7; /* Purple for GIFT files */
+}
+
+.zip-preview-name {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.zip-preview-name.font-bold {
+  font-weight: 800;
+}
+
+.zip-preview-name.font-semibold {
+  font-weight: 600;
+}
+
+.zip-preview-name.text-accent {
+  color: var(--accent-color);
+}
+
+.zip-preview-name.text-success {
+  color: #10b981;
+}
+
+.zip-preview-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.zip-preview-meta.highlight {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  font-weight: 600;
+}
+
+.checklist-bulk-btn.zip-preview-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.checklist-bulk-btn.zip-preview-btn:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}

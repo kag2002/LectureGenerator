@@ -1,8 +1,9 @@
 'use client';
-
+ 
 import dynamic from 'next/dynamic';
 import React from 'react';
-
+import { UILockProvider } from '../context/UILockContext';
+ 
 const DynamicApp = dynamic(() => import('@/App'), {
   ssr: false,
   loading: () => (
@@ -20,7 +21,11 @@ const DynamicApp = dynamic(() => import('@/App'), {
     </div>
   )
 });
-
+ 
 export default function Home() {
-  return <DynamicApp />;
+  return (
+    <UILockProvider>
+      <DynamicApp />
+    </UILockProvider>
+  );
 }

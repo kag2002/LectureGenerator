@@ -7,6 +7,67 @@ from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question,
 from src.database.vector_db import search_rag_isolated
 
 
+async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session) -> Chapter | None:
+    if not chapter_id:
+        return None
+    # 1. Try by exact ID
+    try:
+        ch_id_int = int(chapter_id)
+        chapter = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(Chapter.id == ch_id_int, Course.id == course_id, Course.user_id == user_id).first()
+        )
+        if chapter:
+            return chapter
+    except (ValueError, TypeError):
+        pass
+
+    # 2. Try by sort_order
+    try:
+        ch_id_int = int(chapter_id)
+        chapter = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(
+                Chapter.course_id == course_id,
+                Course.user_id == user_id,
+                Chapter.sort_order == ch_id_int,
+                Chapter.is_active == True
+            ).first()
+        )
+        if chapter:
+            return chapter
+    except (ValueError, TypeError):
+        pass
+
+    # 3. Try by sequence index (N-th active chapter)
+    try:
+        ch_id_int = int(chapter_id)
+        all_ch = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(
+                Chapter.course_id == course_id,
+                Course.user_id == user_id,
+                Chapter.is_active == True
+            ).order_by(Chapter.sort_order.asc()).all()
+        )
+        if 0 <= ch_id_int - 1 < len(all_ch):
+            return all_ch[ch_id_int - 1]
+    except (ValueError, TypeError):
+        pass
+
+    # 4. Try by title match
+    if isinstance(chapter_id, str):
+        chapter = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(
+                Chapter.course_id == course_id,
+                Course.user_id == user_id,
+                Chapter.is_active == True,
+                Chapter.title.ilike(f"%{chapter_id}%")
+            ).first()
+        )
+        if chapter:
+            return chapter
+
+    return None
+
+
 async def execute_chatbot_tool(
     name: str, args: dict, course_id: int, user_id: int, db: Session, chat_message_id: int | None = None
 ) -> dict:
@@ -152,12 +213,13 @@ async def execute_chatbot_tool(
             }
 
         chapter_id = args.get("chapter_id")
-        if not chapter_id:
-            chapter_id = chapters[0].id
+        chapter = await _resolve_chapter(chapter_id, course_id, user_id, db)
+        if chapter:
+            chapter_id = chapter.id
+        elif chapters:
+            chapter = chapters[0]
+            chapter_id = chapter.id
 
-        chapter = await asyncio.to_thread(
-            lambda: db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == user_id).first()
-        )
         if not chapter:
             return {"error": "unauthorized", "message": "Chương học không tồn tại hoặc bạn không có quyền truy cập."}
 
@@ -200,12 +262,13 @@ async def execute_chatbot_tool(
             }
 
         chapter_id = args.get("chapter_id")
-        if not chapter_id:
-            chapter_id = chapters[0].id
+        chapter = await _resolve_chapter(chapter_id, course_id, user_id, db)
+        if chapter:
+            chapter_id = chapter.id
+        elif chapters:
+            chapter = chapters[0]
+            chapter_id = chapter.id
 
-        chapter = await asyncio.to_thread(
-            lambda: db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == user_id).first()
-        )
         if not chapter:
             return {"error": "unauthorized", "message": "Chương học không tồn tại hoặc bạn không có quyền truy cập."}
 
@@ -265,9 +328,9 @@ async def execute_chatbot_tool(
 
         chapter = None
         if chapter_id:
-            chapter = await asyncio.to_thread(
-                lambda: db.query(Chapter).filter(Chapter.id == chapter_id, Chapter.course_id == course_id).first()
-            )
+            chapter = await _resolve_chapter(chapter_id, course_id, user_id, db)
+        if chapter:
+            chapter_id = chapter.id
         elif chapters:
             chapter = chapters[0]
             chapter_id = chapter.id

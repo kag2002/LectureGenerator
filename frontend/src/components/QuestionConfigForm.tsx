@@ -73,6 +73,7 @@ export interface QuestionConfigFormProps {
   isFastMode: boolean;
   setIsFastMode: (val: boolean) => void;
   agentMonitor?: AgentMonitorState;
+  onCloseAgentMonitor?: () => void;
 }
 
 const getStepStatusClass = (stepNum: number, monitor: AgentMonitorState) => {
@@ -125,7 +126,8 @@ export default function QuestionConfigForm({
   handleGenerateQuestions,
   isFastMode,
   setIsFastMode,
-  agentMonitor
+  agentMonitor,
+  onCloseAgentMonitor
 }: QuestionConfigFormProps) {
   return (
     <aside className="qb-sidebar">
@@ -225,9 +227,35 @@ export default function QuestionConfigForm({
                   <Cpu size={15} className={agentMonitor.status === 'running' ? 'animate-pulse text-indigo-400' : ''} />
                   AI Agent Monitor
                 </h4>
-                <div className={`qb-monitor-status-badge ${agentMonitor.status}`}>
-                  <span className={`qb-monitor-led ${agentMonitor.status}`} />
-                  {agentMonitor.status === 'running' ? 'Đang chạy' : agentMonitor.status === 'success' ? 'Hoàn tất' : 'Lỗi'}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className={`qb-monitor-status-badge ${agentMonitor.status}`}>
+                    <span className={`qb-monitor-led ${agentMonitor.status}`} />
+                    {agentMonitor.status === 'running' ? 'Đang chạy' : agentMonitor.status === 'success' ? 'Hoàn tất' : 'Lỗi'}
+                  </div>
+                  {onCloseAgentMonitor && (
+                    <button
+                      type="button"
+                      onClick={onCloseAgentMonitor}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '4px',
+                        transition: 'all 0.2s',
+                        outline: 'none'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+                      onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+                      title="Đóng Monitor"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
 

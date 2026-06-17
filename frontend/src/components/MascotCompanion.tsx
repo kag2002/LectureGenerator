@@ -1,21 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, X, Sparkles, Settings, BarChart2, HelpCircle, FileText, Check, Zap, Upload, Paperclip } from 'lucide-react';
+import { Bot, X, Sparkles, Settings, BarChart2, HelpCircle, FileText, Check, Zap, Upload, Paperclip, Loader2, WifiOff } from 'lucide-react';
 import client from '../api/client';
 import '../styles/MascotCompanion.css';
 import { renderMarkdown } from '../utils/markdown';
+import { useUILock } from '../context/UILockContext';
 
 
 interface MascotCompanionProps {
   onNavigate: (view: string) => void;
   onTriggerPedagogicalConfig?: () => void;
   selectedCourse: any;
+  aiStatus?: { isProcessing: boolean; message: string };
 }
 
 const WELCOME_MESSAGES = [
   "Em chào Thầy/Cô ạ! Hôm nay mình sẽ thiết kế bài giảng cho chương học nào thế nhỉ?",
   "Thầy/Cô có muốn em hỗ trợ cấu hình bối cảnh sư phạm lớp học VinUni không ạ?",
   "Ma trận CLO x Bloom của môn học hiện tại đã đầy đủ chưa Thầy/Cô ơi?",
-  "Em là Falcon AI - Trợ lý ảo đồng hành soạn bài giảng cùng Thầy/Cô!"
+  "Em là ODIN AI - Trợ lý ảo đồng hành soạn bài giảng cùng Thầy/Cô!"
 ];
 
 interface MascotAvatarProps {
@@ -23,37 +25,97 @@ interface MascotAvatarProps {
   onTouchStart: (e: React.TouchEvent) => void;
   hasNotification: boolean;
   isDragging: boolean;
+  isProcessing?: boolean;
+  isOffline?: boolean;
 }
 
-function MascotAvatar({ onMouseDown, onTouchStart, hasNotification, isDragging }: MascotAvatarProps) {
+function MascotAvatar({ onMouseDown, onTouchStart, hasNotification, isDragging, isProcessing, isOffline }: MascotAvatarProps) {
   const [frame, setFrame] = useState(1);
 
   useEffect(() => {
     const interval = setInterval(() => {
       setFrame(f => (f === 1 ? 2 : 1));
-    }, 300);
+    }, isProcessing ? 150 : 300);
     return () => clearInterval(interval);
-  }, []);
+  }, [isProcessing]);
 
   return (
     <div
       className="mascot-avatar-wrapper"
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
-      title="Trợ lý ảo Falcon AI(Đang thử nghiệm)"
+      title="Trợ lý ảo ODIN AI (Đang thử nghiệm)"
       style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
       <img
         src={`/mascot_frame${frame}.png?v=penguin`}
         alt="AI Assistant Mascot"
         className="mascot-avatar-image"
+        style={isProcessing ? { filter: 'brightness(1.15) saturate(1.3)', animation: 'mascotPulse 1s ease-in-out infinite' } : undefined}
       />
-      {hasNotification && <span className="mascot-badge-notification">1</span>}
+      {/* Wifi Offline status indicator */}
+      {isOffline && (
+        <span style={{
+          position: 'absolute',
+          top: '-2px',
+          left: '-2px',
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          background: '#475569',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 12,
+          boxShadow: '0 0 6px rgba(0,0,0,0.5)'
+        }} title="Mất kết nối với máy chủ">
+          <WifiOff size={11} style={{ color: '#cbd5e1' }} />
+        </span>
+      )}
+      {/* AI processing ring */}
+      {isProcessing && (
+        <span style={{
+          position: 'absolute',
+          inset: '-4px',
+          borderRadius: '50%',
+          border: '2px solid transparent',
+          borderTopColor: 'var(--vinuni-gold)',
+          borderRightColor: 'var(--vinuni-gold)',
+          animation: 'spin 0.8s linear infinite',
+          pointerEvents: 'none',
+          zIndex: 10
+        }} />
+      )}
+      {!isProcessing && hasNotification && <span className="mascot-badge-notification">1</span>}
+      {isProcessing && (
+        <span style={{
+          position: 'absolute',
+          bottom: '-2px',
+          right: '-2px',
+          width: '18px',
+          height: '18px',
+          borderRadius: '50%',
+          background: 'var(--vinuni-gold)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 11,
+          boxShadow: '0 0 8px rgba(212,163,89,0.6)'
+        }}>
+          <Loader2 size={11} style={{ color: '#000', animation: 'spin 0.8s linear infinite' }} />
+        </span>
+      )}
     </div>
   );
 }
 
-export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig, selectedCourse }: MascotCompanionProps) {
+export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig, selectedCourse, aiStatus }: MascotCompanionProps) {
+  const { locks, releaseLock } = useUILock();
+  const isAutopilotActive = Object.values(locks).some(l => l.lockedBy === 'odin_autopilot');
+
+  const [sseStatus, setSseStatus] = useState<'connected' | 'reconnecting' | 'failed'>('connected');
+  const [showManualUnlock, setShowManualUnlock] = useState(false);
+
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState(WELCOME_MESSAGES[0]);
   const [hasNotification, setHasNotification] = useState(true);
@@ -121,7 +183,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return; // Only left click
-    
+
     const startX = e.clientX;
     const startY = e.clientY;
     const startPosX = position.x;
@@ -245,6 +307,57 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isOpen, isMounted]);
+
+  // Lắng nghe trạng thái kết nối SSE để hiển thị wifi offline / nút mở khóa thủ công
+  useEffect(() => {
+    let reconnectStart: number | null = null;
+    let timer: any = null;
+
+    const handleSSEStatus = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setSseStatus(detail.status);
+      
+      if (detail.status === 'reconnecting' || detail.status === 'failed') {
+        if (!reconnectStart) {
+          reconnectStart = Date.now();
+        }
+        if (!timer) {
+          timer = setInterval(() => {
+            if (reconnectStart && Date.now() - reconnectStart > 15000) {
+              setShowManualUnlock(true);
+            }
+          }, 1000);
+        }
+      } else if (detail.status === 'connected') {
+        reconnectStart = null;
+        setShowManualUnlock(false);
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      }
+    };
+
+    window.addEventListener('sse-connection-status', handleSSEStatus);
+    return () => {
+      window.removeEventListener('sse-connection-status', handleSSEStatus);
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
+  const handleManualUnlock = async () => {
+    if (!selectedCourse?.id) return;
+    
+    // Giải phóng tất cả các khóa trên giao diện của môn học này
+    const lockedKeys = Object.keys(locks);
+    for (const key of lockedKeys) {
+      await releaseLock(selectedCourse.id, key);
+    }
+    
+    setShowManualUnlock(false);
+    setMessage("Đã mở khóa thủ công giao diện thành công.");
+    window.dispatchEvent(new CustomEvent('db-state-changed'));
+  };
 
   // Adjust position when bubble opens or changes content
   useEffect(() => {
@@ -406,7 +519,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     }
 
     setIsThinking(true);
-    setMessage("Falcon AI: Đang suy nghĩ...");
+    setMessage("ODIN AI: Đang suy nghĩ...");
 
     try {
       const token = localStorage.getItem('token');
@@ -419,7 +532,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       } else {
         const createRes = await client.post('/api/chatbot/sessions', {
           course_id: selectedCourse.id,
-          title: "Trò chuyện với Falcon Companion"
+          title: "Trò chuyện với ODIN Companion"
         });
         sessionId = createRes.data.id;
       }
@@ -439,7 +552,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       });
 
       if (!response.body) {
-        setMessage("Falcon AI: Lỗi kết nối hệ thống.");
+        setMessage("ODIN AI: Lỗi kết nối hệ thống.");
         setIsThinking(false);
         return;
       }
@@ -467,7 +580,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
           const data = JSON.parse(dataMatch[1].trim());
 
           if (event === 'stage') {
-            setMessage(`Falcon AI: ${data.message}...`);
+            setMessage(`ODIN AI: ${data.message}...`);
           } else if (event === 'dispatch_action') {
             window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', { detail: data }));
           } else if (event === 'tool_call') {
@@ -485,13 +598,13 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
               window.dispatchEvent(new CustomEvent('db-state-changed'));
             }
           } else if (event === 'error') {
-            setMessage(`Falcon AI: Gặp lỗi - ${data.message}`);
+            setMessage(`ODIN AI: Gặp lỗi - ${data.message}`);
           }
         }
       }
     } catch (err) {
       console.error("Mascot chat error:", err);
-      setMessage("Falcon AI: Gặp sự cố kết nối LLM.");
+      setMessage("ODIN AI: Gặp sự cố kết nối LLM.");
     } finally {
       setIsThinking(false);
     }
@@ -531,7 +644,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
   const avatarSize = isMounted ? (window.innerWidth <= 576 ? 70 : 80) : 80;
 
   return (
-    <div 
+    <div
       className="mascot-companion-container"
       style={isMounted ? {
         left: `${position.x}px`,
@@ -551,11 +664,13 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
         onTouchStart={handleTouchStart}
         hasNotification={hasNotification}
         isDragging={isDraggingMascot}
+        isProcessing={isAutopilotActive || aiStatus?.isProcessing}
+        isOffline={sseStatus !== 'connected'}
       />
 
       {/* Speech Bubble / Drawer */}
       {isOpen && (
-        <div 
+        <div
           ref={bubbleRef}
           className={`mascot-bubble ${isLeftAligned ? 'bubble-left-aligned' : 'bubble-right-aligned'}`}
           onDragOver={handleDragOver}
@@ -572,8 +687,23 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
           )}
           <div className="mascot-bubble-header">
             <span className="mascot-bubble-title">
-              <Bot size={15} style={{ color: 'var(--vinuni-gold)' }} />
-              Trợ lý ảo Falcon AI(Đang thử nghiệm)
+              <Bot size={15} style={{ color: (isAutopilotActive || aiStatus?.isProcessing) ? '#fbbf24' : 'var(--vinuni-gold)' }} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                <span>{isAutopilotActive ? 'ODIN Autopilot' : 'Trợ lý ảo ODIN AI'}</span>
+                {isAutopilotActive ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: '#fbbf24' }}>
+                    <Loader2 size={9} style={{ animation: 'spin 0.8s linear infinite' }} />
+                    Đang tự soạn bài giảng...
+                  </span>
+                ) : aiStatus?.isProcessing ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: '#fbbf24' }}>
+                    <Loader2 size={9} style={{ animation: 'spin 0.8s linear infinite' }} />
+                    {aiStatus.message || 'Đang xử lý…'}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '10px', fontWeight: 400, opacity: 0.6, letterSpacing: '0.3px' }}>Đang thử nghiệm</span>
+                )}
+              </span>
             </span>
             <button
               onClick={() => setIsOpen(false)}
@@ -634,15 +764,79 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
               </div>
             ) : (
               <>
-                {lastUserInput && (
-                  <div className="mascot-user-question">
-                    <strong>Thầy/Cô:</strong> {lastUserInput}
+                {isAutopilotActive ? (
+                  <div style={{
+                    background: 'rgba(212, 163, 89, 0.05)',
+                    border: '1px solid rgba(212, 163, 89, 0.25)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    margin: '8px 0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--vinuni-gold)', fontWeight: 700, fontSize: '13px' }}>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>ODIN Autopilot Active</span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '12.5px', color: '#cbd5e1', lineHeight: '1.4' }}>
+                      Em đang tự động tương tác và thiết kế bài giảng thay cho Thầy/Cô. Tiến trình này đang chạy ngầm và giao diện tương ứng sẽ tạm thời khóa để đảm bảo an toàn dữ liệu.
+                    </p>
+                    <div style={{
+                      height: '4px',
+                      background: 'rgba(255,255,255,0.06)',
+                      borderRadius: '2px',
+                      overflow: 'hidden',
+                      marginTop: '4px'
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        background: 'linear-gradient(90deg, var(--vinuni-gold), #b8860b)',
+                        width: '75%',
+                        animation: 'pulse 1.5s infinite'
+                      }} />
+                    </div>
+                    {showManualUnlock && (
+                      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontSize: '11.5px', fontWeight: 600 }}>
+                          <WifiOff size={13} />
+                          <span>Mất kết nối thời gian thực!</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleManualUnlock}
+                          style={{
+                            background: '#ef4444',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '6px 12px',
+                            borderRadius: '4px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            alignSelf: 'flex-start',
+                            boxShadow: '0 2px 4px rgba(239,68,68,0.2)'
+                          }}
+                        >
+                          Mở khóa thủ công
+                        </button>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <>
+                    {lastUserInput && (
+                      <div className="mascot-user-question">
+                        <strong>Thầy/Cô:</strong> {lastUserInput}
+                      </div>
+                    )}
+                    <div
+                      className="mascot-bubble-body"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(message) }}
+                    />
+                  </>
                 )}
-                <div
-                  className="mascot-bubble-body"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdown(message) }}
-                />
               </>
             )}
 
@@ -659,7 +853,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--vinuni-gold)', fontWeight: 600, fontSize: '12.5px' }}>
                   <Zap size={14} className="animate-pulse" />
-                  <span>Đề xuất tự động từ Falcon AI</span>
+                  <span>Đề xuất tự động từ ODIN AI</span>
                 </div>
                 <p style={{ margin: '0', fontSize: '13px', color: '#f1f5f9', lineHeight: '1.4', textAlign: 'left' }}>
                   {pendingAction.message || 'Mascot AI đề xuất thực hiện hành động tự động trên giao diện này.'}
@@ -768,7 +962,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
           </div>
 
           <div className="mascot-bubble-chat">
-            <input 
+            <input
               type="file"
               ref={fileInputRef}
               onChange={(e) => {
@@ -783,23 +977,23 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="mascot-attach-btn"
-              disabled={isThinking || !selectedCourse}
+              disabled={isThinking || isAutopilotActive || !selectedCourse}
               title="Đính kèm file đề cương Syllabus (.pdf, .docx, .txt)"
             >
               <Paperclip size={16} />
             </button>
             <input
               type="text"
-              placeholder={isThinking ? "Falcon AI đang suy nghĩ..." : "Hỏi Falcon AI..."}
+              placeholder={isAutopilotActive ? "ODIN đang chạy tự động..." : isThinking ? "ODIN AI đang suy nghĩ..." : "Hỏi ODIN AI..."}
               value={chatInput}
-              disabled={isThinking}
+              disabled={isThinking || isAutopilotActive}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
               className="mascot-chat-input"
             />
             <button
               onClick={handleSendChat}
-              disabled={isThinking || !chatInput.trim()}
+              disabled={isThinking || isAutopilotActive || !chatInput.trim()}
               className="mascot-chat-send-btn"
             >
               Gửi

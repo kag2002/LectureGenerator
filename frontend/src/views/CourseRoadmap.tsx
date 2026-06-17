@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import './CourseRoadmap.css';
-import { 
-  CheckCircle2, Clock, Circle, BookOpen, FileText, 
-  HelpCircle, BarChart2, Library, ClipboardList, Target, 
+import {
+  CheckCircle2, Clock, Circle, BookOpen, FileText,
+  HelpCircle, BarChart2, Library, ClipboardList, Target,
   ArrowLeft, MessageSquare, LogOut,
   Plus, Minus, X, Check, Download, ListTodo,
-  Printer, Pencil, Network, Trash2
+  Printer, Pencil, Network, Trash2,
+  Folder, FolderOpen, Eye
 } from 'lucide-react';
 import { Course, CLO, Chapter } from '@/types';
 import { useRoadmapData } from '../hooks/useRoadmapData';
@@ -36,7 +37,7 @@ function TreeNode({ node, onSelect, onToggleCollapse, isCollapsed, hasChildren }
       </span>
       <div className="roadmap-node-label">{node.label}</div>
       {node.detail && <div className="roadmap-node-detail">{node.detail}</div>}
-      
+
       {hasChildren && (
         <button
           className={`roadmap-node-toggle ${isCollapsed ? 'roadmap-node-toggle--collapsed' : ''}`}
@@ -60,6 +61,23 @@ function getVerticalBezierPath(x1: number, y1: number, x2: number, y2: number) {
   const dy = Math.abs(y2 - y1) * 0.5;
   return `M ${x1} ${y1} C ${x1} ${y1 + (y2 > y1 ? dy : -dy)}, ${x2} ${y2 + (y2 > y1 ? -dy : dy)}, ${x2} ${y2}`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Helper: Convert Vietnamese accented characters to plain ASCII for filename preview
+const sanitizeFilename = (name: string): string => {
+  if (!name) return "Chapter";
+  const from = "àáäâãåăæçèéëêìíïîñòóöôõøœùúüûýÿđñòóôõơàảãáạăằẳẵắặâầẩẫấậèẻẽéẹêềểễếệìỉĩíịòỏõóọôồổỗốộơờởỡớợùủũúụưừửữứựỳỷỹýỵ";
+  const to = "aaaaaaaaceeeeiiiinooooooouuuuyydnoooooaaaaaaaaaaaaaeeeeeeeeeeiiiiiooooooooooooooouuuuuuuuuuyyyyy";
+  let str = name.toLowerCase();
+  for (let i = 0, l = from.length; i < l; i++) {
+    str = str.replace(new RegExp(from[i], "g"), to[i]);
+  }
+  const filtered = str.replace(/[^a-z0-9_\-\s]/g, "");
+  const sanitized = filtered.trim().replace(/[\s_]+/g, "_");
+  return sanitized.split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('_') || "Chapter";
+};
 
 // ═══════════════════════════════════════════════════════════════════════
 // Main Component
@@ -91,6 +109,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
   const [modalTitle, setModalTitle] = useState('');
   const [modalDescription, setModalDescription] = useState('');
   const [modalSaving, setModalSaving] = useState(false);
+  const [isZipPreviewOpen, setIsZipPreviewOpen] = useState(false);
 
   const handleOpenCreateModal = () => {
     setModalMode('create');
@@ -416,8 +435,8 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('.roadmap-node') || target.closest('.roadmap-controls') ||
-        target.closest('.roadmap-sidebar') || target.closest('.roadmap-back-btn') ||
-        target.closest('.roadmap-logout-btn')) return;
+      target.closest('.roadmap-sidebar') || target.closest('.roadmap-back-btn') ||
+      target.closest('.roadmap-logout-btn')) return;
     setIsDragging(true);
     dragStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
   };
@@ -492,14 +511,14 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
 
       {/* ── View Mode Toggle ── */}
       <div className="roadmap-view-mode-toggle-container">
-        <button 
+        <button
           className={`roadmap-view-toggle-btn ${viewMode === 'checklist' ? 'active' : ''}`}
           onClick={() => setViewMode('checklist')}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
           <ClipboardList size={16} /> Bảng tiến độ & Tải đầu ra (Khuyên dùng)
         </button>
-        <button 
+        <button
           className={`roadmap-view-toggle-btn ${viewMode === 'mindmap' ? 'active' : ''}`}
           onClick={() => setViewMode('mindmap')}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
@@ -523,11 +542,12 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                 <button onClick={handleExportZIPPackage} disabled={downloadingZip} className="checklist-bulk-btn zip-package" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                   <Download size={14} /> {downloadingZip ? 'Đang đóng gói...' : 'Tải Trọn bộ Môn học (.zip)'}
                 </button>
-                <button onClick={handleExportCourseLessonPlan} className="checklist-bulk-btn lesson-plan" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <BookOpen size={14} /> Tải Giáo án Cả khóa (.md)
-                </button>
-                <button onClick={handleExportCourseQuestions} className="checklist-bulk-btn questions" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <FileText size={14} /> Tải Đề thi Cả khóa (.md)
+                <button
+                  onClick={() => setIsZipPreviewOpen(true)}
+                  className="checklist-bulk-btn zip-preview-btn"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <Eye size={14} /> Xem trước Cấu trúc ZIP
                 </button>
               </div>
             </div>
@@ -539,12 +559,12 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
           {/* Chapter Table */}
           <div className="checklist-table-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', marginTop: '24px' }}>
             <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>Cấu trúc chương học chi tiết</h3>
-            <button 
+            <button
               onClick={handleOpenCreateModal}
-              className="checklist-bulk-btn zip-package" 
-              style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
+              className="checklist-bulk-btn zip-package"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
                 gap: '6px',
                 background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
                 color: 'white',
@@ -586,7 +606,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                             Cách 2: Click <strong>"Nạp Đề Cương (Syllabus)"</strong> bằng cách chọn Sơ đồ tư duy bên cạnh, hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để tải lên Syllabus của bạn.
                           </li>
                           <li className="empty-suggestions-item">
-                            Cách 3: Click vào mục <strong>Soạn bài giảng</strong> (hoặc hỏi Trợ lý ảo Falcon AI) và chọn <strong>"Gợi ý Dàn ý chương học"</strong> để AI tự động sinh cấu trúc các chương học.
+                            Cách 3: Click vào mục <strong>Soạn bài giảng</strong> (hoặc hỏi Trợ lý ảo ODIN AI) và chọn <strong>"Gợi ý Dàn ý chương học"</strong> để AI tự động sinh cấu trúc các chương học.
                           </li>
                         </ul>
                       </div>
@@ -598,7 +618,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                     const hasScript = !!materialsMap[ch.id]?.hasScript;
                     const chQuestions = questions.filter(q => q.chapter_id === ch.id);
                     const hasQ = chQuestions.length > 0;
-                    
+
                     // Compute dynamic guide
                     let nextActionGuide = "";
                     let guideClass = "guide-info";
@@ -643,15 +663,16 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                             </div>
                           </div>
                         </td>
-                        
+
                         <td className="col-slides">
                           <div className="status-badge-row">
                             <span className={`status-badge ${hasSlide ? 'status-done' : 'status-pending'}`}>
-                              {hasSlide ? '🟢 Đã soạn' : '⚪ Chưa soạn'}
+                              {hasSlide ? <CheckCircle2 size={13} style={{ color: '#10b981' }} /> : <Circle size={13} style={{ color: '#94a3b8' }} />}
+                              {hasSlide ? 'Đã soạn' : 'Chưa soạn'}
                             </span>
                           </div>
                           <div className="action-buttons-row">
-                            <button 
+                            <button
                               onClick={() => handleExportPPTX(ch.id)}
                               disabled={!hasSlide || downloadingChapterId === ch.id}
                               className="checklist-action-btn pptx"
@@ -660,7 +681,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                             >
                               {downloadingChapterId === ch.id ? 'Tải...' : <><Download size={13} /> Tải PPTX</>}
                             </button>
-                            <button 
+                            <button
                               onClick={() => onNavigate('lesson_planner', ch.id)}
                               className="checklist-action-btn-secondary"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
@@ -673,11 +694,12 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                         <td className="col-lesson-plan">
                           <div className="status-badge-row">
                             <span className={`status-badge ${hasScript ? 'status-done' : 'status-pending'}`}>
-                              {hasScript ? '🟢 Đã soạn' : '⚪ Chưa soạn'}
+                              {hasScript ? <CheckCircle2 size={13} style={{ color: '#10b981' }} /> : <Circle size={13} style={{ color: '#94a3b8' }} />}
+                              {hasScript ? 'Đã soạn' : 'Chưa soạn'}
                             </span>
                           </div>
                           <div className="action-buttons-row">
-                            <button 
+                            <button
                               onClick={() => handleExportLessonPlan(ch.id)}
                               disabled={!hasScript}
                               className="checklist-action-btn script"
@@ -686,7 +708,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                             >
                               <Printer size={13} /> In Giáo án
                             </button>
-                            <button 
+                            <button
                               onClick={() => onNavigate('lesson_planner', ch.id)}
                               className="checklist-action-btn-secondary"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
@@ -699,11 +721,12 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                         <td className="col-questions">
                           <div className="status-badge-row">
                             <span className={`status-badge ${hasQ ? 'status-done' : 'status-pending'}`}>
-                              {hasQ ? `🟢 Đã có (${chQuestions.length} câu)` : '⚪ Chưa có'}
+                              {hasQ ? <CheckCircle2 size={13} style={{ color: '#10b981' }} /> : <Circle size={13} style={{ color: '#94a3b8' }} />}
+                              {hasQ ? `Đã có (${chQuestions.length} câu)` : 'Chưa có'}
                             </span>
                           </div>
                           <div className="action-buttons-row">
-                            <button 
+                            <button
                               onClick={() => roadmapData.handleExportChapterExam(ch.id, ch.title)}
                               disabled={!hasQ}
                               className="checklist-action-btn questions"
@@ -712,7 +735,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                             >
                               <Download size={13} /> Tải Đề thi
                             </button>
-                            <button 
+                            <button
                               onClick={() => onNavigate('question_bank', ch.id)}
                               className="checklist-action-btn-secondary"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center' }}
@@ -818,7 +841,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
             <h3 className="chapter-modal-title">
               {modalMode === 'create' ? 'Thêm chương học mới' : 'Chỉnh sửa chương học'}
             </h3>
-            
+
             <div className="chapter-modal-field">
               <label className="chapter-modal-label">Tên chương học</label>
               <input
@@ -854,6 +877,154 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                 disabled={modalSaving}
               >
                 {modalSaving ? 'Đang lưu...' : 'Lưu chương học'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ZIP Export Structure Preview Modal ── */}
+      {isZipPreviewOpen && (
+        <div className="chapter-modal-overlay" onClick={() => setIsZipPreviewOpen(false)}>
+          <div className="chapter-modal-card zip-preview-card" onClick={(e) => e.stopPropagation()}>
+            <div className="zip-preview-header">
+              <h3 className="chapter-modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                <FolderOpen size={20} style={{ color: 'var(--accent-color)' }} />
+                Cấu trúc gói tài liệu xuất bản (.zip)
+              </h3>
+              <button className="zip-preview-close" onClick={() => setIsZipPreviewOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '4px 0 12px 0', lineHeight: '1.5', textAlign: 'left' }}>
+              Xem trước danh sách thư mục và tập tin sẽ được tạo ra khi xuất bản môn học. Học liệu và đề thi sẽ tự động đóng gói theo cấu trúc chuẩn VinUni.
+            </p>
+
+            <div className="zip-preview-tree">
+              {/* Root Zip Folder */}
+              <div className="zip-preview-node root-node">
+                <FolderOpen size={15} className="zip-preview-icon folder" />
+                <span className="zip-preview-name font-bold">Course_Package_{course.course_code || 'export'}.zip</span>
+              </div>
+
+              <div className="zip-preview-children">
+                {/* Syllabus.md */}
+                <div className="zip-preview-node">
+                  <FileText size={14} className="zip-preview-icon file-md" />
+                  <span className="zip-preview-name">Syllabus.md</span>
+                  <span className="zip-preview-meta">Đề cương chi tiết & CLO</span>
+                </div>
+
+                {/* Matrix_Coverage.md */}
+                <div className="zip-preview-node">
+                  <FileText size={14} className="zip-preview-icon file-md" />
+                  <span className="zip-preview-name">Matrix_Coverage.md</span>
+                  <span className="zip-preview-meta">Ma trận độ phủ CLO & Bloom</span>
+                </div>
+
+                {/* Chapters/ folder */}
+                <div className="zip-preview-node">
+                  <FolderOpen size={14} className="zip-preview-icon folder" />
+                  <span className="zip-preview-name font-semibold">Chapters/</span>
+                </div>
+
+                {/* Chapter list */}
+                <div className="zip-preview-children">
+                  {chapters.length === 0 ? (
+                    <div className="zip-preview-node" style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
+                      (Chưa có chương học nào được tạo)
+                    </div>
+                  ) : (
+                    chapters.map((ch, idx) => {
+                      const hasSlide = !!materialsMap[ch.id]?.hasSlide;
+                      const hasScript = !!materialsMap[ch.id]?.hasScript;
+                      const chQuestions = questions.filter(q => q.chapter_id === ch.id);
+                      const hasQ = chQuestions.length > 0;
+                      const chNumStr = String(idx + 1).padStart(2, '0');
+                      const sanitizedTitle = sanitizeFilename(ch.title);
+                      const folderName = `Chapter_${chNumStr}_${sanitizedTitle}/`;
+
+                      return (
+                        <div key={ch.id} className="zip-preview-chapter-block" style={{ marginBottom: '6px' }}>
+                          <div className="zip-preview-node">
+                            <FolderOpen size={14} className="zip-preview-icon folder-chapter" />
+                            <span className="zip-preview-name font-semibold text-accent" title={ch.title}>
+                              {folderName}
+                            </span>
+                          </div>
+
+                          <div className="zip-preview-children">
+                            {hasScript && (
+                              <div className="zip-preview-node">
+                                <FileText size={13} className="zip-preview-icon file-md" />
+                                <span className="zip-preview-name">Storyboard.md</span>
+                                <span className="zip-preview-meta">Giáo án Active Learning</span>
+                              </div>
+                            )}
+
+                            {hasSlide && (
+                              <>
+                                <div className="zip-preview-node">
+                                  <FileText size={13} className="zip-preview-icon file-md" />
+                                  <span className="zip-preview-name">Slides_Source.md</span>
+                                  <span className="zip-preview-meta">Nguồn văn bản Slide</span>
+                                </div>
+                                <div className="zip-preview-node">
+                                  <FileText size={13} className="zip-preview-icon file-pptx" />
+                                  <span className="zip-preview-name text-success font-semibold">Slide_Presentation.pptx</span>
+                                  <span className="zip-preview-meta highlight">Bài giảng PowerPoint</span>
+                                </div>
+                              </>
+                            )}
+
+                            {hasQ && (
+                              <>
+                                <div className="zip-preview-node">
+                                  <FileText size={13} className="zip-preview-icon file-md" />
+                                  <span className="zip-preview-name">Quiz_Questions.md</span>
+                                  <span className="zip-preview-meta">Ngân hàng câu hỏi</span>
+                                </div>
+                                <div className="zip-preview-node">
+                                  <HelpCircle size={13} className="zip-preview-icon file-gift" />
+                                  <span className="zip-preview-name">Quiz_Questions.gift</span>
+                                  <span className="zip-preview-meta">Định dạng GIFT Moodle</span>
+                                </div>
+                              </>
+                            )}
+
+                            {!hasScript && !hasSlide && !hasQ && (
+                              <div className="zip-preview-node" style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: '11px' }}>
+                                (Thư mục rỗng - chưa soạn học liệu)
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="chapter-modal-actions" style={{ marginTop: '12px' }}>
+              <button
+                className="chapter-modal-btn secondary"
+                onClick={() => setIsZipPreviewOpen(false)}
+              >
+                Đóng
+              </button>
+              <button
+                className="chapter-modal-btn primary"
+                onClick={() => {
+                  handleExportZIPPackage();
+                  setIsZipPreviewOpen(false);
+                }}
+                disabled={downloadingZip}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Download size={14} />
+                {downloadingZip ? 'Đang đóng gói...' : 'Tải trọn bộ ZIP'}
               </button>
             </div>
           </div>

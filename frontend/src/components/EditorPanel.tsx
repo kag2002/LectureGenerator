@@ -65,6 +65,7 @@ export interface EditorPanelProps {
   handleRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  materialCreatedBy?: string | null;
 }
 
 export default function EditorPanel({
@@ -99,7 +100,8 @@ export default function EditorPanel({
   handleUndo = () => {},
   handleRedo = () => {},
   canUndo = false,
-  canRedo = false
+  canRedo = false,
+  materialCreatedBy = null
 }: EditorPanelProps) {
   const [revPrompt, setRevPrompt] = useState('');
   const [revisions, setRevisions] = useState<RevisionType[]>([]);
@@ -687,6 +689,7 @@ export default function EditorPanel({
                       isFullscreen={isFullscreen} 
                       chapterId={selectedChapter?.id}
                       onSaveRevisedSlide={handleSaveRevisedSlide}
+                      created_by={materialCreatedBy}
                     />
                   </div>
                 </div>
@@ -716,6 +719,7 @@ export default function EditorPanel({
                     isFullscreen={isFullscreen} 
                     chapterId={selectedChapter?.id}
                     onSaveRevisedSlide={handleSaveRevisedSlide}
+                    created_by={materialCreatedBy}
                   />
                 </>
               )}

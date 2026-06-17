@@ -47,6 +47,8 @@ export interface Question {
   clo_id: number;
   chapter_id?: number | null;
   explanation?: string;
+  created_by?: string | null;
+  status?: string | null;
 }
 
 export interface QueueItem {

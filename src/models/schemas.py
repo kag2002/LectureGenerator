@@ -118,6 +118,8 @@ class MaterialResponse(BaseModel):
     chapter_id: int
     slide_content: str | None
     active_learning_script: str | None
+    created_by: str | None = None
+    status: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -218,6 +220,8 @@ class QuestionResponse(BaseModel):
     bloom_level: int
     clo_id: int | None
     is_active: bool
+    created_by: str | None = None
+    status: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

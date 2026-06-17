@@ -7,6 +7,8 @@ authenticated HTTP clients, and common mocks for external services.
 
 import json
 import os
+os.environ["TESTING"] = "1"
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

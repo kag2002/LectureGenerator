@@ -198,6 +198,14 @@ export function useMaterialsStream({
       setApiStatus('success');
       setMessage(response.data.message);
       setGenLog('');
+
+      window.dispatchEvent(new CustomEvent('programmatic-storyboard-generated', {
+        detail: {
+          chapterId: selectedChapter.id,
+          chapterTitle: selectedChapter.title,
+          storyboard: response.data.storyboard || []
+        }
+      }));
       
       const usage = response.data.usage;
       if (usage) {
@@ -430,6 +438,14 @@ export function useMaterialsStream({
                   setSelfCorrectionAttempt(null);
                 }
                 setGeneratingChapterId(null); // Hoàn tất tiến trình chạy ngầm
+
+                window.dispatchEvent(new CustomEvent('programmatic-materials-generated', {
+                  detail: {
+                    chapterId: targetChapterId,
+                    chapterTitle: selectedChapterRef.current?.title || '',
+                    warnings: data.warnings || []
+                  }
+                }));
                 
                 const opLatency = (Date.now() - startTime) / 1000;
                 onRecordAIUsage({

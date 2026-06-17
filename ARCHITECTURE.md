@@ -16,18 +16,19 @@ graph TB
     end
 
     subgraph Backend[FastAPI Backend]
-        API[API Routes]
+        API[API Routes & SSE Broadcaster]
         Agent[LangGraph Agent]
         LLM[LLM Service]
         Tools[Agent Tools]
     end
 
     subgraph Data[Data Layer]
-        DB[(Database)]
+        DB[(Database: Locks & Logs)]
         Vector[Vector Store]
     end
 
     UI -->|HTTP/REST| API
+    UI <---|SSE Stream| API
     API --> Agent
     Agent --> LLM
     Agent --> Tools
@@ -49,7 +50,7 @@ graph TB
 - **Authentication:** JWT token-based authentication (lưu trữ trong localStorage và truyền qua Header `Authorization: Bearer <token>`).
 
 ### 3. AI Agent (LangGraph)
-- **Agent Type:** Custom State Machine Agent với cơ chế Intent Routing, Guardrail checking và Tool Execution.
+- **Purpose:** Custom State Machine Agent với cơ chế Intent Routing, Guardrail checking và Tool Execution.
 - **State:** `AgentState` TypedDict chứa lịch sử hội thoại, câu hỏi hiện tại, kết quả truy tìm từ Vector RAG, và số lượt lặp tối đa của Agent.
 - **Nodes:** Input Guardrails, Router, Web Search, DB Query, Evaluate, Generate Answer, Output Guardrails.
 - **Tools:** `search_course_knowledge` (RAG Vector Store query), `get_course_clos`, `get_matrix_coverage`, `clarify`, `get_course_chapters`, `generate_course_outline_action`, `generate_chapter_storyboard_action`, `generate_chapter_materials_action`, `generate_chapter_questions_action`.
@@ -70,13 +71,19 @@ graph LR
 
 ### 4. Database
 - **Type:** SQLite (được cấu hình ở chế độ WAL để hỗ trợ ghi đồng thời nhẹ nhàng trong giai đoạn development) và PostgreSQL cho production.
-- **Tables:** `users`, `courses`, `chapters`, `chapter_materials`, `questions`, `chat_sessions`, `chat_messages`, `chat_eval_runs`.
+- **Tables:** `users`, `courses`, `chapters`, `chapter_materials`, `questions`, `chat_sessions`, `chat_messages`, `chat_eval_runs`, `odin_locks`, `odin_action_logs`.
 - **Migrations:** Alembic
 
 ### 5. Vector Store
 - **Type:** ChromaDB (Persisted local client)
 - **Embeddings:** SentenceTransformers (all-MiniLM-L6-v2), fallback sang OpenAI (text-embedding-3-small) hoặc Gemini (text-embedding-004).
 - **Purpose:** Truy vấn RAG cô lập theo Course ID và User ID nhằm cung cấp ngữ cảnh học liệu chính xác khi sinh bài giảng và câu hỏi.
+
+### 6. Autopilot & Real-time Locking (SSE)
+- **Purpose:** Đảm bảo đồng bộ hóa trạng thái giao diện trong thời gian thực khi AI chạy ngầm hoặc khi nhiều giảng viên cùng thao tác trên một chương học/môn học.
+- **SSE Stream:** Endpoint `/api/autopilot/notifications/stream` duy trì kết nối Server-Sent Events để phát sóng tức thì các thay đổi về trạng thái khóa/giải phóng giao diện và tiến trình tác vụ nền từ AI.
+- **Locking Mechanism:** Khi Mascot (Odin AI) chạy tự động, một bản ghi khóa `OdinLock` được thiết lập trong database, khóa chỉnh sửa giao diện của người dùng để tránh ghi đè dữ liệu.
+- **Rollback:** Hỗ trợ Hoàn tác (Undo) toàn bộ các câu hỏi hoặc slide bài giảng được sinh trong phiên làm việc gần nhất của Autopilot (chỉ khi chúng chưa bị sửa đổi thủ công).
 
 ## Data Flow
 

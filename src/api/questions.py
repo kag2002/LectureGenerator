@@ -76,6 +76,9 @@ def create_question(
         if not chapter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chương học không thuộc môn học này.")
 
+        from src.api.autopilot import check_context_lock
+        check_context_lock(db, course_id, f"chapter_{req.chapter_id}", current_user.email)
+
     # 3. Xác thực CLO nếu có truyền vào
     if req.clo_id is not None:
         clo = db.query(CLO).filter(CLO.id == req.clo_id, CLO.course_id == course_id).first()
@@ -92,6 +95,7 @@ def create_question(
         bloom_level=req.bloom_level,
         clo_id=req.clo_id,
         is_active=True,
+        created_by="user",
     )
     db.add(new_q)
     db.commit()
@@ -115,11 +119,16 @@ def update_question(
             status_code=status.HTTP_404_NOT_FOUND, detail="Câu hỏi không tồn tại hoặc bạn không có quyền chỉnh sửa."
         )
 
+    if question.chapter_id is not None:
+        from src.api.autopilot import check_context_lock
+        check_context_lock(db, question.course_id, f"chapter_{question.chapter_id}", current_user.email)
+
     question.question_text = req.question_text
     question.options_json = req.options_json
     question.correct_answer = req.correct_answer
     question.bloom_level = req.bloom_level
     question.clo_id = req.clo_id
+    question.created_by = "user"
 
     db.commit()
     db.refresh(question)
@@ -136,6 +145,11 @@ def delete_question(question_id: int, current_user: User = Depends(get_current_u
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Câu hỏi không tồn tại hoặc bạn không có quyền chỉnh sửa."
         )
+
+    if question.chapter_id is not None:
+        from src.api.autopilot import check_context_lock
+        check_context_lock(db, question.course_id, f"chapter_{question.chapter_id}", current_user.email)
+
     db.delete(question)
     db.commit()
     return {"message": "Đã xóa câu hỏi thành công."}
@@ -172,6 +186,10 @@ def generate_questions(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
         )
+
+    if req.chapter_id is not None:
+        from src.api.autopilot import check_context_lock
+        check_context_lock(db, course_id, f"chapter_{req.chapter_id}", current_user.email)
 
     # --- Langfuse: Khởi tạo Parent Trace cho toàn bộ luồng sinh MCQ ---
     trace = None
@@ -375,6 +393,7 @@ def generate_questions(
             correct_answer=q_data.get("correct_answer", ""),
             bloom_level=safe_parse_bloom_level(q_data.get("bloom_level", req.bloom_level), req.bloom_level),
             clo_id=req.clo_id,
+            created_by="odin_autopilot",
         )
         db.add(new_q)
         saved_questions.append(new_q)
@@ -382,6 +401,20 @@ def generate_questions(
     db.commit()
     for q in saved_questions:
         db.refresh(q)
+
+    # Thêm log hành động để hoàn tác
+    if saved_questions:
+        try:
+            from src.database.models import OdinActionLog
+            action_log = OdinActionLog(
+                course_id=course_id,
+                action_type="generate_questions",
+                affected_ids=json.dumps({"questions": [q.id for q in saved_questions]})
+            )
+            db.add(action_log)
+            db.commit()
+        except Exception as log_err:
+            print(f"[ERROR] Failed to save OdinActionLog: {log_err}")
 
     # --- Langfuse: Đóng Parent Trace ---
     if trace:
@@ -434,6 +467,10 @@ def generate_questions_stream(
     course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Môn học không tồn tại.")
+
+    if req.chapter_id is not None:
+        from src.api.autopilot import check_context_lock
+        check_context_lock(db, course_id, f"chapter_{req.chapter_id}", current_user.email)
 
     # 2. Thu thập ngữ cảnh
     target_clo = db.query(CLO).filter(CLO.id == req.clo_id, CLO.course_id == course_id).first() if req.clo_id else None
@@ -491,6 +528,10 @@ def generate_isomorphic_question(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Câu hỏi gốc không tồn tại hoặc bạn không có quyền sở hữu."
         )
+
+    if orig_q.chapter_id is not None:
+        from src.api.autopilot import check_context_lock
+        check_context_lock(db, orig_q.course_id, f"chapter_{orig_q.chapter_id}", current_user.email)
 
     # 2. Gọi LLM sinh câu hỏi đồng cấu
     system_prompt = """Bạn là chuyên gia sư phạm. Nhiệm vụ của bạn là tạo một câu hỏi trắc nghiệm đồng cấu (isomorphic question).

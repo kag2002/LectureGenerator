@@ -15,8 +15,10 @@ import AppShell from './components/AppShell';
 import MonitorDashboard from './views/MonitorDashboard';
 import AdminDashboard from './views/AdminDashboard';
 import { User, Course, QueueItem } from '@/types';
-import { Zap, X, Play, Pause, Check, Loader2, Maximize2, Minimize2, Cpu } from 'lucide-react';
+import { Zap, X, Play, Pause, Check, Loader2, Maximize2, Minimize2, Cpu, AlertTriangle } from 'lucide-react';
 import MascotCompanion from './components/MascotCompanion';
+import { useUILock } from './context/UILockContext';
+import { UILockProvider } from './context/UILockContext';
 
 
 export default function App() {
@@ -36,6 +38,10 @@ export default function App() {
     message?: string;
   } | null>(null);
   const [showActionModal, setShowActionModal] = useState<boolean>(false);
+  const [showDirtyModal, setShowDirtyModal] = useState<boolean>(false);
+  const [dirtyActionCallback, setDirtyActionCallback] = useState<(() => void) | null>(null);
+  const [isSavingDirty, setIsSavingDirty] = useState<boolean>(false);
+  const { locks, fetchLocks } = useUILock();
 
   // --- States cho Giám sát AI và Trạng thái AI toàn cục ---
   const [monitorStats, setMonitorStats] = useState(() => {
@@ -374,45 +380,58 @@ export default function App() {
     }
   };
 
-  const handleNavigate = (view: string, extra: any = null) => {
-    if (view === 'chatbot' && process.env.NEXT_PUBLIC_HIDE_CHAT === 'true') {
-      view = 'course_roadmap';
+  const checkDirtyAndExecute = (action: () => void) => {
+    if ((window as any).isDirty) {
+      setDirtyActionCallback(() => action);
+      setShowDirtyModal(true);
+    } else {
+      action();
     }
-    if (extra !== null) {
-      if (typeof extra === 'object') {
-        if (extra.chapterId !== undefined) setActiveChapterId(extra.chapterId);
-        if (extra.cloId !== undefined) {
-          setActiveCloId(extra.cloId);
-        } else {
+  };
+
+  const handleNavigate = (view: string, extra: any = null) => {
+    const performNavigation = () => {
+      if (view === 'chatbot' && process.env.NEXT_PUBLIC_HIDE_CHAT === 'true') {
+        view = 'course_roadmap';
+      }
+      if (extra !== null) {
+        if (typeof extra === 'object') {
+          if (extra.chapterId !== undefined) setActiveChapterId(extra.chapterId);
+          if (extra.cloId !== undefined) {
+            setActiveCloId(extra.cloId);
+          } else {
+            setActiveCloId(null);
+          }
+          if (extra.cloCode !== undefined) {
+            setActiveCloCode(extra.cloCode);
+          } else {
+            setActiveCloCode(null);
+          }
+          if (extra.bloomLevel !== undefined) {
+            setActiveBloomLevel(extra.bloomLevel);
+          } else {
+            setActiveBloomLevel(null);
+          }
+        } else if (typeof extra === 'number') {
+          setActiveChapterId(extra);
           setActiveCloId(null);
-        }
-        if (extra.cloCode !== undefined) {
-          setActiveCloCode(extra.cloCode);
-        } else {
           setActiveCloCode(null);
-        }
-        if (extra.bloomLevel !== undefined) {
-          setActiveBloomLevel(extra.bloomLevel);
-        } else {
           setActiveBloomLevel(null);
         }
-      } else if (typeof extra === 'number') {
-        setActiveChapterId(extra);
+      } else {
         setActiveCloId(null);
         setActiveCloCode(null);
         setActiveBloomLevel(null);
       }
-    } else {
-      setActiveCloId(null);
-      setActiveCloCode(null);
-      setActiveBloomLevel(null);
-    }
-    setActiveView(view);
-    localStorage.setItem('active_view', view);
-    if (view === 'dashboard') {
-      setSelectedCourse(null);
-      localStorage.removeItem('selected_course');
-    }
+      setActiveView(view);
+      localStorage.setItem('active_view', view);
+      if (view === 'dashboard') {
+        setSelectedCourse(null);
+        localStorage.removeItem('selected_course');
+      }
+    };
+
+    checkDirtyAndExecute(performNavigation);
   };
 
   useEffect(() => {
@@ -441,6 +460,7 @@ export default function App() {
           try {
             const course = JSON.parse(savedCourse);
             setSelectedCourse(course);
+            fetchLocks(course.id);
             
             if (savedView && savedView !== 'login') {
               setActiveView(savedView);
@@ -485,6 +505,84 @@ export default function App() {
     };
   }, [selectedCourse]);
 
+  // SSE Notification Stream with Exponential Backoff
+  useEffect(() => {
+    if (!selectedCourse?.id) return;
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let attempt = 0;
+    const maxAttempts = 5;
+
+    const connectSSE = () => {
+      if (!selectedCourse?.id) return;
+      const token = localStorage.getItem('token');
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+      const sseUrl = `${apiBase}/api/autopilot/notifications/stream?token=${token || ''}`;
+      
+      console.log(`[SSE] Connecting to autopilot notifications stream (attempt ${attempt + 1})...`);
+      eventSource = new EventSource(sseUrl);
+
+      eventSource.onopen = () => {
+        console.log('[SSE] Connection established successfully.');
+        attempt = 0; // Reset attempts
+        window.dispatchEvent(new CustomEvent('sse-connection-status', { detail: { status: 'connected' } }));
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.course_id === selectedCourse.id) {
+            console.log('[SSE] Notification received:', data);
+            if (data.event === 'lock_acquired' || data.event === 'lock_released' || data.event === 'lock_renewed') {
+              fetchLocks(selectedCourse.id);
+            } else if (data.event === 'autopilot_undone') {
+              window.dispatchEvent(new CustomEvent('db-state-changed'));
+              fetchLocks(selectedCourse.id);
+            }
+          }
+        } catch (err) {
+          // Bỏ qua lỗi parse cho tin nhắn ping
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error('[SSE] Notification stream error:', err);
+        if (eventSource) {
+          eventSource.close();
+        }
+
+        if (attempt < maxAttempts) {
+          const backoff = Math.pow(2, attempt) * 1000;
+          console.log(`[SSE] Reconnecting in ${backoff}ms...`);
+          window.dispatchEvent(new CustomEvent('sse-connection-status', { 
+            detail: { status: 'reconnecting', attempt: attempt + 1, backoff } 
+          }));
+          
+          reconnectTimeout = setTimeout(() => {
+            attempt++;
+            connectSSE();
+          }, backoff);
+        } else {
+          console.error('[SSE] Max reconnection attempts reached.');
+          window.dispatchEvent(new CustomEvent('sse-connection-status', { detail: { status: 'failed' } }));
+        }
+      };
+    };
+
+    connectSSE();
+
+    return () => {
+      console.log('[SSE] Cleaning up autopilot notifications stream connection');
+      if (eventSource) {
+        eventSource.close();
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+      }
+    };
+  }, [selectedCourse?.id]);
+
   useEffect(() => {
     const handleChatbotDispatch = (e: Event) => {
       const customEvent = e as CustomEvent;
@@ -521,6 +619,193 @@ export default function App() {
     };
   }, [pendingAction, selectedCourse, activeView]);
 
+  // Real-time notification logic when background generations complete
+  useEffect(() => {
+    if (!selectedCourse?.id) return;
+
+    const handleSyllabusParsed = (e: Event) => {
+      const { courseId, closCount, fileName } = (e as CustomEvent).detail || {};
+      if (courseId !== selectedCourse.id) return;
+
+      const message = `Dạ, em đã nạp thành công file đề cương **${fileName}** và trích xuất thành công **${closCount} Chuẩn đầu ra (CLO)**. Thầy/Cô có muốn em tiến hành sinh cấu trúc Dàn ý các chương học (Course Outline) cho môn học này không ạ?`;
+      
+      window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', {
+        detail: {
+          view: 'lesson_planner',
+          action: 'generate_outline',
+          params: {},
+          message
+        }
+      }));
+    };
+
+    const handleOutlineGenerated = (e: Event) => {
+      const { courseId, chapters } = (e as CustomEvent).detail || {};
+      if (courseId !== selectedCourse.id) return;
+      if (!chapters || chapters.length === 0) return;
+
+      const message = `Cấu trúc Outline môn học gồm **${chapters.length} chương** đã được thiết kế thành công! Thầy/Cô có muốn chuyển sang thiết kế Dàn ý slide (Storyboard) nháp cho **Chương 1: ${chapters[0].title}** không ạ?`;
+      
+      window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', {
+        detail: {
+          view: 'lesson_planner',
+          action: 'generate_storyboard',
+          params: {
+            chapter_id: chapters[0].id,
+            chapter_title: chapters[0].title
+          },
+          message
+        }
+      }));
+    };
+
+    const handleStoryboardGenerated = (e: Event) => {
+      const { chapterId, chapterTitle } = (e as CustomEvent).detail || {};
+      
+      const message = `Dàn ý slide (Storyboard) nháp cho chương **${chapterTitle}** đã được sinh nháp thành công! Thầy/Cô có muốn em bắt đầu sinh chi tiết nội dung slide bài giảng và kịch bản hoạt động tương tác sư phạm (giáo án) không ạ?`;
+
+      window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', {
+        detail: {
+          view: 'lesson_planner',
+          action: 'generate_materials',
+          params: {
+            chapter_id: chapterId,
+            chapter_title: chapterTitle
+          },
+          message
+        }
+      }));
+    };
+
+    const handleMaterialsGenerated = async (e: Event) => {
+      const { chapterId, chapterTitle } = (e as CustomEvent).detail || {};
+      
+      let cloWarningText = "";
+      try {
+        const token = localStorage.getItem('token');
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+        const response = await fetch(
+          `${apiBase}/api/courses/${selectedCourse.id}/matrix-coverage`,
+          {
+            headers: { 'Authorization': `Bearer ${token || ''}` }
+          }
+        );
+        if (response.ok) {
+          const resData = await response.json();
+          const matrixData = resData.matrix;
+          const missingM: string[] = [];
+          Object.keys(matrixData).forEach(code => {
+            const clo = matrixData[code];
+            const targetLvl = clo.target_bloom;
+            const mLevels = clo.material_levels || {};
+            if ((mLevels[String(targetLvl)] || 0) === 0) {
+              missingM.push(`${code} (Bloom B${targetLvl})`);
+            }
+          });
+          if (missingM.length > 0) {
+            cloWarningText = `\n\n⚠️ **Cảnh báo chuẩn đầu ra**: Hiện tại bài giảng chưa bao phủ đầy đủ chuẩn đầu ra ở mức Bloom mục tiêu: **${missingM.join(', ')}**.`;
+          } else {
+            cloWarningText = `\n\n✅ **Độ phủ chuẩn đầu ra**: Bài giảng đã bao phủ đầy đủ các Chuẩn đầu ra (CLOs).`;
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi khi kiểm tra ma trận độ phủ:", err);
+      }
+
+      const message = `Em đã sinh thành công nội dung slide chi tiết và kịch bản tương tác cho chương **${chapterTitle}**!${cloWarningText}\n\nThầy/Cô có muốn chuyển sang **Ngân hàng đề thi** để tự động sinh các câu hỏi trắc nghiệm đánh giá (MCQs) cho chương học này không ạ?`;
+
+      window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', {
+        detail: {
+          view: 'question_bank',
+          action: 'generate_questions',
+          params: {
+            chapter_id: chapterId,
+            chapter_title: chapterTitle,
+            count: 3,
+            bloom_level: 3
+          },
+          message
+        }
+      }));
+    };
+
+    const handleQuestionsGenerated = async (e: Event) => {
+      const { chapterId, count } = (e as CustomEvent).detail || {};
+      
+      let cloWarningText = "";
+      let hasBlindSpots = false;
+      try {
+        const token = localStorage.getItem('token');
+        const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+        const response = await fetch(
+          `${apiBase}/api/courses/${selectedCourse.id}/matrix-coverage`,
+          {
+            headers: { 'Authorization': `Bearer ${token || ''}` }
+          }
+        );
+        if (response.ok) {
+          const resData = await response.json();
+          const matrixData = resData.matrix;
+          const missingQ: string[] = [];
+          Object.keys(matrixData).forEach(code => {
+            const clo = matrixData[code];
+            const targetLvl = clo.target_bloom;
+            const qLevels = clo.question_levels || {};
+            if ((qLevels[String(targetLvl)] || 0) === 0) {
+              missingQ.push(`${code} (Bloom B${targetLvl})`);
+            }
+          });
+          if (missingQ.length > 0) {
+            hasBlindSpots = true;
+            cloWarningText = `\n\n⚠️ **Điểm mù ngân hàng đề thi**: Phát hiện thiếu hụt độ phủ câu hỏi cho chuẩn đầu ra: **${missingQ.join(', ')}**.`;
+          } else {
+            cloWarningText = `\n\n🎉 **Chúc mừng**: Ngân hàng đề thi đã bao phủ đầy đủ 100% các Chuẩn đầu ra (CLOs) môn học ở mức Bloom mục tiêu!`;
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi khi kiểm tra ma trận câu hỏi:", err);
+      }
+
+      let message = "";
+      let detailAction = {};
+      if (hasBlindSpots) {
+        message = `Đã sinh xong **${count} câu hỏi** trắc nghiệm cho chương!${cloWarningText}\n\nThầy/Cô có muốn em kích hoạt **Hàng đợi Tự động Khắc phục Điểm mù** để tự động bổ sung câu hỏi bao phủ các CLO còn thiếu không ạ?`;
+        detailAction = {
+          view: 'matrix_dashboard',
+          action: 'run_remediation_queue',
+          params: { mode: 'questions' },
+          message
+        };
+      } else {
+        message = `Đã sinh xong **${count} câu hỏi** trắc nghiệm cho chương!${cloWarningText}\n\nThầy/Cô có muốn em mở giao diện **Tải đề thi (.gift)** để nhập trực tiếp vào hệ thống LMS Canvas/Moodle không ạ?`;
+        detailAction = {
+          view: 'question_bank',
+          action: 'export_exam',
+          params: {},
+          message
+        };
+      }
+
+      window.dispatchEvent(new CustomEvent('chatbot-dispatch-action', {
+        detail: detailAction
+      }));
+    };
+
+    window.addEventListener('programmatic-syllabus-parsed', handleSyllabusParsed);
+    window.addEventListener('programmatic-outline-generated', handleOutlineGenerated);
+    window.addEventListener('programmatic-storyboard-generated', handleStoryboardGenerated);
+    window.addEventListener('programmatic-materials-generated', handleMaterialsGenerated);
+    window.addEventListener('programmatic-questions-generated', handleQuestionsGenerated);
+
+    return () => {
+      window.removeEventListener('programmatic-syllabus-parsed', handleSyllabusParsed);
+      window.removeEventListener('programmatic-outline-generated', handleOutlineGenerated);
+      window.removeEventListener('programmatic-storyboard-generated', handleStoryboardGenerated);
+      window.removeEventListener('programmatic-materials-generated', handleMaterialsGenerated);
+      window.removeEventListener('programmatic-questions-generated', handleQuestionsGenerated);
+    };
+  }, [selectedCourse?.id]);
+
   const handleConfirmAction = () => {
     if (!pendingAction) return;
 
@@ -543,6 +828,8 @@ export default function App() {
         eventName = 'lesson-planner-programmatic-trigger';
       } else if (view === 'question_bank') {
         eventName = 'question-bank-programmatic-trigger';
+      } else if (view === 'matrix_dashboard') {
+        eventName = 'matrix-dashboard-programmatic-trigger';
       }
 
       if (eventName) {
@@ -590,6 +877,7 @@ export default function App() {
     setActiveView('course_roadmap');
     localStorage.setItem('active_view', 'course_roadmap');
     resetQueueState();
+    fetchLocks(course.id);
   };
 
   if (loading) {
@@ -601,8 +889,9 @@ export default function App() {
   }
 
   return (
-    <>
-      {activeView === 'landing' && (
+    <UILockProvider>
+      <>
+        {activeView === 'landing' && (
         <Landing user={user} onNavigate={handleNavigate} />
       )}
       {activeView === 'login' && (
@@ -1093,7 +1382,7 @@ export default function App() {
       )}
 
       {/* GLOBAL AI PROCESSING FLOATING BUBBLE */}
-      {globalAIStatus.isProcessing && (
+      {globalAIStatus.isProcessing && !selectedCourse && (
         <div style={{
           position: 'fixed',
           bottom: '115px',
@@ -1164,6 +1453,7 @@ export default function App() {
           selectedCourse={selectedCourse}
           onNavigate={handleNavigate}
           onTriggerPedagogicalConfig={() => setForceOpenPedagogicalModal(true)}
+          aiStatus={globalAIStatus}
         />
       )}
 
@@ -1351,7 +1641,198 @@ export default function App() {
           </div>
         </div>
       )}
+      {showDirtyModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(9, 13, 26, 0.75)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 11100,
+          fontFamily: '"Outfit", "Inter", sans-serif',
+        }}>
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '16px',
+            width: '460px',
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #7f1d1d 0%, #450a0a 100%)',
+              padding: '20px 24px',
+              borderBottom: '1px solid rgba(239, 68, 68, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <div style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#ef4444'
+              }}>
+                <AlertTriangle size={18} />
+              </div>
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: '800', color: '#fca5a5', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Cảnh báo: Thay đổi chưa lưu
+                </h3>
+                <span style={{ fontSize: '11px', color: '#fca5a5', opacity: 0.8 }}>Phát hiện dữ liệu nháp chưa được lưu lại</span>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowDirtyModal(false);
+                  setDirtyActionCallback(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#fca5a5',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Content Body */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left' }}>
+              <p style={{ margin: 0, fontSize: '13.5px', color: '#cbd5e1', lineHeight: '1.5' }}>
+                Thầy/Cô đang có các chỉnh sửa chưa lưu trên trang này. Nếu tiếp tục điều hướng hoặc thực hiện hành động tự động từ AI, toàn bộ các chỉnh sửa chưa lưu này sẽ bị mất.
+              </p>
+            </div>
+
+            {/* Footer Buttons */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(15, 23, 42, 0.2)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px'
+            }}>
+              <button
+                disabled={isSavingDirty}
+                onClick={() => {
+                  setShowDirtyModal(false);
+                  setDirtyActionCallback(null);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  color: '#cbd5e1',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Quay lại sửa tiếp
+              </button>
+              
+              <button
+                disabled={isSavingDirty}
+                onClick={() => {
+                  (window as any).isDirty = false;
+                  if (dirtyActionCallback) {
+                    dirtyActionCallback();
+                  }
+                  setShowDirtyModal(false);
+                  setDirtyActionCallback(null);
+                }}
+                style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid #ef4444',
+                  color: '#f87171',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Ghi đè & Bỏ nháp
+              </button>
+
+              {(window as any).dirtySaveCallback && (
+                <button
+                  disabled={isSavingDirty}
+                  onClick={async () => {
+                    setIsSavingDirty(true);
+                    try {
+                      const success = await (window as any).dirtySaveCallback();
+                      if (success) {
+                        (window as any).isDirty = false;
+                        if (dirtyActionCallback) {
+                          dirtyActionCallback();
+                        }
+                        setShowDirtyModal(false);
+                        setDirtyActionCallback(null);
+                      } else {
+                        alert("Không thể lưu tự động. Vui lòng kiểm tra lại dữ liệu.");
+                      }
+                    } catch (err) {
+                      console.error("Auto save failed:", err);
+                    } finally {
+                      setIsSavingDirty(false);
+                    }
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg, var(--vinuni-gold) 0%, #b8860b 100%)',
+                    color: 'var(--vinuni-navy)',
+                    border: 'none',
+                    padding: '8px 20px',
+                    borderRadius: '8px',
+                    fontSize: '12.5px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(212, 163, 89, 0.2)',
+                    transition: 'all 0.2s',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {isSavingDirty ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      <span>Đang lưu...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check size={12} />
+                      <span>Lưu lại & Tiếp tục</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
+    </UILockProvider>
   );
 }
 

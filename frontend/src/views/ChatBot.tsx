@@ -3,14 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import client from '../api/client';
-import { 
-  ArrowLeft, 
-  MessageSquare, 
-  Plus, 
-  Send, 
-  BarChart2, 
-  Check, 
-  X, 
+import {
+  ArrowLeft,
+  MessageSquare,
+  Plus,
+  Send,
+  BarChart2,
+  Check,
+  X,
   ShieldAlert, Cpu, Zap,
   Edit3,
   ChevronDown,
@@ -95,9 +95,9 @@ interface EvalHistoryItem {
 
 const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageNum: string) => void) => {
   if (!text) return null;
-  
+
   const parts = text.split(/(```[\s\S]*?```)/g);
-  
+
   return parts.map((part, index) => {
     if (part.startsWith('```') && part.endsWith('```')) {
       const codeLines = part.split('\n');
@@ -116,13 +116,13 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
           textAlign: 'left'
         }}>
           {firstLine && (
-            <div style={{ 
-              fontSize: '11px', 
-              color: 'var(--text-muted)', 
-              textTransform: 'uppercase', 
-              borderBottom: '1px solid var(--border-color)', 
-              paddingBottom: '4px', 
-              marginBottom: '6px' 
+            <div style={{
+              fontSize: '11px',
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              borderBottom: '1px solid var(--border-color)',
+              paddingBottom: '4px',
+              marginBottom: '6px'
             }}>
               {firstLine}
             </div>
@@ -131,16 +131,16 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
         </pre>
       );
     }
-    
+
     const lines = part.split('\n');
     let inTable = false;
     let tableHeaders: string[] = [];
     let tableRows: string[][] = [];
     const parsedElements: React.ReactNode[] = [];
-    
+
     const parseInline = (str: string): React.ReactNode[] => {
       let segments: React.ReactNode[] = [str];
-      
+
       segments = segments.flatMap(seg => {
         if (typeof seg !== 'string') return seg;
         const matches = seg.split(/(\*\*.*?\*\*)/g);
@@ -151,7 +151,7 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
           return m;
         });
       });
-      
+
       segments = segments.flatMap(seg => {
         if (typeof seg !== 'string') return seg;
         const matches = seg.split(/(\*.*?\*)/g);
@@ -162,16 +162,16 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
           return m;
         });
       });
-      
+
       segments = segments.flatMap(seg => {
         if (typeof seg !== 'string') return seg;
         const matches = seg.split(/(`.*?`)/g);
         return matches.map((m, idx) => {
           if (m.startsWith('`') && m.endsWith('`')) {
-            return <code key={idx} style={{ 
-              background: 'rgba(255, 255, 255, 0.1)', 
-              padding: '2px 4px', 
-              borderRadius: '4px', 
+            return <code key={idx} style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              padding: '2px 4px',
+              borderRadius: '4px',
               fontFamily: 'Consolas, monospace',
               fontSize: '12px'
             }}>{m.slice(1, -1)}</code>;
@@ -220,10 +220,10 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
           return m;
         });
       });
-      
+
       return segments;
     };
-    
+
     const flushTable = (key: number) => {
       if (!inTable) return null;
       inTable = false;
@@ -231,9 +231,9 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
       const rows = tableRows;
       tableHeaders = [];
       tableRows = [];
-      
+
       if (headers.length === 0 && rows.length === 0) return null;
-      
+
       return (
         <div key={`table-${key}`} style={{ overflowX: 'auto', margin: '12px 0' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13.5px', border: '1px solid var(--border-color)' }}>
@@ -261,10 +261,10 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
         </div>
       );
     };
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      
+
       if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
         const columns = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
         if (columns.every(col => col.startsWith('-') || col.replace(/-/g, '').trim() === '')) {
@@ -281,14 +281,14 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
         const tbl = flushTable(i);
         if (tbl) parsedElements.push(tbl);
       }
-      
+
       if (line.startsWith('# ')) {
         parsedElements.push(<h3 key={i} style={{ fontSize: '18px', fontWeight: 'bold', margin: '14px 0 8px 0', color: 'var(--vinuni-gold)' }}>{parseInline(line.slice(2))}</h3>);
       } else if (line.startsWith('## ')) {
         parsedElements.push(<h4 key={i} style={{ fontSize: '16px', fontWeight: 'bold', margin: '12px 0 6px 0', color: 'var(--vinuni-gold)' }}>{parseInline(line.slice(3))}</h4>);
       } else if (line.startsWith('### ')) {
         parsedElements.push(<h5 key={i} style={{ fontSize: '14px', fontWeight: 'bold', margin: '10px 0 4px 0' }}>{parseInline(line.slice(4))}</h5>);
-      } 
+      }
       else if (line.trim().startsWith('- ') || line.trim().startsWith('* ')) {
         parsedElements.push(
           <li key={i} style={{ listStyleType: 'disc', margin: '4px 0 4px 24px', textAlign: 'left' }}>
@@ -311,12 +311,12 @@ const renderMarkdown = (text: string, onCitationClick?: (fileName: string, pageN
         parsedElements.push(<p key={i} style={{ margin: '4px 0', textAlign: 'left', lineHeight: '1.5' }}>{parseInline(line)}</p>);
       }
     }
-    
+
     if (inTable) {
       const tbl = flushTable(lines.length);
       if (tbl) parsedElements.push(tbl);
     }
-    
+
     return <div key={index}>{parsedElements}</div>;
   });
 };
@@ -337,7 +337,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
   const handleCitationClick = (fileName: string, pageNum: string) => {
     let matchedText = '';
-    
+
     // Tìm kiếm trong lịch sử các tin nhắn của phiên trò chuyện hiện tại
     for (const msg of messages) {
       if (msg.tool_results) {
@@ -360,7 +360,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
         if (searchHit) break;
       }
     }
-    
+
     setSelectedCitation({
       fileName,
       pageNumber: pageNum,
@@ -513,7 +513,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
     try {
       const response = await client.get(`/api/chatbot/sessions/${sid}/messages`);
       setMessages(response.data);
-      
+
       // Khôi phục telemetry từ tin nhắn cuối cùng (nếu là assistant và có log)
       const lastAssistant = [...response.data].reverse().find(m => m.role === 'assistant');
       if (lastAssistant) {
@@ -647,13 +647,13 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
     setMessages(prev => [...prev, tempUserMsg]);
 
     const token = localStorage.getItem('token');
-    
+
     if (chatbotAbortRef.current) {
       chatbotAbortRef.current.abort();
     }
     const controller = new AbortController();
     chatbotAbortRef.current = controller;
-    
+
     try {
       const response = await fetch(`${client.defaults.baseURL || 'http://localhost:8000'}/api/chatbot/chat-stream`, {
         method: 'POST',
@@ -687,12 +687,12 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
         for (const line of lines) {
           if (!line.trim()) continue;
-          
+
           const eventMatch = line.match(/^event:\s*(.+)$/m);
           const dataMatch = line.match(/^data:\s*(.+)$/m);
-          
+
           if (!eventMatch || !dataMatch) continue;
-          
+
           const event = eventMatch[1].trim();
           const data = JSON.parse(dataMatch[1].trim());
 
@@ -776,14 +776,14 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
   const handleSaveEdit = async (m: Message) => {
     if (!editText.trim() || !currentSessionId) return;
-    
+
     const messageIndex = messages.findIndex(msg => msg.id === m.id);
     const subsequentMessages = messages.slice(messageIndex + 1);
     const hasSubsequent = messageIndex < messages.length - 2;
     const hasDbSideEffects = subsequentMessages.some(msg => {
       if (msg.role !== 'assistant') return false;
       const results = parseToolResults(msg.tool_results);
-      return results.some(item => 
+      return results.some(item =>
         ['generate_course_outline_action', 'generate_chapter_materials_action', 'generate_chapter_questions_action'].includes(item.tool)
       );
     });
@@ -812,13 +812,13 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
     setMessages([...messagesBeforeEdit, tempUserMsg]);
 
     const token = localStorage.getItem('token');
-    
+
     if (chatbotAbortRef.current) {
       chatbotAbortRef.current.abort();
     }
     const controller = new AbortController();
     chatbotAbortRef.current = controller;
-    
+
     try {
       const response = await fetch(`${client.defaults.baseURL || 'http://localhost:8000'}/api/chatbot/chat-stream`, {
         method: 'POST',
@@ -855,12 +855,12 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
         for (const line of lines) {
           if (!line.trim()) continue;
-          
+
           const eventMatch = line.match(/^event:\s*(.+)$/m);
           const dataMatch = line.match(/^data:\s*(.+)$/m);
-          
+
           if (!eventMatch || !dataMatch) continue;
-          
+
           const event = eventMatch[1].trim();
           const data = JSON.parse(dataMatch[1].trim());
 
@@ -993,7 +993,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
         </aside>
 
         {/* Cột 2: Chat View */}
-        <section 
+        <section
           className="chatbot-chat-container"
           onDragOver={handleDragOver}
           onDragEnter={handleDragEnter}
@@ -1017,8 +1017,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                 </div>
                 <h4>Em có thể giúp gì cho Thầy/Cô hôm nay?</h4>
                 <p>Thầy/Cô có thể yêu cầu soạn bài giảng, tra cứu tài liệu RAG, hoặc xem ma trận CLO chuẩn Bloom của môn học.</p>
-                
-                <div 
+
+                <div
                   className="chatbot-empty-dropzone"
                   onClick={() => fileInputRef.current?.click()}
                   title="Nhấn để chọn file đề cương Syllabus (.pdf, .docx, .txt)"
@@ -1051,17 +1051,17 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                                 rows={3}
                               />
                               <div className="chatbot-edit-actions">
-                                <button 
-                                  type="button" 
-                                  onClick={() => handleSaveEdit(m)} 
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEdit(m)}
                                   className="chatbot-edit-save-btn"
                                   disabled={loading}
                                 >
                                   Lưu & Gửi
                                 </button>
-                                <button 
-                                  type="button" 
-                                  onClick={handleCancelEdit} 
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEdit}
                                   className="chatbot-edit-cancel-btn"
                                   disabled={loading}
                                 >
@@ -1074,9 +1074,9 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                               <div className="chatbot-message-content">{renderMarkdown(m.content, handleCitationClick)}</div>
                               <div className="chatbot-message-bubble-footer">
                                 {isUser && !loading && (
-                                  <button 
-                                    type="button" 
-                                    onClick={() => handleStartEdit(m)} 
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEdit(m)}
                                     className="chatbot-message-edit-btn"
                                     title="Sửa tin nhắn"
                                   >
@@ -1085,9 +1085,9 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                                 )}
                                 {m.versions && m.versions.length > 1 && (
                                   <div className="chatbot-version-selector">
-                                    <button 
-                                      type="button" 
-                                      disabled={m.versions!.indexOf(m.id) === 0 || loading} 
+                                    <button
+                                      type="button"
+                                      disabled={m.versions!.indexOf(m.id) === 0 || loading}
                                       onClick={() => handleSwitchBranch(m.versions![m.versions!.indexOf(m.id) - 1])}
                                       className="chatbot-version-btn"
                                     >
@@ -1096,9 +1096,9 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                                     <span className="chatbot-version-text">
                                       v{m.versions!.indexOf(m.id) + 1}/{m.versions!.length}
                                     </span>
-                                    <button 
-                                      type="button" 
-                                      disabled={m.versions!.indexOf(m.id) === m.versions!.length - 1 || loading} 
+                                    <button
+                                      type="button"
+                                      disabled={m.versions!.indexOf(m.id) === m.versions!.length - 1 || loading}
                                       onClick={() => handleSwitchBranch(m.versions![m.versions!.indexOf(m.id) + 1])}
                                       className="chatbot-version-btn"
                                     >
@@ -1110,9 +1110,9 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                             </>
                           )}
                           {m.role === 'assistant' && m.tool_calls && (
-                            <CompletedReasoningAccordion 
-                              toolCalls={parseToolCalls(m.tool_calls)} 
-                              toolResults={parseToolResults(m.tool_results)} 
+                            <CompletedReasoningAccordion
+                              toolCalls={parseToolCalls(m.tool_calls)}
+                              toolResults={parseToolResults(m.tool_results)}
                             />
                           )}
                           {m.role === 'assistant' && m.tool_results && (
@@ -1198,12 +1198,12 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                     <div className="chatbot-message-bubble chatbot-bot-bubble" style={{ border: '1px solid rgba(212, 163, 89, 0.3)', background: 'rgba(212, 163, 89, 0.05)', borderRadius: '12px', padding: '16px', maxWidth: '80%', width: '100%', minWidth: '320px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--vinuni-gold)', fontWeight: 600 }}>
                         <Zap size={14} className="animate-pulse" />
-                        <span>Đề xuất tự động từ trợ lý Falcon AI</span>
+                        <span>Đề xuất tự động từ trợ lý ODIN AI</span>
                       </div>
                       <p style={{ margin: '0 0 12px 0', fontSize: '13.5px', color: 'var(--text-primary)', lineHeight: '1.5', textAlign: 'left' }}>
                         {pendingAction.message || 'Mascot AI đề xuất thực hiện hành động tự động trên giao diện này.'}
                       </p>
-                      
+
                       {pendingAction.params && (
                         <div style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '12.5px', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                           {pendingAction.params.chapter_title && <div><strong>Chương học:</strong> <span style={{ color: 'var(--text-primary)' }}>{pendingAction.params.chapter_title}</span></div>}
@@ -1212,7 +1212,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                           {pendingAction.params.count && <div><strong>Số lượng:</strong> <span style={{ color: 'var(--text-primary)' }}>{pendingAction.params.count} câu</span></div>}
                         </div>
                       )}
-                      
+
                       <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-start' }}>
                         <button
                           type="button"
@@ -1276,7 +1276,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                         </div>
                         <div className="chatbot-upload-progress-body">
                           <div className="chatbot-upload-progressbar-container">
-                            <div 
+                            <div
                               className={`chatbot-upload-progressbar ${uploadStage === 4 ? 'chatbot-upload-progressbar--success' : ''}`}
                               style={{ width: `${(uploadStage / 4) * 100}%` }}
                             />
@@ -1295,7 +1295,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                               <span className="chatbot-inline-icon-prefix">💾</span> 4. Lưu trữ và đồng bộ hóa
                             </div>
                           </div>
-                          
+
                           {uploadLog && (
                             <div className="chatbot-stream-log-text" style={{ fontSize: '12px', marginTop: '6px', color: 'var(--vinuni-gold)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <span className="chatbot-pulse-dot" style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--vinuni-gold)', animation: 'pulse 1s infinite' }} />
@@ -1328,7 +1328,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
 
           {/* Form Input */}
           <form onSubmit={handleSendMessage} className="chatbot-chat-form">
-            <input 
+            <input
               type="file"
               ref={fileInputRef}
               onChange={(e) => {
@@ -1356,7 +1356,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   const fakeEvent = {
-                    preventDefault: () => {},
+                    preventDefault: () => { },
                   } as React.FormEvent;
                   handleSendMessage(fakeEvent);
                 }
@@ -1423,7 +1423,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                 <div className="chatbot-panel-desc">
                   Hiển thị lịch sử gọi công cụ trung gian của AI trong vòng chat hiện tại.
                 </div>
-                
+
                 {toolCalls.length === 0 ? (
                   <div className="chatbot-empty-telemetry">
                     Chưa có cuộc gọi công cụ nào được kích hoạt. Hãy thử hỏi câu hỏi liên quan đến tài liệu học trình.
@@ -1439,7 +1439,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                         <pre className="chatbot-log-pre">
                           {JSON.stringify(tc.args, null, 2)}
                         </pre>
-                        
+
                         {toolResults[tcIdx] && (
                           <div className="chatbot-log-result-container">
                             <span className="chatbot-log-badge-result">Result</span>
@@ -1459,7 +1459,7 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
             {activeTab === 'cost' && (
               <div className="chatbot-cost-panel">
                 <h4 className="chatbot-panel-title">Chi Phí & Token Tiêu Thụ</h4>
-                
+
                 {performanceMetrics ? (
                   <div className="chatbot-metrics-grid">
                     <div className="chatbot-metric-card">
@@ -1575,8 +1575,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
               Chỉnh sửa tin nhắn này sẽ cắt ngắn lịch sử hội thoại và tạo nhánh mới. Một số học liệu đã được tạo tự động trong nhánh cũ có thể bị ảnh hưởng. Hãy lựa chọn phương án xử lý học liệu cũ:
             </p>
             <div className="chatbot-modal-options">
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => {
                   sendEditRequest(conflictEditId!, conflictText, conflictParentId, 'archive');
                   setConflictModalOpen(false);
@@ -1586,8 +1586,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                 <span className="chatbot-modal-option-title">1. Lưu trữ (Archive) [Khuyến nghị]</span>
                 <span className="chatbot-modal-option-desc">Ẩn các học liệu thuộc nhánh cũ khỏi dashboard, dễ dàng khôi phục khi chuyển lại phiên bản.</span>
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => {
                   sendEditRequest(conflictEditId!, conflictText, conflictParentId, 'overwrite');
                   setConflictModalOpen(false);
@@ -1597,8 +1597,8 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
                 <span className="chatbot-modal-option-title">2. Ghi đè (Overwrite)</span>
                 <span className="chatbot-modal-option-desc">Xóa hoàn toàn các học liệu thuộc nhánh cũ khỏi cơ sở dữ liệu.</span>
               </button>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => {
                   sendEditRequest(conflictEditId!, conflictText, conflictParentId, 'keep');
                   setConflictModalOpen(false);
@@ -1610,9 +1610,9 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
               </button>
             </div>
             <div className="chatbot-modal-actions">
-              <button 
-                type="button" 
-                onClick={() => setConflictModalOpen(false)} 
+              <button
+                type="button"
+                onClick={() => setConflictModalOpen(false)}
                 className="chatbot-edit-cancel-btn"
               >
                 Hủy sửa đổi
@@ -1631,19 +1631,19 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
             </h3>
             <div className="chatbot-modal-body" style={{ textAlign: 'left', margin: '15px 0' }}>
               <div style={{ marginBottom: '12px', fontSize: '13.5px' }}>
-                <strong>Tài liệu:</strong> <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>{selectedCitation.fileName}</code> 
+                <strong>Tài liệu:</strong> <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px', wordBreak: 'break-all' }}>{selectedCitation.fileName}</code>
                 {selectedCitation.pageNumber && (
                   <span style={{ marginLeft: '12px' }}>
                     <strong>Trang:</strong> <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{selectedCitation.pageNumber}</code>
                   </span>
                 )}
               </div>
-              <div style={{ 
-                background: 'rgba(15, 23, 42, 0.4)', 
-                border: '1px solid var(--border-color)', 
-                borderRadius: '8px', 
-                padding: '16px', 
-                maxHeight: '300px', 
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.4)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '16px',
+                maxHeight: '300px',
                 overflowY: 'auto',
                 fontStyle: 'italic',
                 lineHeight: '1.6',
@@ -1655,9 +1655,9 @@ export default function ChatBot({ course, onGoBack, activeView, isActive }: Chat
               </div>
             </div>
             <div className="chatbot-modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button 
-                type="button" 
-                onClick={() => setSelectedCitation(null)} 
+              <button
+                type="button"
+                onClick={() => setSelectedCitation(null)}
                 className="chatbot-edit-cancel-btn"
                 style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer' }}
               >
@@ -1707,7 +1707,7 @@ function parseToolCalls(tc: any): any[] {
 
 function CompletedReasoningAccordion({ toolCalls, toolResults }: { toolCalls: any[], toolResults: any[] }) {
   const [isOpen, setIsOpen] = useState(false);
-  
+
   if (!toolCalls || toolCalls.length === 0) return null;
 
   return (
@@ -1868,7 +1868,7 @@ function MaterialsWidget({ data }: { data: any }) {
   const slideCount = data.slide_count || 0;
   const warnings: string[] = data.warnings || [];
   const slideTitles: string[] = data.slide_titles || [];
-  
+
   return (
     <div className="chatbot-widget-container-lighter">
       <div className="chatbot-widget-title-flex">
@@ -1878,12 +1878,12 @@ function MaterialsWidget({ data }: { data: any }) {
         <div>Số slide đã sinh: <strong className="chatbot-widget-stats-val-blue">{slideCount} slides</strong></div>
         <div>Cảnh báo sư phạm: <strong className={warnings.length > 0 ? 'chatbot-widget-stats-val-rose' : 'chatbot-widget-stats-val-green'}>{warnings.length}</strong></div>
       </div>
-      
+
       {slideTitles.length > 0 && (
         <div style={{ marginBottom: '8px' }}>
-          <button 
+          <button
             type="button"
-            onClick={() => setShowSlides(!showSlides)} 
+            onClick={() => setShowSlides(!showSlides)}
             className="chatbot-widget-collapse-btn"
           >
             {showSlides ? <><ChevronDown size={14} /> Ẩn danh sách slide</> : <><ChevronRight size={14} /> Xem danh sách slide</>}
@@ -1902,9 +1902,9 @@ function MaterialsWidget({ data }: { data: any }) {
 
       {warnings.length > 0 && (
         <div>
-          <button 
+          <button
             type="button"
-            onClick={() => setShowWarnings(!showWarnings)} 
+            onClick={() => setShowWarnings(!showWarnings)}
             className="chatbot-widget-collapse-btn-rose"
           >
             {showWarnings ? <><ChevronDown size={14} /> Ẩn cảnh báo sư phạm</> : <><ChevronRight size={14} /> Xem cảnh báo sư phạm</>}
@@ -1939,7 +1939,7 @@ function QuestionsWidget({ data }: { data: any }) {
 function QuizCard({ q, idx }: { q: any, idx: number }) {
   const [revealed, setRevealed] = useState(false);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  
+
   let options: string[] = [];
   try {
     options = typeof q.options_json === 'string' ? JSON.parse(q.options_json) : q.options_json;
@@ -1955,7 +1955,7 @@ function QuizCard({ q, idx }: { q: any, idx: number }) {
           Bloom {q.bloom_level}
         </span>
       </div>
-      
+
       <div className="chatbot-widget-quiz-text">
         {q.question_text}
       </div>

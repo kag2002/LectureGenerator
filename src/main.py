@@ -34,7 +34,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from src.api import auth, chatbot, courses, export, materials, outline, questions, routes, admin, telemetry
+from src.api import auth, chatbot, courses, export, materials, outline, questions, routes, admin, telemetry, autopilot
 from src.config import get_settings
 from src.database.session import Base, engine
 from src.services import web_search_agent
@@ -135,6 +135,38 @@ try:
         print("[MIGRATION] Adding column 'role' to table 'users'...")
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"))
+
+    # Questions status & created_by & updated_at
+    q_columns = [col["name"] for col in inspector.get_columns("questions")]
+    if "status" not in q_columns:
+        print("[MIGRATION] Adding column 'status' to table 'questions'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE questions ADD COLUMN status TEXT DEFAULT 'approved'"))
+    if "created_by" not in q_columns:
+        print("[MIGRATION] Adding column 'created_by' to table 'questions'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE questions ADD COLUMN created_by TEXT DEFAULT 'user'"))
+    if "updated_at" not in q_columns:
+        print("[MIGRATION] Adding column 'updated_at' to table 'questions'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE questions ADD COLUMN updated_at DATETIME"))
+            conn.execute(text("UPDATE questions SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+
+    # ChapterMaterials status & created_by & updated_at
+    cm_columns = [col["name"] for col in inspector.get_columns("chapter_materials")]
+    if "status" not in cm_columns:
+        print("[MIGRATION] Adding column 'status' to table 'chapter_materials'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chapter_materials ADD COLUMN status TEXT DEFAULT 'approved'"))
+    if "created_by" not in cm_columns:
+        print("[MIGRATION] Adding column 'created_by' to table 'chapter_materials'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chapter_materials ADD COLUMN created_by TEXT DEFAULT 'user'"))
+    if "updated_at" not in cm_columns:
+        print("[MIGRATION] Adding column 'updated_at' to table 'chapter_materials'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chapter_materials ADD COLUMN updated_at DATETIME"))
+            conn.execute(text("UPDATE chapter_materials SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
 except Exception as e:
     logger.warning(f"[MIGRATION WARNING] Failed to migrate SQLite/PostgreSQL columns: {e}")
 
@@ -306,6 +338,7 @@ app.include_router(web_search_agent.router)
 app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(telemetry.router)
+app.include_router(autopilot.router)
 
 # Register C2-App-023 default router at v1 for compatibility
 app.include_router(routes.router, prefix="/api/v1")

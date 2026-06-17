@@ -85,6 +85,8 @@ class ChapterMaterial(Base):
     slide_content = Column(Text, nullable=True)  # Markdown text
     active_learning_script = Column(Text, nullable=True)  # Text guide
     is_active = Column(Boolean, default=True)
+    status = Column(String(20), default="approved", nullable=True)
+    created_by = Column(String(50), default="user", nullable=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Quan hệ
@@ -107,8 +109,11 @@ class Question(Base, SoftDeleteMixin):
     bloom_level = Column(Integer, nullable=False)
     clo_id = Column(Integer, ForeignKey("clos.id", ondelete="SET NULL"), nullable=True, index=True)
     is_active = Column(Boolean, default=True)
+    status = Column(String(20), default="approved", nullable=True)
+    created_by = Column(String(50), default="user", nullable=True)
     chat_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     # Quan hệ
     course = relationship("Course", back_populates="questions")
@@ -280,6 +285,27 @@ class AIGenerationTrace(Base):
     course = relationship("Course")
     chapter = relationship("Chapter")
     clo = relationship("CLO")
+
+
+class OdinLock(Base):
+    __tablename__ = "odin_locks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    context_key = Column(String(100), nullable=False, unique=True)
+    locked_by = Column(String(50), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class OdinActionLog(Base):
+    __tablename__ = "odin_action_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    action_type = Column(String(50), nullable=False)
+    affected_ids = Column(Text, nullable=False)  # JSON string
+    created_at = Column(DateTime, server_default=func.now())
 
 
 # --- Soft-Delete Event Hooks & Monkeypatching ---

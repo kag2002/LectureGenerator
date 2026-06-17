@@ -7,9 +7,11 @@ import FlowSteps from '../components/FlowSteps';
 import QuestionConfigForm from '../components/QuestionConfigForm';
 import QuestionEditorForm from '../components/QuestionEditorForm';
 import QuestionCard from '../components/QuestionCard';
-import { ArrowLeft, BookOpen, BarChart2, Download, Plus, Sparkles, Map, Target } from 'lucide-react';
+import { ArrowLeft, BookOpen, BarChart2, Download, Plus, Sparkles, Map, Target, Loader2 } from 'lucide-react';
 import { Course, CLO, Chapter, Question } from '@/types';
 import '../styles/QuestionBank.css';
+import { useUILock } from '../context/UILockContext';
+import { useDirtyState } from '../hooks/useDirtyState';
 
 export interface QuestionBankProps {
   course: Course;
@@ -57,12 +59,6 @@ export default function QuestionBank({
   setAIProcessingStatus,
   isActive
 }: QuestionBankProps) {
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    setPortalTarget(document.getElementById('app-header-portal-slot'));
-  }, []);
-
   const [questions, setQuestions] = useState<Question[]>([]);
   const [clos, setClos] = useState<CLO[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -80,12 +76,25 @@ export default function QuestionBank({
     questionAttempts: {},
     status: 'idle'
   });
+  const [showAgentMonitor, setShowAgentMonitor] = useState(false);
 
   // General States
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
+
+  const { isLocked, getLockOwner } = useUILock();
+  const isChapterLocked = selectedChapter ? isLocked(`chapter_${selectedChapter}`) : false;
+  const lockOwner = selectedChapter ? getLockOwner(`chapter_${selectedChapter}`) : null;
+
+  useDirtyState(editingQuestion !== null, () => handleUpdateQuestion());
+
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById('app-header-portal-slot'));
+  }, []);
 
   // Load ban đầu
   const fetchData = async () => {
@@ -165,6 +174,7 @@ export default function QuestionBank({
       status: 'running',
       latency: 0
     });
+    setShowAgentMonitor(true);
 
     let timer: any = null;
     timer = setInterval(() => {
@@ -280,6 +290,14 @@ export default function QuestionBank({
                 setGenerating(false);
                 setGenLog('');
                 setAIProcessingStatus(false);
+
+                window.dispatchEvent(new CustomEvent('programmatic-questions-generated', {
+                  detail: {
+                    courseId: course.id,
+                    chapterId: selectedChapter ? parseInt(selectedChapter.toString()) : null,
+                    count: parseInt(count.toString())
+                  }
+                }));
                 const opLatency = (Date.now() - opStartTime) / 1000;
                 onRecordAIUsage({
                   operation: `Sinh câu hỏi tự động - ${count} câu`,
@@ -395,6 +413,10 @@ export default function QuestionBank({
             handleGenerateQuestions({ preventDefault: () => {} } as any);
           }
         }, 150);
+      } else if (action === 'export_exam') {
+        setTimeout(() => {
+          handleExportExam();
+        }, 150);
       }
     };
     window.addEventListener('question-bank-programmatic-trigger', handleProgrammaticTrigger);
@@ -473,15 +495,17 @@ export default function QuestionBank({
     });
   };
 
-  const handleUpdateQuestion = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateQuestion = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setError('');
     setMessage('');
     
+    if (!editingQuestion) return false;
+
     // Đảm bảo đáp án đúng phải trùng khớp với một trong các lựa chọn
     if (!editingQuestion.options.includes(editingQuestion.correct_answer)) {
       setError('Đáp án đúng phải trùng với một trong bốn lựa chọn đã nhập.');
-      return;
+      return false;
     }
 
     try {
@@ -508,9 +532,11 @@ export default function QuestionBank({
         setMessage('Cập nhật câu hỏi thành công!');
       }
       setEditingQuestion(null);
+      return true;
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.detail || 'Lỗi khi lưu câu hỏi.');
+      return false;
     }
   };
 
@@ -530,21 +556,48 @@ export default function QuestionBank({
     }
   };
 
-  // Xuất bản đề thi (tải file Markdown)
+  // Helpers to format questions in GIFT format
+  const formatToGift = (questionText: string, options: string[], correctAnswer: string): string => {
+    const escapeGift = (text: string) => {
+      return text.replace(/[{}[\]~=#:\/]/g, '\\$&');
+    };
+
+    const qText = escapeGift(questionText);
+    const giftOptions = options.map(opt => {
+      const optEscaped = escapeGift(opt);
+      if (opt.trim().toLowerCase() === correctAnswer.trim().toLowerCase()) {
+        return `=${optEscaped}`;
+      }
+      return `~${optEscaped}`;
+    });
+
+    const hasCorrect = giftOptions.some(o => o.startsWith('='));
+    if (!hasCorrect && ['A', 'B', 'C', 'D', 'a', 'b', 'c', 'd'].includes(correctAnswer.trim())) {
+      const idx = correctAnswer.trim().toUpperCase().charCodeAt(0) - 65;
+      if (idx < giftOptions.length) {
+        giftOptions[idx] = '=' + giftOptions[idx].slice(1);
+      }
+    }
+
+    const hasCorrectFinal = giftOptions.some(o => o.startsWith('='));
+    if (!hasCorrectFinal && giftOptions.length > 0) {
+      giftOptions[0] = '=' + giftOptions[0].slice(1);
+    }
+
+    return `${qText} {${giftOptions.join(' ')}}`;
+  };
+
+  // Xuất bản đề thi (tải file GIFT cho Canvas/Moodle)
   const handleExportExam = () => {
     if (questions.length === 0) {
       setError('Chưa có câu hỏi nào để xuất bản.');
       return;
     }
     
-    let content = `# ĐỀ THI TRẮC NGHIỆM MÔN HỌC: ${(course.course_name || '').toUpperCase()}\n`;
-    content += `Mã môn học: ${course.course_code || ''}\n`;
-    content += `Số lượng câu hỏi: ${questions.length} câu\n`;
-    content += `Sinh tự động bởi AI Lecture Assistant (G02-Team023)\n\n`;
-    content += `--------------------------------------------------------\n\n`;
+    let content = `// Ngân hàng câu hỏi trắc nghiệm môn học: ${course.course_name || ''} (${course.course_code || ''})\n`;
+    content += `// Số lượng câu hỏi: ${questions.length} câu\n\n`;
     
-    questions.forEach((q, idx) => {
-      content += `Câu ${idx + 1}: ${q.question_text || ''}\n`;
+    questions.forEach((q) => {
       let opts: string[] = [];
       if (q.options_json) {
         try {
@@ -554,22 +607,14 @@ export default function QuestionBank({
         }
       }
       
-      const labels = ["A", "B", "C", "D"];
-      opts.forEach((opt, oIdx) => {
-        content += `${labels[oIdx]}. ${opt}\n`;
-      });
-      
-      content += `\n* Đáp án đúng: ${q.correct_answer || ''}\n`;
-      const clo = clos.find(c => c.id === q.clo_id);
-      content += `* Phân loại: [${clo ? (clo.clo_code || clo.code) : 'N/A'}] - Bloom level: ${q.bloom_level}\n\n`;
-      content += `----------------\n\n`;
+      content += formatToGift(q.question_text || '', opts, q.correct_answer || '') + '\n\n';
     });
     
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `De_thi_${course.course_code || 'export'}.md`);
+    link.setAttribute("download", `De_thi_${course.course_code || 'export'}.gift`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -594,8 +639,8 @@ export default function QuestionBank({
           <button onClick={onViewDashboard} className="qb-dashboard-btn">
             <BarChart2 size={15} /> Xem Ma trận Bloom-CLO
           </button>
-          <button onClick={handleExportExam} className="qb-export-btn">
-            <Download size={15} /> Xuất bản Đề thi (.md)
+          <button onClick={handleExportExam} className="qb-export-btn" title="Xuất bản đề thi chuẩn LMS GIFT (.gift)">
+            <Download size={15} /> Tải Đề thi (.gift)
           </button>
         </div>,
         portalTarget
@@ -618,8 +663,8 @@ export default function QuestionBank({
             <button onClick={onViewDashboard} className="qb-dashboard-btn">
               <BarChart2 size={15} /> Xem Ma trận Bloom-CLO
             </button>
-            <button onClick={handleExportExam} className="qb-export-btn">
-              <Download size={15} /> Xuất bản Đề thi (.md)
+            <button onClick={handleExportExam} className="qb-export-btn" title="Xuất bản đề thi chuẩn LMS GIFT (.gift)">
+              <Download size={15} /> Tải Đề thi (.gift)
             </button>
           </div>
         </header>
@@ -648,10 +693,10 @@ export default function QuestionBank({
             <button 
               onClick={handleExportExam} 
               className="whats-next-action-btn questions"
-              title="Tải toàn bộ bộ câu hỏi trắc nghiệm dưới dạng tệp Markdown (.md)"
+              title="Tải ngân hàng đề thi định dạng GIFT để nhập vào Canvas/Moodle"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}
             >
-              <Download size={14} /> Tải Đề thi (.md)
+              <Download size={14} /> Tải Đề thi (.gift)
             </button>
             <button 
               onClick={onViewDashboard} 
@@ -673,7 +718,7 @@ export default function QuestionBank({
         </div>
       )}
 
-      <div className="qb-main-grid">
+      <div className="qb-main-grid" style={{ position: 'relative' }}>
 
         <QuestionConfigForm
           selectedClo={selectedClo}
@@ -692,7 +737,8 @@ export default function QuestionBank({
           handleGenerateQuestions={handleGenerateQuestions}
           isFastMode={isFastMode}
           setIsFastMode={setIsFastMode}
-          agentMonitor={agentMonitor}
+          agentMonitor={showAgentMonitor ? agentMonitor : undefined}
+          onCloseAgentMonitor={() => setShowAgentMonitor(false)}
         />
 
         {/* BẢNG CHÍNH BÊN PHẢI: CHI TIẾT CÂU HỎI */}
@@ -750,6 +796,31 @@ export default function QuestionBank({
             )}
           </div>
         </main>
+        {isChapterLocked && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(9, 13, 26, 0.8)',
+            backdropFilter: 'blur(3px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            borderRadius: '16px',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            color: '#fff',
+            padding: '20px',
+            textAlign: 'center',
+            fontFamily: '"Outfit", "Inter", sans-serif'
+          }}>
+            <Loader2 size={32} className="animate-spin" style={{ color: 'var(--vinuni-gold)', marginBottom: '12px' }} />
+            <h4 style={{ margin: '0 0 6px 0', color: 'var(--vinuni-gold)', fontWeight: 800 }}>Chương học đang khóa</h4>
+            <p style={{ margin: 0, fontSize: '12.5px', color: '#cbd5e1', maxWidth: '300px', lineHeight: '1.4' }}>
+              Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo câu hỏi cho chương này. Giao diện tạm thời khóa chỉnh sửa để tránh ghi đè dữ liệu.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

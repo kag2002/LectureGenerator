@@ -102,6 +102,7 @@ export function useLessonPlannerState({
   const [activeLearningScript, setActiveLearningScriptInternal] = useState('');
   const [savedSlideContent, setSavedSlideContent] = useState('');
   const [savedScript, setSavedScript] = useState('');
+  const [materialCreatedBy, setMaterialCreatedBy] = useState<string | null>(null);
 
   // History stacks for Undo / Redo
   const [slideHistory, setSlideHistory] = useState<{ past: string[]; future: string[] }>({ past: [], future: [] });
@@ -528,6 +529,7 @@ export function useLessonPlannerState({
       setActiveLearningScriptInternal(aScript);
       setSavedSlideContent(sCont);
       setSavedScript(aScript);
+      setMaterialCreatedBy(response.data.created_by || null);
 
       // Fetch RAG references for citation matching
       try {
@@ -589,6 +591,13 @@ export function useLessonPlannerState({
         handleSelectChapter(response.data.chapters[0]);
       }
       setMessage('Đã sinh cấu trúc chương học bằng AI thành công!');
+
+      window.dispatchEvent(new CustomEvent('programmatic-outline-generated', {
+        detail: {
+          courseId: course.id,
+          chapters: response.data.chapters
+        }
+      }));
     } catch (err: any) {
       console.error(err);
       setError(err.response?.data?.detail || 'Không thể sinh cấu trúc Outline.');
@@ -643,7 +652,7 @@ export function useLessonPlannerState({
 
   // Lưu bản soạn thảo chính của giảng viên xuống DB
   const handleSaveMaterials = async () => {
-    if (!selectedChapter) return;
+    if (!selectedChapter) return false;
     setError('');
     setMessage('');
     setSaving(true);
@@ -656,9 +665,11 @@ export function useLessonPlannerState({
       setSavedSlideContent(slideContent);
       setSavedScript(activeLearningScript);
       setMessage('Đã lưu học liệu thành công lên hệ thống Cloud!');
+      return true;
     } catch (err) {
       console.error(err);
       setError('Lỗi khi lưu học liệu.');
+      return false;
     } finally {
       setSaving(false);
     }
@@ -1030,7 +1041,16 @@ export function useLessonPlannerState({
           stream.handleGenerateStoryboard();
         }
       } else if (action === 'generate_materials') {
-        if (params?.storyboard) {
+        const confirmBtn = document.getElementById('ai-generate-materials-confirm-btn');
+        if (confirmBtn) {
+          confirmBtn.classList.add('programmatic-click');
+          setTimeout(() => {
+            confirmBtn.classList.remove('programmatic-click');
+            confirmBtn.click();
+          }, 1000);
+        } else if (stream.storyboardDraft && stream.storyboardDraft.length > 0) {
+          stream.handleGenerateMaterialsFromStoryboard(stream.storyboardDraft);
+        } else if (params?.storyboard) {
           const btn = document.getElementById('ai-generate-materials-confirm-btn');
           if (btn) {
             btn.classList.add('programmatic-click');
@@ -1113,6 +1133,8 @@ export function useLessonPlannerState({
     setScriptEditMode,
     slideProposalViewMode,
     setSlideProposalViewMode,
+    materialCreatedBy,
+    setMaterialCreatedBy,
     selectedTheme,
     setSelectedTheme,
     documents,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Copy, Edit3, Trash2 } from 'lucide-react';
+import { Copy, Edit3, Trash2, Sparkles } from 'lucide-react';
 import { CLO, Question } from '@/types';
 
 export interface QuestionCardProps {
@@ -30,9 +30,41 @@ export default function QuestionCard({
     }
   }
   const linkedClo = clos.find(c => c.id === q.clo_id);
+  const isAutopilot = q.created_by === 'odin_autopilot';
   
   return (
-    <div className="qb-question-card">
+    <div 
+      className="qb-question-card"
+      style={isAutopilot ? {
+        border: '2px dashed var(--vinuni-gold)',
+        position: 'relative',
+        boxShadow: '0 2px 8px rgba(212, 163, 89, 0.15)'
+      } : undefined}
+    >
+      {isAutopilot && (
+        <div style={{
+          position: 'absolute',
+          top: '-10px',
+          right: '12px',
+          background: 'var(--vinuni-gold)',
+          color: '#000',
+          fontSize: '9px',
+          fontWeight: '800',
+          padding: '2px 6px',
+          borderRadius: '3px',
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+          pointerEvents: 'none',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px'
+        }}>
+          <Sparkles size={8} />
+          AI Autopilot
+        </div>
+      )}
       <div className="qb-question-card-header">
         <div className="qb-question-card-meta">
           <span className="qb-idx-badge">Câu {index + 1}</span>
