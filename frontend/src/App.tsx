@@ -421,28 +421,42 @@ export default function App() {
     const savedUser = localStorage.getItem('user');
 
     if (savedToken && savedUser) {
-      setUser(JSON.parse(savedUser));
-      
-      // Khôi phục môn học đã chọn và view đang xem trước đó
-      const savedCourse = localStorage.getItem('selected_course');
-      const savedView = localStorage.getItem('active_view');
-      
-      if (savedCourse) {
-        try {
-          const course = JSON.parse(savedCourse);
-          setSelectedCourse(course);
-          
-          if (savedView && savedView !== 'login') {
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        
+        // Khôi phục môn học đã chọn và view đang xem trước đó
+        const savedCourse = localStorage.getItem('selected_course');
+        const savedView = localStorage.getItem('active_view');
+        
+        if (parsedUser && parsedUser.role === 'admin') {
+          // Admin luôn được đưa về admin_dashboard
+          if (savedView && ['admin_dashboard', 'ai_monitor'].includes(savedView)) {
             setActiveView(savedView);
           } else {
-            setActiveView('course_roadmap');
+            setActiveView('admin_dashboard');
+            localStorage.setItem('active_view', 'admin_dashboard');
           }
-        } catch (e) {
-          console.error(e);
+        } else if (savedCourse) {
+          try {
+            const course = JSON.parse(savedCourse);
+            setSelectedCourse(course);
+            
+            if (savedView && savedView !== 'login') {
+              setActiveView(savedView);
+            } else {
+              setActiveView('course_roadmap');
+            }
+          } catch (e) {
+            console.error(e);
+            setActiveView('dashboard');
+          }
+        } else {
           setActiveView('dashboard');
         }
-      } else {
-        setActiveView('dashboard');
+      } catch (e) {
+        console.error(e);
+        setActiveView('landing');
       }
     } else {
       setActiveView('landing');
@@ -550,8 +564,13 @@ export default function App() {
 
   const handleLoginSuccess = (loggedInUser: User) => {
     setUser(loggedInUser);
-    setActiveView('dashboard');
-    localStorage.setItem('active_view', 'dashboard');
+    if (loggedInUser.role === 'admin') {
+      setActiveView('admin_dashboard');
+      localStorage.setItem('active_view', 'admin_dashboard');
+    } else {
+      setActiveView('dashboard');
+      localStorage.setItem('active_view', 'dashboard');
+    }
   };
 
   const handleLogout = () => {
