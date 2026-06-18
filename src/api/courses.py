@@ -7,7 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import CLO, Course, RAGDocument, User
+from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, RAGDocument, User
 from src.database.session import get_db
 from src.models.schemas import (
     CLOCreate,
@@ -882,3 +882,74 @@ def search_test_rag(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi truy vấn thử nghiệm RAG: {str(e)}"
         )
+
+
+# --- API TRẠNG THÁI SẴN SÀNG (READINESS) --- Dùng cho Mascot Execution Mode
+
+
+@router.get("/{course_id}/readiness")
+def get_course_readiness(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Trả về snapshot trạng thái dữ liệu của môn học để Mascot tính toán
+    điều kiện tiên quyết (prerequisite) cho từng action trong Execution Mode.
+    """
+    from sqlalchemy import func
+
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    # 1. CLOs
+    clos = db.query(CLO).filter(CLO.course_id == course_id).all()
+
+    # 2. Chapters (active)
+    chapters = (
+        db.query(Chapter)
+        .filter(Chapter.course_id == course_id, Chapter.is_active == True)  # noqa: E712
+        .order_by(Chapter.sort_order.asc())
+        .all()
+    )
+    chapter_ids = [c.id for c in chapters]
+
+    # 3. ChapterMaterials — xác định chương nào đã/chưa có material
+    chapters_with_materials: list[int] = []
+    chapters_without_materials: list[int] = []
+    if chapter_ids:
+        mats = (
+            db.query(ChapterMaterial)
+            .filter(
+                ChapterMaterial.chapter_id.in_(chapter_ids),
+                ChapterMaterial.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+        mat_chapter_ids = {m.chapter_id for m in mats if m.slide_content}
+        chapters_with_materials = list(mat_chapter_ids)
+        chapters_without_materials = [c.id for c in chapters if c.id not in mat_chapter_ids]
+
+    # 4. Questions
+    question_count = (
+        db.query(func.count(Question.id))
+        .filter(Question.course_id == course_id, Question.is_active == True)  # noqa: E712
+        .scalar()
+        or 0
+    )
+
+    return {
+        "has_clos": len(clos) > 0,
+        "clo_count": len(clos),
+        "has_chapters": len(chapters) > 0,
+        "chapter_count": len(chapters),
+        "chapters": [{"id": c.id, "title": c.title} for c in chapters],
+        "chapters_with_materials": chapters_with_materials,
+        "chapters_without_materials": chapters_without_materials,
+        "has_any_questions": question_count > 0,
+        "question_count": question_count,
+    }
+

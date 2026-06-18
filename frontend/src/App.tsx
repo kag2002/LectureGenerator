@@ -14,16 +14,23 @@ import ChatBot from './views/ChatBot';
 import AppShell from './components/AppShell';
 import MonitorDashboard from './views/MonitorDashboard';
 import AdminDashboard from './views/AdminDashboard';
+import Trash from './views/Trash';
 import { User, Course, QueueItem } from '@/types';
 import { Zap, X, Play, Pause, Check, Loader2, Maximize2, Minimize2, Cpu, AlertTriangle } from 'lucide-react';
 import MascotCompanion from './components/MascotCompanion';
 import { useUILock } from './context/UILockContext';
 import { UILockProvider } from './context/UILockContext';
 
+const cleanLogText = (text: string) => {
+  if (!text) return '';
+  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}\u{2700}-\u{27BF}️\s✅⚡⏳🛡️🎨🔍✍️🧩💾☁️⏱️❌🎉⚠️]+/u, '').trim();
+};
+
+
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<string>('landing'); // 'landing' | 'login' | 'dashboard' | 'course_roadmap' | 'course_config' | 'lesson_planner' | 'question_bank' | 'matrix_dashboard' | 'knowledge_base' | 'chatbot'
+  const [activeView, setActiveView] = useState<string>('landing'); // 'landing' | 'login' | 'dashboard' | 'course_roadmap' | 'course_config' | 'lesson_planner' | 'question_bank' | 'matrix_dashboard' | 'knowledge_base' | 'chatbot' | 'trash'
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [activeChapterId, setActiveChapterId] = useState<number | null>(null);
   const [activeCloId, setActiveCloId] = useState<number | null>(null);
@@ -909,7 +916,7 @@ export default function App() {
           }}
         />
       )}
-      {(selectedCourse || activeView === 'admin_dashboard') && ['course_roadmap', 'course_config', 'lesson_planner', 'question_bank', 'matrix_dashboard', 'knowledge_base', 'chatbot', 'ai_monitor', 'admin_dashboard'].includes(activeView) && (
+      {(selectedCourse || activeView === 'admin_dashboard') && ['course_roadmap', 'course_config', 'lesson_planner', 'question_bank', 'matrix_dashboard', 'knowledge_base', 'chatbot', 'ai_monitor', 'admin_dashboard', 'trash'].includes(activeView) && (
         <AppShell
           key={selectedCourse?.id || 0}
           course={selectedCourse || { id: 0, course_code: 'SYS', course_name: 'Hệ thống Quản trị' } as any}
@@ -1036,6 +1043,15 @@ export default function App() {
               <AdminDashboard
                 onBack={() => handleNavigate(selectedCourse ? 'course_roadmap' : 'dashboard')}
                 isActive={activeView === 'admin_dashboard'}
+              />
+            )}
+          </div>
+          <div style={{ display: activeView === 'trash' ? 'block' : 'none' }}>
+            {activeView === 'trash' && (
+              <Trash
+                course={selectedCourse}
+                onNavigate={handleNavigate}
+                isActive={activeView === 'trash'}
               />
             )}
           </div>
@@ -1424,7 +1440,7 @@ export default function App() {
               wordBreak: 'break-word',
               lineHeight: '1.4'
             }}>
-              {globalAIStatus.message || 'Vui lòng đợi trong giây lát…'}
+              {cleanLogText(globalAIStatus.message) || 'Vui lòng đợi trong giây lát…'}
             </span>
           </div>
           <button

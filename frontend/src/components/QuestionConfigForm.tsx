@@ -6,7 +6,7 @@ import { CLO, Chapter } from '@/types';
 
 const cleanLogText = (text: string) => {
   if (!text) return '';
-  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}️\s✅⚡⏳🛡️🎨🔍✍️🧩💾☁️⏱️]+/u, '').trim();
+  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}\u{2700}-\u{27BF}️\s✅⚡⏳🛡️🎨🔍✍️🧩💾☁️⏱️❌🎉⚠️]+/u, '').trim();
 };
 
 const getLogIcon = (stage: number, text: string) => {
@@ -102,7 +102,7 @@ const getStepIcon = (stepNum: number, monitor: AgentMonitorState) => {
 
 const getStepDesc = (stepNum: number, monitor: AgentMonitorState, defaultDesc: string) => {
   const matched = monitor.stages.find(s => s.stage === stepNum);
-  if (matched) return matched.message;
+  if (matched) return cleanLogText(matched.message);
   
   const maxStage = Math.max(...monitor.stages.map(s => s.stage), 0);
   if (maxStage > stepNum) return 'Đã hoàn tất thành công.';

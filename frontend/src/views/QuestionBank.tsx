@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import client from '../api/client';
 import FlowSteps from '../components/FlowSteps';
@@ -85,10 +85,12 @@ export default function QuestionBank({
   const [editingQuestion, setEditingQuestion] = useState<any>(null);
 
   const { isLocked, getLockOwner } = useUILock();
-  const isChapterLocked = selectedChapter ? isLocked(`chapter_${selectedChapter}`) : false;
-  const lockOwner = selectedChapter ? getLockOwner(`chapter_${selectedChapter}`) : null;
+  const isChapterLockedFull = selectedChapter ? isLocked(`chapter_${selectedChapter}`) : false;
+  const isQuestionsOnlyLocked = selectedChapter ? isLocked(`chapter_${selectedChapter}_questions`) : false;
+  const lockOwner = selectedChapter ? (getLockOwner(`chapter_${selectedChapter}`) || getLockOwner(`chapter_${selectedChapter}_questions`)) : null;
 
   useDirtyState(editingQuestion !== null, () => handleUpdateQuestion());
+  const generatingMascotRef = useRef(false);
 
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -423,6 +425,119 @@ export default function QuestionBank({
     return () => window.removeEventListener('question-bank-programmatic-trigger', handleProgrammaticTrigger);
   }, [clos, chapters, selectedClo, selectedChapter, bloomLevel, count, isFastMode, handleGenerateQuestions]);
 
+  // Listen to Mascot Companion execution events to sync state in QuestionBank
+  useEffect(() => {
+    const handleMascotStart = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { action, params } = customEvent.detail || {};
+      
+      const chapterId = params?.chapter_id ? Number(params.chapter_id) : null;
+      if (chapterId) {
+        setSelectedChapter(chapterId);
+      }
+
+      const actType = action?.backendAction;
+      if (actType === 'generate_chapter_questions_action' || actType === 'autopilot_full_chapter') {
+        generatingMascotRef.current = true;
+        setError('');
+        setMessage('');
+        setGenerating(true);
+        setGenLog('ODIN Autopilot đang tạo câu hỏi MCQ...');
+        
+        if (params?.count) {
+          setCount(params.count);
+        }
+
+        setAgentMonitor({
+          stages: [
+            { stage: 1, message: 'ODIN Autopilot đang khởi động...', status: 'running' }
+          ],
+          questionAttempts: {},
+          status: 'running',
+          latency: 0
+        });
+        setShowAgentMonitor(true);
+      }
+    };
+
+    const handleMascotStage = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const data = customEvent.detail || {};
+      
+      if (!generatingMascotRef.current) return;
+
+      setGenLog(data.message);
+      setAIProcessingStatus(true, `Sinh câu hỏi (Mascot): ${data.message}`);
+
+      const stageNum = data.stage || 1;
+      setAgentMonitor(prev => {
+        const existingStageIdx = prev.stages.findIndex(s => s.stage === stageNum);
+        let newStages = [...prev.stages];
+        if (existingStageIdx > -1) {
+          newStages[existingStageIdx] = {
+            stage: stageNum,
+            message: data.message,
+            status: 'running'
+          };
+        } else {
+          newStages = newStages.map(s => ({ ...s, status: s.status === 'running' ? 'success' : s.status }));
+          newStages.push({
+            stage: stageNum,
+            message: data.message,
+            status: 'running'
+          });
+        }
+        return {
+          ...prev,
+          stages: newStages
+        };
+      });
+    };
+
+    const handleMascotEnd = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const detail = customEvent.detail || {};
+      
+      if (!generatingMascotRef.current) return;
+
+      generatingMascotRef.current = false;
+      setGenerating(false);
+      setGenLog('');
+      setAIProcessingStatus(false);
+      
+      if (detail.success) {
+        setMessage(detail.message || 'Sinh câu hỏi thành công!');
+        setAgentMonitor(prev => ({
+          ...prev,
+          status: 'success',
+          stages: prev.stages.map(s => ({ ...s, status: 'success' }))
+        }));
+        fetchData();
+      } else {
+        setError(detail.message || 'Có lỗi xảy ra khi sinh câu hỏi.');
+        setAgentMonitor(prev => ({
+          ...prev,
+          status: 'error',
+          stages: prev.stages.map((s, idx) => {
+            if (idx === prev.stages.length - 1) {
+              return { ...s, message: `❌ Lỗi: ${detail.message}`, status: 'error' };
+            }
+            return s;
+          })
+        }));
+      }
+    };
+
+    window.addEventListener('mascot-execution-start', handleMascotStart);
+    window.addEventListener('mascot-execution-stage', handleMascotStage);
+    window.addEventListener('mascot-execution-end', handleMascotEnd);
+    return () => {
+      window.removeEventListener('mascot-execution-start', handleMascotStart);
+      window.removeEventListener('mascot-execution-stage', handleMascotStage);
+      window.removeEventListener('mascot-execution-end', handleMascotEnd);
+    };
+  }, [selectedChapter]);
+
   // Sinh câu hỏi isomorphic
   const handleGenerateIsomorphic = async (qId: number) => {
     setError('');
@@ -636,12 +751,6 @@ export default function QuestionBank({
               <BookOpen size={15} /> Soạn Slide & Giáo án
             </button>
           )}
-          <button onClick={onViewDashboard} className="qb-dashboard-btn">
-            <BarChart2 size={15} /> Xem Ma trận Bloom-CLO
-          </button>
-          <button onClick={handleExportExam} className="qb-export-btn" title="Xuất bản đề thi chuẩn LMS GIFT (.gift)">
-            <Download size={15} /> Tải Đề thi (.gift)
-          </button>
         </div>,
         portalTarget
       ) : !portalTarget ? (
@@ -660,12 +769,6 @@ export default function QuestionBank({
                 <BookOpen size={15} /> Soạn Slide & Giáo án
               </button>
             )}
-            <button onClick={onViewDashboard} className="qb-dashboard-btn">
-              <BarChart2 size={15} /> Xem Ma trận Bloom-CLO
-            </button>
-            <button onClick={handleExportExam} className="qb-export-btn" title="Xuất bản đề thi chuẩn LMS GIFT (.gift)">
-              <Download size={15} /> Tải Đề thi (.gift)
-            </button>
           </div>
         </header>
       ) : null}
@@ -718,7 +821,7 @@ export default function QuestionBank({
         </div>
       )}
 
-      <div className="qb-main-grid" style={{ position: 'relative' }}>
+      <div className={`qb-main-grid ${isChapterLockedFull ? 'odin-locked-area' : ''}`} style={{ position: 'relative' }}>
 
         <QuestionConfigForm
           selectedClo={selectedClo}
@@ -742,7 +845,7 @@ export default function QuestionBank({
         />
 
         {/* BẢNG CHÍNH BÊN PHẢI: CHI TIẾT CÂU HỎI */}
-        <main className="qb-content-area">
+        <main className={`qb-content-area ${isQuestionsOnlyLocked ? 'odin-locked-area' : ''}`} style={{ position: 'relative' }}>
           <QuestionEditorForm
             editingQuestion={editingQuestion}
             setEditingQuestion={setEditingQuestion}
@@ -795,30 +898,27 @@ export default function QuestionBank({
               ))
             )}
           </div>
+          {isQuestionsOnlyLocked && (
+            <div className="odin-lock-overlay">
+              <div className="odin-lock-content">
+                <Loader2 size={24} className="animate-spin" style={{ color: 'var(--vinuni-gold)' }} />
+                <h4 className="odin-lock-title">Khu vực bị khóa</h4>
+                <p className="odin-lock-desc">
+                  Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo câu hỏi cho chương này. Giao diện bị khóa để tránh ghi đè dữ liệu.
+                </p>
+              </div>
+            </div>
+          )}
         </main>
-        {isChapterLocked && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(9, 13, 26, 0.8)',
-            backdropFilter: 'blur(3px)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            borderRadius: '16px',
-            border: '1px solid rgba(251, 191, 36, 0.3)',
-            color: '#fff',
-            padding: '20px',
-            textAlign: 'center',
-            fontFamily: '"Outfit", "Inter", sans-serif'
-          }}>
-            <Loader2 size={32} className="animate-spin" style={{ color: 'var(--vinuni-gold)', marginBottom: '12px' }} />
-            <h4 style={{ margin: '0 0 6px 0', color: 'var(--vinuni-gold)', fontWeight: 800 }}>Chương học đang khóa</h4>
-            <p style={{ margin: 0, fontSize: '12.5px', color: '#cbd5e1', maxWidth: '300px', lineHeight: '1.4' }}>
-              Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo câu hỏi cho chương này. Giao diện tạm thời khóa chỉnh sửa để tránh ghi đè dữ liệu.
-            </p>
+        {isChapterLockedFull && (
+          <div className="odin-lock-overlay">
+            <div className="odin-lock-content">
+              <Loader2 size={24} className="animate-spin" style={{ color: 'var(--vinuni-gold)' }} />
+              <h4 className="odin-lock-title">Khu vực bị khóa</h4>
+              <p className="odin-lock-desc">
+                Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo chương này. Giao diện bị khóa để tránh ghi đè dữ liệu.
+              </p>
+            </div>
           </div>
         )}
       </div>

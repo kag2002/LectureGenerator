@@ -324,12 +324,32 @@ def _add_soft_delete_filter(execute_state):
 
 @event.listens_for(Session, "before_flush")
 def _intercept_deletes(session, flush_context, instances):
+    # Support hard-delete if requested via session info flag
+    if session.info.get("hard_delete", False):
+        return
     # Intercept session.delete() and convert to soft-delete
     for obj in list(session.deleted):
         if isinstance(obj, SoftDeleteMixin):
             session.add(obj)  # Add back to session as persistent/dirty
             obj.is_deleted = True
-            obj.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            now_time = datetime.now(timezone.utc).replace(tzinfo=None)
+            obj.deleted_at = now_time
+            
+            # Cascade soft-delete to child elements
+            if isinstance(obj, Course):
+                session.query(Chapter).filter(Chapter.course_id == obj.id).update(
+                    {"is_deleted": True, "deleted_at": now_time},
+                    synchronize_session="evaluate"
+                )
+                session.query(Question).filter(Question.course_id == obj.id).update(
+                    {"is_deleted": True, "deleted_at": now_time},
+                    synchronize_session="evaluate"
+                )
+            elif isinstance(obj, Chapter):
+                session.query(Question).filter(Question.chapter_id == obj.id).update(
+                    {"is_deleted": True, "deleted_at": now_time},
+                    synchronize_session="evaluate"
+                )
 
 # Monkeypatch Query.delete to convert bulk deletes to bulk updates
 _original_delete = Query.delete

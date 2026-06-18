@@ -355,6 +355,15 @@
   gap: 16px;
 }
 
+.course-config-rows-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .course-config-row {
   display: flex;
   gap: 12px;

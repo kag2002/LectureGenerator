@@ -10,18 +10,7 @@ from src.database.vector_db import search_rag_isolated
 async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session) -> Chapter | None:
     if not chapter_id:
         return None
-    # 1. Try by exact ID
-    try:
-        ch_id_int = int(chapter_id)
-        chapter = await asyncio.to_thread(
-            lambda: db.query(Chapter).join(Course).filter(Chapter.id == ch_id_int, Course.id == course_id, Course.user_id == user_id).first()
-        )
-        if chapter:
-            return chapter
-    except (ValueError, TypeError):
-        pass
-
-    # 2. Try by sort_order
+    # 1. Try by sort_order FIRST (most common: user says "chương 2" → sort_order=2)
     try:
         ch_id_int = int(chapter_id)
         chapter = await asyncio.to_thread(
@@ -37,7 +26,7 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
     except (ValueError, TypeError):
         pass
 
-    # 3. Try by sequence index (N-th active chapter)
+    # 2. Try by sequence index (N-th active chapter)
     try:
         ch_id_int = int(chapter_id)
         all_ch = await asyncio.to_thread(
@@ -49,6 +38,22 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
         )
         if 0 <= ch_id_int - 1 < len(all_ch):
             return all_ch[ch_id_int - 1]
+    except (ValueError, TypeError):
+        pass
+
+    # 3. Try by exact database ID (fallback)
+    try:
+        ch_id_int = int(chapter_id)
+        chapter = await asyncio.to_thread(
+            lambda: db.query(Chapter).join(Course).filter(
+                Chapter.id == ch_id_int,
+                Course.id == course_id,
+                Course.user_id == user_id,
+                Chapter.is_active == True
+            ).first()
+        )
+        if chapter:
+            return chapter
     except (ValueError, TypeError):
         pass
 

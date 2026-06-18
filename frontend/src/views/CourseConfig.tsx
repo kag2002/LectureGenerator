@@ -350,6 +350,7 @@ export default function CourseConfig({
 
       setMessage('Đã lưu danh sách CLO và tài liệu tham khảo môn học thành công!');
       fetchClos();
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
     } catch (err: any) {
       console.error(err);
       const errMsg = err.response?.data?.detail || err.response?.data?.message || err.response?.data?.details || 'Lỗi khi lưu danh sách CLO.';
@@ -521,6 +522,18 @@ export default function CourseConfig({
               <p>Chưa cấu hình Chuẩn đầu ra môn học.</p>
               <p className="course-config-empty-desc">Hãy upload Syllabus ở bên trái để AI tự động trích xuất.</p>
 
+              {isDirty && (
+                <div className="course-config-save-container" style={{ borderTop: 'none', paddingTop: 0, justifyContent: 'center', marginBottom: '20px' }}>
+                  <button onClick={handleSaveClos} disabled={saving} className="course-config-save-btn">
+                    {saving ? 'Đang lưu...' : (
+                      <span className="course-config-inline-flex">
+                        <CheckCircle size={16} /> Lưu & Đồng bộ CLOs
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
               <div className="empty-suggestions-box">
                 <div className="empty-suggestions-title">
                   <span>💡 Hướng dẫn & Gợi ý thực hiện:</span>
@@ -540,45 +553,47 @@ export default function CourseConfig({
             </div>
           ) : (
             <div className="course-config-list">
-              {clos.map((clo, index) => (
-                <div key={clo.id || index} className="course-config-row">
-                  <input
-                    type="text"
-                    value={clo.clo_code || clo.code || ''}
-                    onChange={(e) => handleFieldChange(index, 'clo_code', e.target.value)}
-                    className="course-config-clo-code-input"
-                    placeholder="Mã CLO"
-                    required
-                  />
-                  <input
-                    type="text"
-                    value={clo.description}
-                    onChange={(e) => handleFieldChange(index, 'description', e.target.value)}
-                    className="course-config-clo-desc-input"
-                    placeholder="Mô tả chuẩn đầu ra môn học (động từ hành động Bloom)"
-                    required
-                  />
-                  <select
-                    value={clo.bloom_level}
-                    onChange={(e) => handleFieldChange(index, 'bloom_level', parseInt(e.target.value))}
-                    className="course-config-bloom-select"
-                  >
-                    <option value={1}>Nhớ (B1)</option>
-                    <option value={2}>Hiểu (B2)</option>
-                    <option value={3}>Vận dụng (B3)</option>
-                    <option value={4}>Phân tích (B4)</option>
-                    <option value={5}>Đánh giá (B5)</option>
-                    <option value={6}>Sáng tạo (B6)</option>
-                  </select>
-                  <button
-                    onClick={() => handleRemoveRow(index)}
-                    className="course-config-row-delete-btn"
-                    title="Xóa CLO"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ))}
+              <div className="course-config-rows-container">
+                {clos.map((clo, index) => (
+                  <div key={clo.id || index} className="course-config-row">
+                    <input
+                      type="text"
+                      value={clo.clo_code || clo.code || ''}
+                      onChange={(e) => handleFieldChange(index, 'clo_code', e.target.value)}
+                      className="course-config-clo-code-input"
+                      placeholder="Mã CLO"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={clo.description}
+                      onChange={(e) => handleFieldChange(index, 'description', e.target.value)}
+                      className="course-config-clo-desc-input"
+                      placeholder="Mô tả chuẩn đầu ra môn học (động từ hành động Bloom)"
+                      required
+                    />
+                    <select
+                      value={clo.bloom_level}
+                      onChange={(e) => handleFieldChange(index, 'bloom_level', parseInt(e.target.value))}
+                      className="course-config-bloom-select"
+                    >
+                      <option value={1}>Nhớ (B1)</option>
+                      <option value={2}>Hiểu (B2)</option>
+                      <option value={3}>Vận dụng (B3)</option>
+                      <option value={4}>Phân tích (B4)</option>
+                      <option value={5}>Đánh giá (B5)</option>
+                      <option value={6}>Sáng tạo (B6)</option>
+                    </select>
+                    <button
+                      onClick={() => handleRemoveRow(index)}
+                      className="course-config-row-delete-btn"
+                      title="Xóa CLO"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
 
               <div className="course-config-save-container">
                 <button onClick={handleSaveClos} disabled={saving} className="course-config-save-btn">

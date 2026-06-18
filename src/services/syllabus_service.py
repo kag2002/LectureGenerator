@@ -20,7 +20,7 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
     new_db = SessionLocal()
     try:
         # Stage 1: Đọc tài liệu
-        yield send("stage", {"stage": 1, "message": "📄 Đang trích xuất văn bản từ tài liệu đề cương..."})
+        yield send("stage", {"stage": 1, "message": "Đang trích xuất văn bản từ tài liệu đề cương..."})
 
         text_content = parse_document(temp_file_path)
         if not text_content or not text_content.strip():
@@ -34,12 +34,12 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
 
         # Stage 2: AI phân tích
         yield send(
-            "stage", {"stage": 2, "message": "🤖 AI đang bóc tách cấu trúc và chuẩn hóa các chuẩn đầu ra CLO..."}
+            "stage", {"stage": 2, "message": "AI đang bóc tách cấu trúc và chuẩn hóa các chuẩn đầu ra CLO..."}
         )
         analysis_result = analyse_syllabus(text_content)
 
         # Stage 3: Phân cấp mức Bloom
-        yield send("stage", {"stage": 3, "message": "📊 Đang chuẩn hóa động từ hành động và phân cấp mức Bloom..."})
+        yield send("stage", {"stage": 3, "message": "Đang chuẩn hóa động từ hành động và phân cấp mức Bloom..."})
 
         # Khôi phục môn học trong session mới
         new_course = new_db.query(Course).filter(Course.id == course_id).first()
@@ -55,7 +55,7 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
             new_course.recommended_readings = "\n".join(readings) if isinstance(readings, list) else str(readings)
 
         # Stage 4: Lưu trữ vào DB
-        yield send("stage", {"stage": 4, "message": "💾 Đang lưu trữ và đồng bộ hóa danh sách CLOs..."})
+        yield send("stage", {"stage": 4, "message": "Đang lưu trữ và đồng bộ hóa danh sách CLOs..."})
 
         # Xóa các CLOs cũ của môn này
         new_db.query(CLO).filter(CLO.course_id == course_id).delete()
@@ -104,7 +104,7 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
         yield send(
             "done",
             {
-                "message": "✅ Đã phân tích và chuẩn hóa CLOs thành công!",
+                "message": "Đã phân tích và chuẩn hóa CLOs thành công!",
                 "course": {
                     "id": new_course.id,
                     "course_code": new_course.course_code,

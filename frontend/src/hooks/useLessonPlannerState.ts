@@ -1017,28 +1017,15 @@ export function useLessonPlannerState({
           handleGenerateOutline(true);
         }
       } else if (action === 'generate_storyboard') {
+        // Only highlight the button visually — do NOT auto-click or auto-generate.
+        // The user should review and click "Generate Storyboard" themselves.
         const btn = document.getElementById('lp-generate-materials-btn');
         if (btn) {
           btn.classList.add('programmatic-click');
           setTimeout(() => {
             btn.classList.remove('programmatic-click');
-            btn.click();
-            
-            setTimeout(() => {
-              const modalBtn = document.getElementById('lp-pedagogical-confirm-btn');
-              if (modalBtn) {
-                modalBtn.classList.add('programmatic-click');
-                setTimeout(() => {
-                  modalBtn.classList.remove('programmatic-click');
-                  modalBtn.click();
-                }, 1000);
-              } else {
-                stream.handleGenerateStoryboard();
-              }
-            }, 500);
-          }, 1000);
-        } else {
-          stream.handleGenerateStoryboard();
+            // Do NOT click — let the user manually trigger
+          }, 2500);
         }
       } else if (action === 'generate_materials') {
         const confirmBtn = document.getElementById('ai-generate-materials-confirm-btn');
@@ -1091,6 +1078,23 @@ export function useLessonPlannerState({
     window.addEventListener('lesson-planner-programmatic-trigger', handleProgrammaticTrigger);
     return () => window.removeEventListener('lesson-planner-programmatic-trigger', handleProgrammaticTrigger);
   }, [selectedChapter, stream, clos]);
+
+  useEffect(() => {
+    const handleMascotStart = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { params } = customEvent.detail || {};
+      const chapterId = params?.chapter_id ? Number(params.chapter_id) : null;
+      if (chapterId && chapters.length > 0) {
+        const found = chapters.find((ch: Chapter) => ch.id === chapterId);
+        if (found && (!selectedChapterRef.current || selectedChapterRef.current.id !== found.id)) {
+          handleSelectChapter(found);
+        }
+      }
+    };
+    window.addEventListener('mascot-execution-start', handleMascotStart);
+    return () => window.removeEventListener('mascot-execution-start', handleMascotStart);
+  }, [chapters, handleSelectChapter]);
+
 
   return {
     chapters,

@@ -61,6 +61,7 @@ export function useMaterialsStream({
   }, [selectedChapter]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const accumulatedMascotTextRef = useRef('');
   const [storyboardDrafts, setStoryboardDrafts] = useState<Record<number, any[]>>({});
   const [aiSlideProposals, setAiSlideProposals] = useState<Record<number, string>>({});
   const [aiActiveLearningProposals, setAiActiveLearningProposals] = useState<Record<number, string>>({});
@@ -553,6 +554,187 @@ export function useMaterialsStream({
     setAgentStatus(null);
     setSelfCorrectionAttempt(null);
   };
+
+  // Listen to Mascot Companion execution stream events
+  useEffect(() => {
+    const handleMascotStart = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { action, params } = customEvent.detail || {};
+      const chapterId = params?.chapter_id ? Number(params.chapter_id) : null;
+      if (!chapterId) return;
+
+      const actType = action?.backendAction;
+      if (actType === 'generate_chapter_materials_action' || actType === 'autopilot_full_chapter' || actType === 'generate_chapter_storyboard_action') {
+        setGeneratingChapterId(chapterId);
+        setApiStatus('generating');
+        
+        if (actType === 'generate_chapter_storyboard_action') {
+          setIsGeneratingStoryboard(true);
+          setGenLog('Giai đoạn 1: AI đang lập cấu trúc slide (Storyboard)…');
+        } else {
+          setGenLog('Giai đoạn 2: AI đang viết slide chi tiết & kịch bản tương tác…');
+          setAiSlideProposals(prev => ({ ...prev, [chapterId]: '' }));
+          setAiActiveLearningProposals(prev => ({ ...prev, [chapterId]: '' }));
+          setCurrentStage(1);
+          setCurrentSlide(0);
+          setTotalSlides(0);
+        }
+        
+        setError('');
+        setMessage('');
+        setActiveAgent('storyboard_architect');
+        setAgentStatus('running');
+        setSelfCorrectionAttempt(null);
+        accumulatedMascotTextRef.current = '';
+        setAIProcessingStatus(true, 'ODIN Autopilot đang khởi động...');
+      }
+    };
+
+    const handleMascotStage = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const data = customEvent.detail || {};
+
+      if (selectedChapterRef.current?.id === generatingChapterId) {
+        setGenLog(data.message);
+        if (data.stage) {
+          setCurrentStage(data.stage);
+        }
+        if (data.current_slide !== undefined) {
+          setCurrentSlide(data.current_slide);
+        }
+        if (data.total_slides !== undefined) {
+          setTotalSlides(data.total_slides);
+        }
+        if (data.active_agent !== undefined) {
+          setActiveAgent(data.active_agent);
+        }
+        if (data.agent_status !== undefined) {
+          setAgentStatus(data.agent_status);
+        }
+        if (data.self_correction_attempt !== undefined) {
+          setSelfCorrectionAttempt(data.self_correction_attempt);
+        } else {
+          setSelfCorrectionAttempt(null);
+        }
+        setAIProcessingStatus(true, `Học liệu (Mascot): ${data.message}`);
+      }
+    };
+
+    const handleMascotToken = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const data = customEvent.detail || {};
+      const targetChapterId = generatingChapterId;
+      if (!targetChapterId) return;
+
+      if (selectedChapterRef.current?.id === targetChapterId) {
+        accumulatedMascotTextRef.current += data.token;
+        
+        let slideText = "";
+        let activeText = "";
+        const accumulatedText = accumulatedMascotTextRef.current;
+        if (accumulatedText.includes("---SLIDES---")) {
+          const parts = accumulatedText.split("---SLIDES---");
+          const afterSlides = parts.slice(1).join("---SLIDES---");
+          if (afterSlides.includes("---ACTIVE_LEARNING---")) {
+            const activeParts = afterSlides.split("---ACTIVE_LEARNING---");
+            slideText = activeParts[0];
+            activeText = activeParts.slice(1).join("---ACTIVE_LEARNING---");
+          } else {
+            slideText = afterSlides;
+          }
+        } else {
+          if (accumulatedText.includes("---ACTIVE_LEARNING---")) {
+            const activeParts = accumulatedText.split("---ACTIVE_LEARNING---");
+            slideText = activeParts[0];
+            activeText = activeParts.slice(1).join("---ACTIVE_LEARNING---");
+          } else {
+            slideText = accumulatedText;
+          }
+        }
+
+        if (activeText.trim() && currentStage < 3) {
+          setCurrentStage(3);
+        }
+
+        setAiSlideProposals(prev => ({ ...prev, [targetChapterId]: slideText.trim() }));
+        setAiActiveLearningProposals(prev => ({ ...prev, [targetChapterId]: activeText.trim() }));
+      }
+    };
+
+    const handleMascotEnd = async (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const data = customEvent.detail || {};
+      const targetChapterId = generatingChapterId;
+      if (!targetChapterId) return;
+
+      setIsGeneratingStoryboard(false);
+      setGeneratingChapterId(null);
+      setAIProcessingStatus(false);
+      accumulatedMascotTextRef.current = '';
+
+      if (data.success) {
+        setApiStatus('success');
+        setMessage(data.message || 'Hoàn tất soạn học liệu chi tiết!');
+        
+        if (data.slide_content !== undefined) {
+          setAiSlideProposals(prev => ({ ...prev, [targetChapterId]: data.slide_content }));
+        }
+        if (data.active_learning_script !== undefined) {
+          setAiActiveLearningProposals(prev => ({ ...prev, [targetChapterId]: data.active_learning_script }));
+        }
+        if (data.storyboard !== undefined) {
+          setStoryboardDrafts(prev => ({ ...prev, [targetChapterId]: data.storyboard }));
+        }
+        setWarnings(data.warnings || []);
+
+        if (selectedChapterRef.current?.id === targetChapterId) {
+          setCurrentStage(6);
+          setActiveAgent('saver');
+          setAgentStatus('completed');
+          setSelfCorrectionAttempt(null);
+
+          try {
+            const response = await client.get(`/api/courses/chapters/${targetChapterId}/materials`);
+            const sCont = response.data.slide_content || '';
+            const aScript = response.data.active_learning_script || '';
+            
+            setSlideContent(sCont);
+            setActiveLearningScript(aScript);
+            setSavedSlideContent(sCont);
+            setSavedScript(aScript);
+          } catch (err) {
+            console.error("Lỗi khi tải lại học liệu sau Mascot end:", err);
+          }
+
+          try {
+            const ragRes = await client.get(`/api/courses/chapters/${targetChapterId}/rag-references`);
+            setRagReferences(ragRes.data.references || []);
+          } catch (ragErr) {
+            // ignore
+          }
+
+          loadRevisions(targetChapterId);
+          loadChapterMcqs(targetChapterId);
+        }
+      } else {
+        setApiStatus('error');
+        setError(data.message || 'Lỗi trong tiến trình Autopilot.');
+        setGenLog('');
+        setAgentStatus('error');
+      }
+    };
+
+    window.addEventListener('mascot-execution-start', handleMascotStart);
+    window.addEventListener('mascot-execution-stage', handleMascotStage);
+    window.addEventListener('mascot-execution-token', handleMascotToken);
+    window.addEventListener('mascot-execution-end', handleMascotEnd);
+    return () => {
+      window.removeEventListener('mascot-execution-start', handleMascotStart);
+      window.removeEventListener('mascot-execution-stage', handleMascotStage);
+      window.removeEventListener('mascot-execution-token', handleMascotToken);
+      window.removeEventListener('mascot-execution-end', handleMascotEnd);
+    };
+  }, [generatingChapterId, currentStage]);
 
   return {
     storyboardDraft,

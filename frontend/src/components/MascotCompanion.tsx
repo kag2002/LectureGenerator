@@ -1,10 +1,18 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Bot, X, Sparkles, Settings, BarChart2, HelpCircle, FileText, Check, Zap, Upload, Paperclip, Loader2, WifiOff } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Bot, X, Settings, BarChart2, HelpCircle, FileText, Check, Zap, Upload, Paperclip, Loader2, WifiOff, MessageSquare, Cpu } from 'lucide-react';
 import client from '../api/client';
 import '../styles/MascotCompanion.css';
 import { renderMarkdown } from '../utils/markdown';
 import { useUILock } from '../context/UILockContext';
+import ExecutionView, { CourseReadiness } from './mascot/ExecutionView';
+import { MascotAction } from '../config/mascotActions';
 
+type MascotMode = 'chat' | 'execution';
+
+const cleanLogText = (text: string) => {
+  if (!text) return '';
+  return text.replace(/^[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2300}-\u{23FF}\u{2700}-\u{27BF}️\s✅⚡⏳🛡️🎨🔍✍️🧩💾☁️⏱️❌🎉⚠️]+/u, '').trim();
+};
 
 interface MascotCompanionProps {
   onNavigate: (view: string) => void;
@@ -110,11 +118,54 @@ function MascotAvatar({ onMouseDown, onTouchStart, hasNotification, isDragging, 
 }
 
 export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig, selectedCourse, aiStatus }: MascotCompanionProps) {
-  const { locks, releaseLock } = useUILock();
+  const { locks, releaseLock, fetchLocks } = useUILock();
   const isAutopilotActive = Object.values(locks).some(l => l.lockedBy === 'odin_autopilot');
 
   const [sseStatus, setSseStatus] = useState<'connected' | 'reconnecting' | 'failed'>('connected');
   const [showManualUnlock, setShowManualUnlock] = useState(false);
+
+  // ── Dual-Mode State ──────────────────────────────────────────────────
+  const [mascotMode, setMascotMode] = useState<MascotMode>(() => {
+    return (localStorage.getItem('mascot-mode') as MascotMode) ?? 'chat';
+  });
+  // Execution mode: running / result state
+  const [execRunning, setExecRunning] = useState(false);
+  const [execLog, setExecLog] = useState('');
+  const [execChapterId, setExecChapterId] = useState<number | null>(null);
+  const [execResult, setExecResult] = useState<{ success: boolean; message: string; navigateTo?: string } | null>(null);
+  // MascotContext: cross-mode state sharing
+  const [mascotContext, setMascotContext] = useState<{ chapterId?: number; cloId?: number }>({});
+  // Course readiness snapshot — single source of truth for dependency tracking
+  const [courseReadiness, setCourseReadiness] = useState<CourseReadiness | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  // CLOs for wizard (kept separate since readiness doesn't carry full list)
+  const [clos, setClos] = useState<{ id: number; clo_code: string; description: string }[]>([]);
+
+  // ── fetchReadiness — single source of truth for dependency tracking ──────
+  const fetchReadiness = useCallback(async () => {
+    if (!selectedCourse?.id) return;
+    setReadinessLoading(true);
+    try {
+      const res = await client.get(`/api/courses/${selectedCourse.id}/readiness`);
+      setCourseReadiness(res.data);
+    } catch {
+      setCourseReadiness(null);
+    } finally {
+      setReadinessLoading(false);
+    }
+  }, [selectedCourse?.id]);
+
+  // ── fetchClos — vẫn fetch riêng vì readiness không chứa full CLO list ────
+  const fetchClos = useCallback(async () => {
+    if (!selectedCourse?.id) { setClos([]); return; }
+    try {
+      const res = await client.get(`/api/courses/${selectedCourse.id}/clos`);
+      const data = Array.isArray(res.data) ? res.data : (res.data?.clos ?? []);
+      setClos(data.map((c: any) => ({ id: c.id, clo_code: c.clo_code, description: c.description ?? '' })));
+    } catch {
+      setClos([]);
+    }
+  }, [selectedCourse?.id]);
 
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState(WELCOME_MESSAGES[0]);
@@ -359,6 +410,16 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     window.dispatchEvent(new CustomEvent('db-state-changed'));
   };
 
+  const handleCancelExecution = async () => {
+    if (!selectedCourse?.id || !execChapterId) return;
+    try {
+      setExecLog('Đang gửi lệnh hủy...');
+      await client.post(`/api/chatbot/courses/${selectedCourse.id}/chapters/${execChapterId}/cancel-direct-action`);
+    } catch (err: any) {
+      console.error('Failed to cancel direct action:', err);
+    }
+  };
+
   // Adjust position when bubble opens or changes content
   useEffect(() => {
     if (isOpen && isMounted) {
@@ -372,8 +433,12 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
   useEffect(() => {
     const handleDispatchAction = (e: Event) => {
       const customEvent = e as CustomEvent;
-      setPendingAction(customEvent.detail);
+      const detail = customEvent.detail;
+      setPendingAction(detail);
       setHasNotification(true);
+      if (detail && detail.message) {
+        setMessage(detail.message);
+      }
     };
     const handleOpenBubble = () => {
       setIsOpen(true);
@@ -381,18 +446,23 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     };
     const handleClearAction = () => {
       setPendingAction(null);
+      setMessage("Dạ, em đang thực hiện hành động theo yêu cầu của Thầy/Cô ạ!");
+    };
+    const handleCancelActionGlobal = () => {
+      setPendingAction(null);
+      setMessage("Em đã hủy lệnh theo yêu cầu của Thầy/Cô.");
     };
 
     window.addEventListener('chatbot-dispatch-action', handleDispatchAction);
     window.addEventListener('open-mascot-bubble', handleOpenBubble);
     window.addEventListener('confirm-chatbot-action', handleClearAction);
-    window.addEventListener('cancel-chatbot-action', handleClearAction);
+    window.addEventListener('cancel-chatbot-action', handleCancelActionGlobal);
 
     return () => {
       window.removeEventListener('chatbot-dispatch-action', handleDispatchAction);
       window.removeEventListener('open-mascot-bubble', handleOpenBubble);
       window.removeEventListener('confirm-chatbot-action', handleClearAction);
-      window.removeEventListener('cancel-chatbot-action', handleClearAction);
+      window.removeEventListener('cancel-chatbot-action', handleCancelActionGlobal);
     };
   }, []);
 
@@ -446,11 +516,49 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     }
   };
 
+  // Trigger 1: Course thay đổi → reset state + fetch readiness & CLOs
   useEffect(() => {
     setMessage(WELCOME_MESSAGES[0]);
     setLastUserInput('');
     setPendingAction(null);
+    setExecResult(null);
+    setMascotContext({});
+    if (!selectedCourse?.id) {
+      setCourseReadiness(null);
+      setClos([]);
+      return;
+    }
+    fetchReadiness();
+    fetchClos();
   }, [selectedCourse?.id]);
+
+  // Trigger 2: db-state-changed event (debounce 300ms) → refetch readiness
+  useEffect(() => {
+    let timer: any;
+    const handler = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fetchReadiness(), 300);
+    };
+    window.addEventListener('db-state-changed', handler);
+    return () => { window.removeEventListener('db-state-changed', handler); clearTimeout(timer); };
+  }, [fetchReadiness]);
+
+  // Trigger 3: Mascot bubble mở → refetch readiness (user có thể đã làm gì đó)
+  useEffect(() => {
+    if (isOpen) fetchReadiness();
+  }, [isOpen]);
+
+  // Trigger 4: Window focus → refetch readiness (user quay lại từ tab/window khác)
+  useEffect(() => {
+    const handler = () => fetchReadiness();
+    window.addEventListener('focus', handler);
+    return () => window.removeEventListener('focus', handler);
+  }, [fetchReadiness]);
+
+  // Persist mode to localStorage
+  useEffect(() => {
+    localStorage.setItem('mascot-mode', mascotMode);
+  }, [mascotMode]);
 
   // Cycle messages randomly on click
   const rotateMessage = () => {
@@ -492,6 +600,138 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       setMessage("Em đã mở trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp đề cương Syllabus rồi nhé!");
     }
   };
+
+  // ── handleExecuteAction — Execution Mode direct API call ──────────────
+  const handleExecuteAction = useCallback(async (action: MascotAction, params: Record<string, any>) => {
+    if (!selectedCourse || !action.backendAction) return;
+    setExecRunning(true);
+    setExecResult(null);
+    setExecLog('Đang khởi động...');
+
+    const chapterId = params.chapter_id ? Number(params.chapter_id) : null;
+    setExecChapterId(chapterId);
+
+    // Phát sự kiện bắt đầu sinh ở Mascot
+    window.dispatchEvent(new CustomEvent('mascot-execution-start', { detail: { action, params } }));
+
+    let endDispatched = false;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${client.defaults.baseURL || 'http://localhost:8000'}/api/chatbot/direct-action`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            course_id: selectedCourse.id,
+            action_type: action.backendAction,
+            params,
+          }),
+        }
+      );
+
+      if (!response.body) throw new Error('No response body');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const eventMatch = line.match(/^event:\s*(.+)$/m);
+          const dataMatch = line.match(/^data:\s*(.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+          const evt = eventMatch[1].trim();
+          const data = JSON.parse(dataMatch[1].trim());
+          if (evt === 'stage') {
+            setExecLog(data.message);
+            // Đồng bộ nhanh trạng thái khóa lên UI
+            fetchLocks(selectedCourse.id);
+
+            // Phát sự kiện cập nhật tiến trình của Mascot để đồng bộ stepper & logs
+            window.dispatchEvent(new CustomEvent('mascot-execution-stage', {
+              detail: {
+                message: data.message,
+                stage: data.stage,
+                current_slide: data.current_slide,
+                total_slides: data.total_slides,
+                active_agent: data.active_agent,
+                agent_status: data.agent_status,
+                self_correction_attempt: data.self_correction_attempt
+              }
+            }));
+          } else if (evt === 'token') {
+            // Phát sự kiện sinh token để preview slide trực tiếp
+            window.dispatchEvent(new CustomEvent('mascot-execution-token', {
+              detail: { token: data.token }
+            }));
+          } else if (evt === 'done') {
+            endDispatched = true;
+            setExecResult({ success: true, message: data.message, navigateTo: data.navigate_to });
+            if (data.navigate_to) {
+              window.dispatchEvent(new CustomEvent('db-state-changed'));
+            }
+            // Phát sự kiện kết thúc thành công
+            window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+              detail: {
+                success: true,
+                message: data.message,
+                slide_content: data.slide_content,
+                active_learning_script: data.active_learning_script,
+                warnings: data.warnings,
+                storyboard: data.storyboard
+              }
+            }));
+          } else if (evt === 'error') {
+            endDispatched = true;
+            setExecResult({ success: false, message: data.message });
+            // Phát sự kiện kết thúc thất bại
+            window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+              detail: {
+                success: false,
+                message: data.message
+              }
+            }));
+          }
+        }
+      }
+    } catch (err: any) {
+      endDispatched = true;
+      setExecResult({ success: false, message: `Lỗi kết nối: ${err.message}` });
+      // Phát sự kiện kết thúc thất bại khi gặp ngoại lệ mạng
+      window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+        detail: {
+          success: false,
+          message: err.message
+        }
+      }));
+    } finally {
+      if (!endDispatched) {
+        window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+          detail: {
+            success: false,
+            message: 'Tiến trình thực thi bị gián đoạn hoặc hủy.'
+          }
+        }));
+      }
+      setExecRunning(false);
+      setExecChapterId(null);
+      fetchLocks(selectedCourse.id);
+    }
+  }, [selectedCourse, fetchLocks]);
+
+  const handleNavigateAction = useCallback((view: string, triggerEvent?: string) => {
+    onNavigate(view);
+    if (triggerEvent === 'trigger-pedagogical-config' && onTriggerPedagogicalConfig) {
+      setTimeout(() => onTriggerPedagogicalConfig!(), 100);
+    }
+  }, [onNavigate, onTriggerPedagogicalConfig]);
 
   const handleSendChat = async () => {
     if (!chatInput.trim()) return;
@@ -689,7 +929,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
             <span className="mascot-bubble-title">
               <Bot size={15} style={{ color: (isAutopilotActive || aiStatus?.isProcessing) ? '#fbbf24' : 'var(--vinuni-gold)' }} />
               <span style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-                <span>{isAutopilotActive ? 'ODIN Autopilot' : 'Trợ lý ảo ODIN AI'}</span>
+                <span>{isAutopilotActive ? 'ODIN Autopilot' : 'ODIN AI'}</span>
                 {isAutopilotActive ? (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: '#fbbf24' }}>
                     <Loader2 size={9} style={{ animation: 'spin 0.8s linear infinite' }} />
@@ -698,13 +938,32 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
                 ) : aiStatus?.isProcessing ? (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: '#fbbf24' }}>
                     <Loader2 size={9} style={{ animation: 'spin 0.8s linear infinite' }} />
-                    {aiStatus.message || 'Đang xử lý…'}
+                    {cleanLogText(aiStatus.message) || 'Đang xử lý…'}
                   </span>
-                ) : (
-                  <span style={{ fontSize: '10px', fontWeight: 400, opacity: 0.6, letterSpacing: '0.3px' }}>Đang thử nghiệm</span>
-                )}
+                ) : null}
               </span>
             </span>
+
+            {/* Mode Switcher Pill */}
+            <div className="mascot-mode-switcher" role="group" aria-label="Chọn chế độ">
+              <button
+                className={`mascot-mode-btn ${mascotMode === 'chat' ? 'active' : ''}`}
+                onClick={() => setMascotMode('chat')}
+                title="Chế độ Trò chuyện"
+              >
+                <MessageSquare size={11} />
+                Trò chuyện
+              </button>
+              <button
+                className={`mascot-mode-btn ${mascotMode === 'execution' ? 'active' : ''}`}
+                onClick={() => { setMascotMode('execution'); setExecResult(null); }}
+                title="Chế độ Thực thi"
+              >
+                <Cpu size={11} />
+                Thực thi
+              </button>
+            </div>
+
             <button
               onClick={() => setIsOpen(false)}
               className="mascot-bubble-close"
@@ -715,39 +974,116 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
           </div>
 
           <div className="mascot-bubble-scroll-container">
-            {uploadingFile ? (
-              <div className="mascot-upload-progress-card" style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '2px dashed var(--vinuni-gold)',
-                padding: '12px',
-                marginTop: '8px',
-                color: '#ffffff',
-                fontFamily: 'VT323',
-                fontSize: '15px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontWeight: 'bold' }}>
+            {/* ── EXECUTION MODE VIEW ─────────────────────────── */}
+            {mascotMode === 'execution' && !uploadingFile && (
+              <div className="mascot-view-body">
+                {/* Running card */}
+                {execRunning && (
+                  <div className="exec-running-card">
+                    <div className="exec-running-title">
+                      <Loader2 size={14} className="animate-spin" />
+                      Đang thực thi...
+                    </div>
+                    <div className="exec-running-log">{execLog}</div>
+                    <div className="exec-progress-bar">
+                      <div className="exec-progress-fill" />
+                    </div>
+                    {execChapterId && (
+                      <button
+                        className="exec-cancel-btn"
+                        onClick={handleCancelExecution}
+                        style={{
+                          marginTop: '10px',
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#fca5a5',
+                          fontSize: '11px',
+                          padding: '5px 10px',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          width: '100%',
+                          transition: 'all 0.2s ease',
+                          fontWeight: 500
+                        }}
+                      >
+                        <X size={12} /> Hủy thực thi (Mascot)
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Result card */}
+                {!execRunning && execResult && (
+                  <div className={`exec-result-card ${execResult.success ? '' : 'error'}`}>
+                    <div className="exec-result-title">
+                      {execResult.success ? <Check size={14} /> : <X size={14} />}
+                      {execResult.success ? 'Hoàn thành!' : 'Gặp lỗi'}
+                    </div>
+                    <p className="exec-result-msg">{execResult.message}</p>
+                    <div className="exec-result-actions">
+                      {execResult.success && execResult.navigateTo && (
+                        <button
+                          className="exec-result-btn primary"
+                          onClick={() => { onNavigate(execResult.navigateTo!); setIsOpen(false); }}
+                        >
+                          <Check size={12} /> Xem kết quả
+                        </button>
+                      )}
+                      <button
+                        className="exec-result-btn secondary"
+                        onClick={() => setExecResult(null)}
+                      >
+                        {execResult.success ? 'Làm thêm' : 'Thử lại'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {/* Action list — hidden when running or showing result */}
+                {!execRunning && !execResult && (
+                  <ExecutionView
+                    selectedCourse={selectedCourse}
+                    courseReadiness={courseReadiness}
+                    readinessLoading={readinessLoading}
+                    clos={clos}
+                    isOffline={sseStatus !== 'connected'}
+                    onExecuteAction={handleExecuteAction}
+                    onNavigateAction={handleNavigateAction}
+                    mascotContext={mascotContext}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* ── CHAT MODE VIEW (original) ───────────────────── */}
+            {(mascotMode === 'chat' || uploadingFile) && (
+            <>{uploadingFile ? (
+              <div className="mascot-upload-card">
+                <div className="mascot-upload-header">
                   <span>NẠP SYLLABUS:</span>
-                  <span style={{ color: 'var(--vinuni-gold)' }}>{uploadingFile}</span>
+                  <span className="mascot-upload-filename">{uploadingFile}</span>
                 </div>
-                <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', marginBottom: '8px' }}>
-                  <div style={{ height: '100%', background: 'var(--vinuni-gold)', width: `${(uploadStage / 4) * 100}%` }} />
+                <div className="mascot-upload-bar-track">
+                  <div className="mascot-upload-bar-fill" style={{ width: `${(uploadStage / 4) * 100}%` }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <div style={{ color: uploadStage >= 1 ? 'var(--vinuni-gold)' : '#64748b' }}>
-                    1. Đọc và trích xuất tài liệu {uploadStage > 1 && '✅'}
+                <div className="mascot-upload-stages">
+                  <div className={uploadStage >= 1 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    1. Đọc và trích xuất tài liệu {uploadStage > 1 && <Check size={11} style={{ display: 'inline' }} />}
                   </div>
-                  <div style={{ color: uploadStage >= 2 ? 'var(--vinuni-gold)' : '#64748b' }}>
-                    2. AI phân tích cấu trúc CLOs {uploadStage > 2 && '✅'}
+                  <div className={uploadStage >= 2 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    2. AI phân tích cấu trúc CLOs {uploadStage > 2 && <Check size={11} style={{ display: 'inline' }} />}
                   </div>
-                  <div style={{ color: uploadStage >= 3 ? 'var(--vinuni-gold)' : '#64748b' }}>
-                    3. Ánh xạ Bloom {uploadStage > 3 && '✅'}
+                  <div className={uploadStage >= 3 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    3. Ánh xạ Bloom {uploadStage > 3 && <Check size={11} style={{ display: 'inline' }} />}
                   </div>
-                  <div style={{ color: uploadStage >= 4 ? 'var(--vinuni-gold)' : '#64748b' }}>
-                    4. Lưu trữ và đồng bộ hóa {uploadStage > 4 && '✅'}
+                  <div className={uploadStage >= 4 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    4. Lưu trữ và đồng bộ hóa {uploadStage > 4 && <Check size={11} style={{ display: 'inline' }} />}
                   </div>
                 </div>
                 {uploadLog && (
-                  <div style={{ marginTop: '8px', color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>
+                  <div className="mascot-upload-log">
                     {uploadLog}
                   </div>
                 )}
@@ -765,22 +1101,12 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
             ) : (
               <>
                 {isAutopilotActive ? (
-                  <div style={{
-                    background: 'rgba(212, 163, 89, 0.05)',
-                    border: '1px solid rgba(212, 163, 89, 0.25)',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    margin: '8px 0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    textAlign: 'left'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--vinuni-gold)', fontWeight: 700, fontSize: '13px' }}>
+                  <div className="mascot-autopilot-card">
+                    <div className="mascot-autopilot-title">
                       <Loader2 size={14} className="animate-spin" />
                       <span>ODIN Autopilot Active</span>
                     </div>
-                    <p style={{ margin: 0, fontSize: '12.5px', color: '#cbd5e1', lineHeight: '1.4' }}>
+                    <p className="mascot-autopilot-msg">
                       Em đang tự động tương tác và thiết kế bài giảng thay cho Thầy/Cô. Tiến trình này đang chạy ngầm và giao diện tương ứng sẽ tạm thời khóa để đảm bảo an toàn dữ liệu.
                     </p>
                     <div style={{
@@ -826,7 +1152,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
                   </div>
                 ) : (
                   <>
-                    {lastUserInput && (
+                {lastUserInput && (
                       <div className="mascot-user-question">
                         <strong>Thầy/Cô:</strong> {lastUserInput}
                       </div>
@@ -841,26 +1167,14 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
             )}
 
             {pendingAction && (
-              <div style={{
-                background: 'rgba(212, 163, 89, 0.05)',
-                border: '1px solid rgba(212, 163, 89, 0.25)',
-                borderRadius: '8px',
-                padding: '12px',
-                margin: '12px 0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--vinuni-gold)', fontWeight: 600, fontSize: '12.5px' }}>
+              <div className="mascot-proposal-card">
+                <div className="mascot-proposal-card-title">
                   <Zap size={14} className="animate-pulse" />
                   <span>Đề xuất tự động từ ODIN AI</span>
                 </div>
-                <p style={{ margin: '0', fontSize: '13px', color: '#f1f5f9', lineHeight: '1.4', textAlign: 'left' }}>
-                  {pendingAction.message || 'Mascot AI đề xuất thực hiện hành động tự động trên giao diện này.'}
-                </p>
 
                 {pendingAction.params && (
-                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '6px', padding: '8px 10px', fontSize: '11.5px', color: '#94a3b8', display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                  <div className="mascot-proposal-card-params">
                     {pendingAction.params.chapter_title && <div><strong>Chương:</strong> {pendingAction.params.chapter_title}</div>}
                     {pendingAction.params.clo_code && <div><strong>CLO:</strong> {pendingAction.params.clo_code}</div>}
                     {pendingAction.params.bloom_level && <div><strong>Bloom:</strong> Bậc B{pendingAction.params.bloom_level}</div>}
@@ -959,8 +1273,12 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
                 )}
               </div>
             )}
+            {/* END CHAT MODE VIEW fragment */}
+            </>)}
           </div>
 
+          {/* Chat footer — only in chat mode */}
+          {(mascotMode === 'chat' || uploadingFile) && (
           <div className="mascot-bubble-chat">
             <input
               type="file"
@@ -999,6 +1317,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
               Gửi
             </button>
           </div>
+          )}
         </div>
       )}
     </div>

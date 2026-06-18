@@ -946,4 +946,116 @@ body.editor-fullscreen .app-main-content {
   }
 }
 
+/* Custom Agent-style glowing lock overlay (Odin Autopilot Lock) */
+@keyframes lockGlowPulse {
+  0% {
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4), inset 0 0 8px rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.85), inset 0 0 15px rgba(251, 191, 36, 0.45);
+    border-color: rgba(251, 191, 36, 1);
+  }
+  100% {
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.4), inset 0 0 8px rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.6);
+  }
+}
+
+.odin-locked-area {
+  position: relative !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.odin-locked-area::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(251, 191, 36, 0.7);
+  border-radius: inherit;
+  z-index: 100;
+  pointer-events: none;
+  animation: lockGlowPulse 1.8s infinite ease-in-out;
+}
+
+.odin-lock-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(9, 13, 26, 0.15);
+  backdrop-filter: blur(1.5px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 99;
+  border-radius: inherit;
+  cursor: not-allowed;
+  padding: 16px;
+  text-align: center;
+  color: #fff;
+  transition: opacity 0.3s ease;
+  user-select: none;
+}
+
+.odin-lock-content {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  padding: 12px 18px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  animation: scaleUpIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scaleUpIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.odin-lock-title {
+  color: var(--vinuni-gold);
+  font-weight: 800;
+  font-size: 13px;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.odin-lock-desc {
+  color: #cbd5e1;
+  font-size: 11px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Dynamic premium pulse glow highlight for guided UI elements */
+@keyframes odinTargetGlowPulse {
+  0% {
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.4), inset 0 0 4px rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.8), inset 0 0 8px rgba(251, 191, 36, 0.4);
+    border-color: rgba(251, 191, 36, 0.9);
+  }
+  100% {
+    box-shadow: 0 0 4px rgba(251, 191, 36, 0.4), inset 0 0 4px rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.5);
+  }
+}
+
+.odin-target-glow {
+  position: relative;
+  animation: odinTargetGlowPulse 1.6s infinite ease-in-out !important;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: inherit;
+  transition: all 0.3s ease;
+}
+
+
 

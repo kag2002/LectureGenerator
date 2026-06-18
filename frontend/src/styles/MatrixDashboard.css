@@ -160,6 +160,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 24px;
+  align-items: start;
 }
 
 @media (max-width: 768px) {
@@ -478,6 +479,11 @@
 .matrix-blind-spot-desc {
   margin: 4px 0 0 0 !important;
   font-size: 13px !important;
+  color: #5c1d1d !important;
+  opacity: 0.85;
+}
+
+[data-theme="dark"] .matrix-blind-spot-desc {
   color: #fca5a5 !important;
 }
 

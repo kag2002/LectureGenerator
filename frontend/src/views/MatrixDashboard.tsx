@@ -47,7 +47,7 @@ export default function MatrixDashboard({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeMode, setActiveMode] = useState<'questions' | 'materials'>('questions');
-  const [isBlindSpotsCollapsed, setIsBlindSpotsCollapsed] = useState(false);
+  const [isBlindSpotsCollapsed, setIsBlindSpotsCollapsed] = useState(true);
 
   const [chapters, setChapters] = useState<any[]>([]);
   const prevSuccessCount = React.useRef(0);
@@ -306,78 +306,61 @@ export default function MatrixDashboard({
               </div>
             </div>
 
-            <div className="matrix-stat-card-danger">
+            <div className="matrix-stat-card-danger" style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="matrix-stat-label">Điểm mù Chất lượng (Blind Spots)</div>
-              <div className="matrix-stat-remedy-row">
+              <div className="matrix-stat-remedy-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '12px', marginBottom: '6px' }}>
                 <div className="matrix-stat-value matrix-stat-value-no-margin">{activeMode === 'questions' ? blindSpotsCountQ : blindSpotsCountM}</div>
-                {blindSpotsCount > 0 && (
-                  <button 
-                    onClick={() => handleInitQueue()}
-                    className="matrix-remedy-btn"
-                    title="Tự động khởi chạy hàng đợi sửa chữa tất cả điểm mù chất lượng qua AI"
-                  >
-                    <Zap size={14} /> Khắc phục hàng loạt
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {blindSpotsCount > 0 && (
+                    <button 
+                      onClick={() => handleInitQueue()}
+                      className="matrix-remedy-btn"
+                      title="Tự động khởi chạy hàng đợi sửa chữa tất cả điểm mù chất lượng qua AI"
+                    >
+                      <Zap size={14} /> Khắc phục
+                    </button>
+                  )}
+                  {blindSpotsCount > 0 && (
+                    <button
+                      onClick={() => setIsBlindSpotsCollapsed(!isBlindSpotsCollapsed)}
+                      className="matrix-toggle-blind-spots-btn"
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.1)',
+                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                        color: '#f87171',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        transition: 'all 0.2s ease',
+                        outline: 'none',
+                        minHeight: '38px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                      }}
+                    >
+                      {isBlindSpotsCollapsed ? 'Chi tiết' : 'Ẩn'}
+                      {isBlindSpotsCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="matrix-stat-sub-danger">{activeMode === 'questions' ? 'CLOs chưa có câu hỏi đúng mức Bloom quy định' : 'CLOs chưa có nội dung slide đúng mức Bloom quy định'}</div>
-            </div>
-          </div>
+              <div className="matrix-stat-sub-danger" style={{ marginBottom: !isBlindSpotsCollapsed && blindSpotsCount > 0 ? '12px' : '0px' }}>
+                {activeMode === 'questions' ? 'CLOs chưa có câu hỏi đúng mức Bloom quy định' : 'CLOs chưa có nội dung slide đúng mức Bloom quy định'}
+              </div>
 
-          {/* BLIND SPOTS ALERTS SECTION */}
-          {blindSpotsCount > 0 && (
-            <div className="matrix-blind-spots-section">
-              <div 
-                className="matrix-blind-spots-header" 
-                style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  cursor: 'pointer',
-                  userSelect: 'none'
-                }}
-                onClick={() => setIsBlindSpotsCollapsed(!isBlindSpotsCollapsed)}
-              >
-                <h4 className="matrix-blind-spots-title" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AlertCircle size={18} className="matrix-blind-spots-icon" /> Danh sách Điểm Mù Chất lượng cần khắc phục ({activeMode === 'questions' ? 'Đánh giá' : 'Giảng dạy'}):
-                </h4>
-                <button
-                  type="button"
-                  className="matrix-blind-spots-collapse-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsBlindSpotsCollapsed(!isBlindSpotsCollapsed);
-                  }}
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                    color: '#f87171',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    fontWeight: 700,
-                    fontSize: '13px',
-                    padding: '6px 12px',
-                    borderRadius: '8px',
-                    transition: 'all 0.2s ease',
-                    outline: 'none'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)';
-                  }}
-                >
-                  {isBlindSpotsCollapsed ? 'Mở rộng' : 'Thu gọn'}
-                  {isBlindSpotsCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                </button>
-              </div>
-              {!isBlindSpotsCollapsed && (
-                <div className="matrix-blind-spots-list" style={{ marginTop: '16px' }}>
+              {!isBlindSpotsCollapsed && blindSpotsCount > 0 && (
+                <div className="matrix-blind-spots-inline-list" style={{ marginTop: '16px', borderTop: '1px dashed rgba(239, 68, 68, 0.3)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '240px', overflowY: 'auto', paddingRight: '4px' }}>
                   {Object.keys(matrixData).map(code => {
                     const clo = matrixData[code];
                     const targetLvl = clo.target_bloom;
@@ -385,10 +368,10 @@ export default function MatrixDashboard({
                     const count = levels[String(targetLvl)] || 0;
                     if (count === 0) {
                       return (
-                        <div key={code} className="matrix-blind-spot-alert">
-                          <strong>Chuẩn đầu ra {code}:</strong> Chưa có {activeMode === 'questions' ? 'câu hỏi trắc nghiệm' : 'nội dung slide'} nào phục vụ mức nhận thức mục tiêu <strong>{getBloomHeader(targetLvl)}</strong>.
-                          <p className="matrix-blind-spot-desc">
-                            * Gợi ý: {activeMode === 'questions' ? `Hãy mở Ngân hàng câu hỏi, chọn chuẩn đầu ra ${code} và chọn mức Bloom ${targetLvl} để sinh thêm câu hỏi tương ứng.` : `Hãy mở Soạn bài giảng, chọn chương học liên quan đến ${code} để bổ sung nội dung slide giảng dạy mức Bloom ${targetLvl}.`}
+                        <div key={code} className="matrix-blind-spot-alert" style={{ margin: 0, padding: '10px 12px', background: 'rgba(239, 68, 68, 0.12)', borderRadius: '8px', borderLeft: '3px solid rgba(239, 68, 68, 0.7)' }}>
+                          <strong>Chuẩn đầu ra {code}:</strong> Chưa có {activeMode === 'questions' ? 'câu hỏi' : 'slide'} cho mức <strong>{getBloomHeader(targetLvl)}</strong>.
+                          <p className="matrix-blind-spot-desc" style={{ marginTop: '4px', fontSize: '12px', opacity: 0.85 }}>
+                            * Gợi ý: {activeMode === 'questions' ? `Mở Ngân hàng câu hỏi, chọn ${code} mức B${targetLvl} để sinh thêm.` : `Mở Soạn bài giảng, bổ sung slide B${targetLvl} cho chương học tương ứng.`}
                           </p>
                         </div>
                       );
@@ -398,7 +381,7 @@ export default function MatrixDashboard({
                 </div>
               )}
             </div>
-          )}
+          </div>
 
           {/* HEATMAP TABLE */}
           <section className="matrix-heatmap-card">

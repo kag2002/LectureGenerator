@@ -186,8 +186,14 @@ export default function LessonPlanner({
   const [savingChapter, setSavingChapter] = useState(false);
 
   const { isLocked, getLockOwner } = useUILock();
-  const isChapterLocked = selectedChapter ? isLocked(`chapter_${selectedChapter.id}`) : false;
-  const lockOwner = selectedChapter ? getLockOwner(`chapter_${selectedChapter.id}`) : null;
+  const isChapterLockedFull = selectedChapter ? isLocked(`chapter_${selectedChapter.id}`) : false;
+  const isStoryboardLocked = selectedChapter ? (isChapterLockedFull || isLocked(`chapter_${selectedChapter.id}_storyboard`)) : false;
+  const isMaterialsLocked = selectedChapter ? (isChapterLockedFull || isLocked(`chapter_${selectedChapter.id}_materials`)) : false;
+  const lockOwner = selectedChapter
+    ? (getLockOwner(`chapter_${selectedChapter.id}`) ||
+       getLockOwner(`chapter_${selectedChapter.id}_storyboard`) ||
+       getLockOwner(`chapter_${selectedChapter.id}_materials`))
+    : null;
 
   const isDirty = slideContent !== savedSlideContent || activeLearningScript !== savedScript;
   useDirtyState(isDirty, handleSaveMaterials);
@@ -615,7 +621,8 @@ export default function LessonPlanner({
       <ResizableLayout
         showSidebar={showSidebar}
         showAIProposal={showAIProposal}
-        isLocked={isChapterLocked}
+        isStoryboardLocked={isStoryboardLocked}
+        isMaterialsLocked={isMaterialsLocked}
         lockOwner={lockOwner}
       >
         <LessonPlannerSidebar
@@ -1768,12 +1775,13 @@ const styles: Record<string, any> = {
 interface ResizableLayoutProps {
   showSidebar: boolean;
   showAIProposal: boolean;
-  isLocked?: boolean;
+  isStoryboardLocked?: boolean;
+  isMaterialsLocked?: boolean;
   lockOwner?: string | null;
   children: React.ReactNode;
 }
 
-function ResizableLayout({ showSidebar, showAIProposal, isLocked, lockOwner, children }: ResizableLayoutProps) {
+function ResizableLayout({ showSidebar, showAIProposal, isStoryboardLocked, isMaterialsLocked, lockOwner, children }: ResizableLayoutProps) {
   const { containerRef, onMouseDownSidebar, onMouseDownAI, sidebarWidth, aiRatio, isDragging } =
     useResizablePanels(showSidebar, showAIProposal);
   const childrenArr = React.Children.toArray(children);
@@ -1819,7 +1827,7 @@ function ResizableLayout({ showSidebar, showAIProposal, isLocked, lockOwner, chi
 
       {/* ── AI Proposal panel ── */}
       <div
-        className={`planner-ai-wrapper ${showAIProposal ? 'expanded' : 'collapsed'}`}
+        className={`planner-ai-wrapper ${showAIProposal ? 'expanded' : 'collapsed'} ${isStoryboardLocked ? 'odin-locked-area' : ''}`}
         style={{
           flex: showAIProposal ? `${aiRatio} 1 0` : '0 0 0px',
           width: showAIProposal ? 'auto' : '0px',
@@ -1833,29 +1841,15 @@ function ResizableLayout({ showSidebar, showAIProposal, isLocked, lockOwner, chi
         }}
       >
         {childrenArr[1]}
-        {isLocked && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(9, 13, 26, 0.8)',
-            backdropFilter: 'blur(3px)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            borderRadius: '16px',
-            border: '1px solid rgba(251, 191, 36, 0.3)',
-            color: '#fff',
-            padding: '20px',
-            textAlign: 'center',
-            fontFamily: '"Outfit", "Inter", sans-serif'
-          }}>
-            <Loader2 size={32} className="animate-spin" style={{ color: 'var(--vinuni-gold)', marginBottom: '12px' }} />
-            <h4 style={{ margin: '0 0 6px 0', color: 'var(--vinuni-gold)', fontWeight: 800 }}>Chương học đang khóa</h4>
-            <p style={{ margin: 0, fontSize: '12.5px', color: '#cbd5e1', maxWidth: '300px', lineHeight: '1.4' }}>
-              Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo chương này. Giao diện tạm thời khóa chỉnh sửa để tránh ghi đè dữ liệu.
-            </p>
+        {isStoryboardLocked && (
+          <div className="odin-lock-overlay">
+            <div className="odin-lock-content">
+              <Loader2 size={24} className="animate-spin" style={{ color: 'var(--vinuni-gold)' }} />
+              <h4 className="odin-lock-title">Khu vực bị khóa</h4>
+              <p className="odin-lock-desc">
+                Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo storyboard cho chương này. Giao diện bị khóa để tránh ghi đè dữ liệu.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -1879,7 +1873,7 @@ function ResizableLayout({ showSidebar, showAIProposal, isLocked, lockOwner, chi
 
       {/* ── Editor panel ── always visible */}
       <div
-        className="planner-editor-wrapper"
+        className={`planner-editor-wrapper ${isMaterialsLocked ? 'odin-locked-area' : ''}`}
         style={{
           flex: showAIProposal ? `${1 - aiRatio} 1 0` : '1 1 0',
           minWidth: 0,
@@ -1888,29 +1882,15 @@ function ResizableLayout({ showSidebar, showAIProposal, isLocked, lockOwner, chi
         }}
       >
         {childrenArr[2]}
-        {isLocked && (
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(9, 13, 26, 0.8)',
-            backdropFilter: 'blur(3px)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            borderRadius: '16px',
-            border: '1px solid rgba(251, 191, 36, 0.3)',
-            color: '#fff',
-            padding: '20px',
-            textAlign: 'center',
-            fontFamily: '"Outfit", "Inter", sans-serif'
-          }}>
-            <Loader2 size={32} className="animate-spin" style={{ color: 'var(--vinuni-gold)', marginBottom: '12px' }} />
-            <h4 style={{ margin: '0 0 6px 0', color: 'var(--vinuni-gold)', fontWeight: 800 }}>Chương học đang khóa</h4>
-            <p style={{ margin: 0, fontSize: '12.5px', color: '#cbd5e1', maxWidth: '300px', lineHeight: '1.4' }}>
-              Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo chương này. Giao diện tạm thời khóa chỉnh sửa để tránh ghi đè dữ liệu.
-            </p>
+        {isMaterialsLocked && (
+          <div className="odin-lock-overlay">
+            <div className="odin-lock-content">
+              <Loader2 size={24} className="animate-spin" style={{ color: 'var(--vinuni-gold)' }} />
+              <h4 className="odin-lock-title">Khu vực bị khóa</h4>
+              <p className="odin-lock-desc">
+                Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo nội dung bài giảng cho chương này. Giao diện bị khóa để tránh ghi đè dữ liệu.
+              </p>
+            </div>
           </div>
         )}
       </div>

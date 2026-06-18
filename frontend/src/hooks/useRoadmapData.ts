@@ -160,6 +160,7 @@ export function useRoadmapData(course: Course) {
         }
       }));
       setWorkspaceMessage('AI đã sinh học liệu bài giảng thành công!');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
     } catch (err: any) {
       console.error(err);
       setWorkspaceError(err.response?.data?.detail || 'Lỗi khi AI sinh học liệu.');
@@ -183,6 +184,7 @@ export function useRoadmapData(course: Course) {
       setQuestions(qRes.data || []);
       setLocalQuestions((qRes.data || []).filter((q: any) => q.chapter_id === chapterId));
       setWorkspaceMessage('AI đã sinh thành công 5 câu hỏi trắc nghiệm!');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
     } catch (err: any) {
       console.error(err);
       setWorkspaceError(err.response?.data?.detail || 'Lỗi khi AI sinh câu hỏi.');
@@ -269,6 +271,7 @@ export function useRoadmapData(course: Course) {
         }
       }));
       setWorkspaceMessage('Lưu học liệu bài giảng thành công!');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
       setTimeout(() => setWorkspaceNode(null), 1000);
     } catch (err: any) {
       console.error(err);
@@ -305,6 +308,7 @@ export function useRoadmapData(course: Course) {
       setClos(res.data);
       
       setWorkspaceMessage('Cập nhật danh sách CLOs môn học thành công!');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
       setTimeout(() => setWorkspaceNode(null), 1000);
     } catch (err: any) {
       console.error(err);
@@ -355,6 +359,7 @@ export function useRoadmapData(course: Course) {
         setLocalQuestions(prev => prev.map(item => item.id === q.id ? res.data : item));
         setWorkspaceMessage('Cập nhật câu hỏi thành công!');
       }
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
       setEditingQuestion(null);
     } catch (err: any) {
       console.error(err);
@@ -371,6 +376,7 @@ export function useRoadmapData(course: Course) {
       setQuestions(prev => prev.filter(item => item.id !== qId));
       setLocalQuestions(prev => prev.filter(item => item.id !== qId));
       setWorkspaceMessage('Đã xóa câu hỏi.');
+      window.dispatchEvent(new CustomEvent('db-state-changed'));
     } catch (err) {
       console.error(err);
       setWorkspaceError('Lỗi khi xóa câu hỏi.');

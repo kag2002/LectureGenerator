@@ -18,7 +18,8 @@ import {
   Home,
   Activity,
   ArrowLeft,
-  Shield
+  Shield,
+  Trash2
 } from 'lucide-react';
 import { Course } from '@/types';
 import FlowSteps from './FlowSteps';
@@ -110,6 +111,7 @@ export default function AppShell({
     { view: 'matrix_dashboard', label: 'Ma trận CLO-Bloom', icon: <BarChart2 size={18} /> },
     { view: 'knowledge_base', label: 'Thư viện RAG', icon: <Library size={18} /> },
     { view: 'ai_monitor', label: 'Giám sát AI', icon: <Activity size={18} /> },
+    { view: 'trash', label: 'Thùng rác', icon: <Trash2 size={18} /> },
   ];
 
   const menuItems = (isAdmin && (course?.id === 0 || activeView === 'admin_dashboard'))

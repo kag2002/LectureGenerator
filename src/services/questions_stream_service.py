@@ -56,7 +56,7 @@ def generate_questions_stream_generator(
             }
         return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-    yield send("stage", {"stage": 1, "message": "✅ Đang truy xuất Vector DB (RAG) và các chuẩn đầu ra CLO..."})
+    yield send("stage", {"stage": 1, "message": "Đang truy xuất Vector DB (RAG) và các chuẩn đầu ra CLO..."})
 
     # RAG search
     query_str = f"{clo_context} {chapter_context}"
@@ -68,7 +68,7 @@ def generate_questions_stream_generator(
 
     yield send(
         "stage",
-        {"stage": 2, "message": f"✅ RAG tìm thấy {len(rag_hits)} đoạn trích. Đang gọi mô hình AI (Qwen/Gemini)..."},
+        {"stage": 2, "message": f"RAG tìm thấy {len(rag_hits)} đoạn trích. Đang gọi mô hình AI (Qwen/Gemini)..."},
     )
 
     generator_system_prompt = build_generator_system_prompt_compact(count=count, bloom_level=bloom_level)
@@ -111,7 +111,7 @@ def generate_questions_stream_generator(
                 "stage",
                 {
                     "stage": 3,
-                    "message": f"⚡ Chế độ tạo nhanh: Bỏ qua bước tự sửa lỗi. Đang lưu {len(raw_questions)} câu hỏi vào CSDL...",
+                    "message": f"Chế độ tạo nhanh: Bỏ qua bước tự sửa lỗi. Đang lưu {len(raw_questions)} câu hỏi vào CSDL...",
                 },
             )
             for idx, q in enumerate(raw_questions):
@@ -153,7 +153,7 @@ def generate_questions_stream_generator(
         else:
             yield send(
                 "stage",
-                {"stage": 3, "message": f"✅ Generator sinh xong {len(raw_questions)} câu. Bắt đầu Self-Correction..."},
+                {"stage": 3, "message": f"Generator sinh xong {len(raw_questions)} câu. Bắt đầu Self-Correction..."},
             )
             solver_system_prompt = SOLVER_SYSTEM_PROMPT_COMPACT
 
@@ -162,7 +162,7 @@ def generate_questions_stream_generator(
                     "stage",
                     {
                         "stage": 3,
-                        "message": f"⏳ Đang tự sửa lỗi và xác minh câu {idx + 1}/{len(raw_questions)}...",
+                        "message": f"Đang tự sửa lỗi và xác minh câu {idx + 1}/{len(raw_questions)}...",
                     },
                 )
 
@@ -291,7 +291,7 @@ def generate_questions_stream_generator(
     yield send(
         "done",
         {
-            "message": f"✅ Hoàn tất! Đã sinh và xác minh {len(saved_questions)}/{count} câu hỏi.",
+            "message": f"Hoàn tất! Đã sinh và xác minh {len(saved_questions)}/{count} câu hỏi.",
             "total": len(saved_questions),
         },
     )

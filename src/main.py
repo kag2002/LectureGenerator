@@ -34,7 +34,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from src.api import auth, chatbot, courses, export, materials, outline, questions, routes, admin, telemetry, autopilot
+from src.api import auth, chatbot, courses, export, materials, outline, questions, routes, admin, telemetry, autopilot, trash
 from src.config import get_settings
 from src.database.session import Base, engine
 from src.services import web_search_agent
@@ -366,6 +366,7 @@ app.include_router(export.router)
 app.include_router(admin.router)
 app.include_router(telemetry.router)
 app.include_router(autopilot.router)
+app.include_router(trash.router)
 
 # Register C2-App-023 default router at v1 for compatibility
 app.include_router(routes.router, prefix="/api/v1")

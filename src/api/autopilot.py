@@ -265,7 +265,7 @@ async def autopilot_undo(
     deleted_questions = 0
     deleted_materials = 0
 
-    # 1. Rollback questions (chỉ xóa những câu hỏi chưa bị sửa tay: updated_at == created_at)
+    # 1. Rollback questions (chỉ xóa những câu hỏi chưa bị sửa tay: created_by == 'odin_autopilot')
     if "questions" in affected and affected["questions"]:
         q_ids = affected["questions"]
         questions_to_check = db.query(Question).filter(
@@ -273,27 +273,19 @@ async def autopilot_undo(
             Question.course_id == course_id
         ).all()
         for q in questions_to_check:
-            is_unmodified = True
-            if q.updated_at and q.created_at:
-                diff = abs((q.updated_at - q.created_at).total_seconds())
-                if diff > 1.0:
-                    is_unmodified = False
+            is_unmodified = (q.created_by == "odin_autopilot")
             if is_unmodified:
                 db.delete(q)
                 deleted_questions += 1
 
-    # 2. Rollback chapter materials (chỉ xóa những slide/kịch bản chưa bị sửa tay: updated_at == created_at)
+    # 2. Rollback chapter materials (chỉ xóa những slide/kịch bản chưa bị sửa tay: created_by == 'odin_autopilot')
     if "materials" in affected and affected["materials"]:
         cm_ids = affected["materials"]
         materials_to_check = db.query(ChapterMaterial).filter(
             ChapterMaterial.id.in_(cm_ids)
         ).all()
         for cm in materials_to_check:
-            is_unmodified = True
-            if cm.updated_at and cm.created_at:
-                diff = abs((cm.updated_at - cm.created_at).total_seconds())
-                if diff > 1.0:
-                    is_unmodified = False
+            is_unmodified = (cm.created_by == "odin_autopilot")
             if is_unmodified:
                 db.delete(cm)
                 deleted_materials += 1
