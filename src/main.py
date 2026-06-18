@@ -114,6 +114,25 @@ try:
         logger.info("[MIGRATION] Adding column 'recommended_readings' to table 'courses'...")
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE courses ADD COLUMN recommended_readings TEXT"))
+    if "deleted_at" not in columns:
+        logger.info("[MIGRATION] Adding column 'deleted_at' to table 'courses'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE courses ADD COLUMN deleted_at DATETIME"))
+    if "is_deleted" not in columns:
+        logger.info("[MIGRATION] Adding column 'is_deleted' to table 'courses'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE courses ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
+
+    # Chapters
+    chapter_columns = [col["name"] for col in inspector.get_columns("chapters")]
+    if "deleted_at" not in chapter_columns:
+        logger.info("[MIGRATION] Adding column 'deleted_at' to table 'chapters'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chapters ADD COLUMN deleted_at DATETIME"))
+    if "is_deleted" not in chapter_columns:
+        logger.info("[MIGRATION] Adding column 'is_deleted' to table 'chapters'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE chapters ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
 
     # RAGDocument fields
     rag_doc_columns = [col["name"] for col in inspector.get_columns("rag_documents")]
@@ -151,6 +170,14 @@ try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE questions ADD COLUMN updated_at DATETIME"))
             conn.execute(text("UPDATE questions SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
+    if "deleted_at" not in q_columns:
+        logger.info("[MIGRATION] Adding column 'deleted_at' to table 'questions'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE questions ADD COLUMN deleted_at DATETIME"))
+    if "is_deleted" not in q_columns:
+        logger.info("[MIGRATION] Adding column 'is_deleted' to table 'questions'...")
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE questions ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
 
     # ChapterMaterials status & created_by & updated_at
     cm_columns = [col["name"] for col in inspector.get_columns("chapter_materials")]
