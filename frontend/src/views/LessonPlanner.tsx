@@ -20,7 +20,7 @@ import { Course, CLO, Chapter } from '@/types';
 import '../styles/LessonPlanner.css';
 import { useLessonPlannerState } from '../hooks/useLessonPlannerState';
 import { useUILock } from '../context/UILockContext';
-import { useDirtyState } from '../hooks/useDirtyState';
+import { useDirtyState } from '@/hooks/useDirtyState';
 
 export interface LessonPlannerProps {
   course: Course;

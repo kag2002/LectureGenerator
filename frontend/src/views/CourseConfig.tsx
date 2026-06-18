@@ -4,7 +4,7 @@ import client from '../api/client';
 import FlowSteps from '../components/FlowSteps';
 import { ArrowLeft, ArrowRight, Upload, BookOpen, Trash2, Plus, CheckCircle, RefreshCw } from 'lucide-react';
 import { Course, CLO } from '@/types';
-import { useDirtyState } from '../hooks/useDirtyState';
+import { useDirtyState } from '@/hooks/useDirtyState';
 import '../styles/CourseConfig.css';
 
 export interface CourseConfigProps {

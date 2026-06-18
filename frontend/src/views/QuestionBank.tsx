@@ -11,7 +11,7 @@ import { ArrowLeft, BookOpen, BarChart2, Download, Plus, Sparkles, Map, Target, 
 import { Course, CLO, Chapter, Question } from '@/types';
 import '../styles/QuestionBank.css';
 import { useUILock } from '../context/UILockContext';
-import { useDirtyState } from '../hooks/useDirtyState';
+import { useDirtyState } from '@/hooks/useDirtyState';
 
 export interface QuestionBankProps {
   course: Course;
