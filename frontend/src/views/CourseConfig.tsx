@@ -4,6 +4,7 @@ import client from '../api/client';
 import FlowSteps from '../components/FlowSteps';
 import { ArrowLeft, ArrowRight, Upload, BookOpen, Trash2, Plus, CheckCircle, RefreshCw } from 'lucide-react';
 import { Course, CLO } from '@/types';
+import { useDirtyState } from '../hooks/useDirtyState';
 import '../styles/CourseConfig.css';
 
 export interface CourseConfigProps {
@@ -54,12 +55,19 @@ export default function CourseConfig({
   const [streamLog, setStreamLog] = useState('');
   const [streamStage, setStreamStage] = useState(0); // 0 -> 4
 
+  const [isDirty, setIsDirty] = useState(false);
+  useDirtyState(isDirty, () => {
+    handleSaveClos();
+    return true;
+  });
+
   // Lấy các CLO hiện có của môn học từ API
   const fetchClos = async () => {
     setLoading(true);
     try {
       const response = await client.get(`/api/courses/${course.id}/clos`);
       setClos(response.data);
+      setIsDirty(false);
     } catch (err) {
       console.error(err);
       setError('Không thể lấy danh sách CLO hiện tại.');
@@ -74,13 +82,15 @@ export default function CourseConfig({
 
   useEffect(() => {
     const handleDbChanged = () => {
-      fetchClos();
+      if (!isDirty) {
+        fetchClos();
+      }
     };
     window.addEventListener('db-state-changed', handleDbChanged);
     return () => {
       window.removeEventListener('db-state-changed', handleDbChanged);
     };
-  }, [course.id]);
+  }, [course.id, isDirty]);
 
   useEffect(() => {
     const handleTriggerParse = (e: Event) => {
@@ -102,6 +112,7 @@ export default function CourseConfig({
     setError('');
     setMessage('');
     setLoading(true);
+    setIsDirty(false);
     setStreamLog('🚀 Đang kết nối tới AI...');
     setStreamStage(0);
     setClos([]); // Xóa danh sách cũ để cập nhật mới từ stream
@@ -279,11 +290,13 @@ export default function CourseConfig({
       ...clos,
       { id: Date.now(), clo_code: newCode, description: '', bloom_level: 2 }
     ]);
+    setIsDirty(true);
   };
 
   // Xóa một dòng CLO
   const handleRemoveRow = (index: number) => {
     setClos(clos.filter((_, idx) => idx !== index));
+    setIsDirty(true);
   };
 
   // Cập nhật giá trị một trường của CLO trong danh sách
@@ -294,6 +307,7 @@ export default function CourseConfig({
       [field]: value
     };
     setClos(updated);
+    setIsDirty(true);
   };
 
   // Lưu danh sách CLO xuống DB
@@ -439,7 +453,10 @@ export default function CourseConfig({
                 </label>
                 <textarea
                   value={requiredTextbooks}
-                  onChange={(e) => setRequiredTextbooks(e.target.value)}
+                  onChange={(e) => {
+                    setRequiredTextbooks(e.target.value);
+                    setIsDirty(true);
+                  }}
                   placeholder="Ví dụ: Cấu trúc dữ liệu & Giải thuật - Nguyễn Văn A - NXB Đại Học Quốc Gia"
                   className="course-config-textarea course-config-textbooks-textarea"
                 />
@@ -450,7 +467,10 @@ export default function CourseConfig({
                 </label>
                 <textarea
                   value={recommendedReadings}
-                  onChange={(e) => setRecommendedReadings(e.target.value)}
+                  onChange={(e) => {
+                    setRecommendedReadings(e.target.value);
+                    setIsDirty(true);
+                  }}
                   placeholder="Ví dụ: Introduction to Algorithms - Cormen et al."
                   className="course-config-textarea course-config-textbooks-textarea"
                 />
