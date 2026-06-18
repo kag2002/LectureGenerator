@@ -1,12 +1,11 @@
-import os
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from sqlalchemy import func, text
+from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import User, ChatMessage
-from src.database.session import get_db, engine
 from src.config import get_settings
+from src.database.models import ChatMessage, User
+from src.database.session import engine, get_db
 from src.utils.telemetry import get_system_metrics, get_traffic_summary
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -61,28 +60,28 @@ def read_ai_costs(db: Session = Depends(get_db)):
             func.sum(ChatMessage.total_tokens).label("total_total_tokens"),
             func.avg(ChatMessage.latency_ms).label("avg_latency_ms")
         ).filter(ChatMessage.total_tokens > 0).first()
-        
+
         total_messages = stats.total_messages or 0
         prompt_tokens = stats.total_prompt_tokens or 0
         completion_tokens = stats.total_completion_tokens or 0
         total_tokens = stats.total_total_tokens or 0
         avg_latency = round(stats.avg_latency_ms or 0.0, 2)
-        
+
         # Ước tính chi phí (giả lập dựa trên đơn giá trung bình $0.00015/1K tokens của gpt-4o-mini / Gemini)
         estimated_cost_usd = round((total_tokens / 1000) * 0.00015, 6)
-        
+
         # Lấy lịch sử token theo ngày
         daily_stats_query = db.query(
             func.strftime("%Y-%m-%d", ChatMessage.created_at).label("day"),
             func.sum(ChatMessage.total_tokens).label("tokens"),
             func.count(ChatMessage.id).label("msg_count")
         ).group_by("day").order_by("day").all()
-        
+
         daily_usage = [
             {"date": row.day, "tokens": row.tokens or 0, "messages": row.msg_count or 0}
             for row in daily_stats_query
         ]
-        
+
         return {
             "total_messages": total_messages,
             "prompt_tokens": prompt_tokens,
@@ -119,7 +118,7 @@ def optimize_database():
     db_url = settings.database_url
     if not db_url.startswith("sqlite"):
         return {"status": "skipped", "message": "Chức năng VACUUM chỉ khả dụng với SQLite."}
-        
+
     try:
         # Thực hiện optimize bằng cách chạy lệnh VACUUM
         with engine.begin() as conn:
@@ -137,27 +136,27 @@ def read_agent_memory(db: Session = Depends(get_db)):
     """Trả về danh sách bộ nhớ trải nghiệm slide (episodic memory) của từng user."""
     try:
         from src.services.memory_service import episodic_collection
-        
+
         # Lấy tất cả tài liệu trong ChromaDB collection
         res = episodic_collection.get()
-        
+
         memories = []
         if res and res.get("ids"):
             ids = res["ids"]
             documents = res.get("documents") or []
             metadatas = res.get("metadatas") or []
-            
+
             for i in range(len(ids)):
                 meta = metadatas[i] if i < len(metadatas) else {}
                 prompt = documents[i] if i < len(documents) else ""
-                
+
                 user_id = meta.get("user_id", 0)
                 user_email = "Hệ thống"
                 if user_id:
                     user_obj = db.query(User).filter(User.id == user_id).first()
                     if user_obj:
                         user_email = user_obj.email
-                
+
                 memories.append({
                     "id": ids[i],
                     "user_id": user_id,
@@ -168,7 +167,7 @@ def read_agent_memory(db: Session = Depends(get_db)):
                     "layout": meta.get("layout", "standard_list"),
                     "content": meta.get("revised_content", ""),
                 })
-        
+
         # Sắp xếp theo thứ tự mới nhất (ID có timestamp)
         memories.sort(key=lambda x: x["id"], reverse=True)
         return memories

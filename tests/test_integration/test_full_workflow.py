@@ -6,10 +6,10 @@ Flow: Register → Login → Create Course → Add CLOs → Generate Outline →
 All external services (LLM, RAG, ChromaDB) are mocked.
 """
 
-import json
+
+from unittest.mock import patch
 
 import pytest
-from unittest.mock import patch
 
 
 @pytest.mark.asyncio

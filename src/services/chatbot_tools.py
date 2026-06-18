@@ -18,7 +18,7 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
                 Chapter.course_id == course_id,
                 Course.user_id == user_id,
                 Chapter.sort_order == ch_id_int,
-                Chapter.is_active == True
+                Chapter.is_active
             ).first()
         )
         if chapter:
@@ -33,7 +33,7 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
             lambda: db.query(Chapter).join(Course).filter(
                 Chapter.course_id == course_id,
                 Course.user_id == user_id,
-                Chapter.is_active == True
+                Chapter.is_active
             ).order_by(Chapter.sort_order.asc()).all()
         )
         if 0 <= ch_id_int - 1 < len(all_ch):
@@ -49,7 +49,7 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
                 Chapter.id == ch_id_int,
                 Course.id == course_id,
                 Course.user_id == user_id,
-                Chapter.is_active == True
+                Chapter.is_active
             ).first()
         )
         if chapter:
@@ -63,7 +63,7 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
             lambda: db.query(Chapter).join(Course).filter(
                 Chapter.course_id == course_id,
                 Course.user_id == user_id,
-                Chapter.is_active == True,
+                Chapter.is_active,
                 Chapter.title.ilike(f"%{chapter_id}%")
             ).first()
         )

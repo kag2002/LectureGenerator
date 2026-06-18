@@ -4,9 +4,8 @@ Covers materials export (Markdown), questions export (Markdown),
 and lesson plan export (HTML).
 """
 
-import pytest
-from unittest.mock import patch
 
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════
 # EXPORT MATERIALS (Markdown)

@@ -1,7 +1,6 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -9,7 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import User, Course, OdinLock, OdinActionLog, Question, ChapterMaterial
+from src.database.models import ChapterMaterial, Course, OdinActionLog, OdinLock, Question, User
 from src.database.session import get_db
 
 router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
@@ -17,7 +16,7 @@ router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
 # --- IN-MEMORY SSE BROADCASTER ---
 class NotificationManager:
     def __init__(self):
-        self._listeners: List[asyncio.Queue] = []
+        self._listeners: list[asyncio.Queue] = []
 
     def subscribe(self) -> asyncio.Queue:
         q = asyncio.Queue()
@@ -169,7 +168,7 @@ async def acquire_lock(
             existing_lock.expires_at = expires_at
             db.commit()
             db.refresh(existing_lock)
-            
+
             await publish_autopilot_event(course_id, {
                 "event": "lock_renewed",
                 "context_key": req.context_key,

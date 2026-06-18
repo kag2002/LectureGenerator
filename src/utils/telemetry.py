@@ -1,9 +1,8 @@
 import os
-import time
 from collections import deque
 from datetime import datetime, timedelta
+
 import psutil
-from sqlalchemy import text
 
 # Ring buffer to store the last 1000 API requests
 # Format: {timestamp, method, path, status_code, latency_ms, client_ip}
@@ -38,12 +37,12 @@ def record_system_snapshot(db_url: str):
         metrics = get_system_metrics(db_url)
         cpu_p = metrics["cpu"]["percent"]
         ram_p = metrics["ram"]["percent"]
-        
+
         # RPM trong chu kỳ 60 giây vừa rồi
         current_reqs = request_counter
         rpm = current_reqs - last_snapshot_requests
         last_snapshot_requests = current_reqs
-        
+
         system_history.append({
             "timestamp": datetime.utcnow().isoformat(),
             "cpu_percent": cpu_p,
@@ -57,7 +56,7 @@ def get_system_metrics(db_url: str) -> dict:
     """Thu thập thông số phần cứng hiện tại và kích thước database."""
     # CPU usage
     cpu_percent = psutil.cpu_percent(interval=None)
-    
+
     # RAM usage
     ram = psutil.virtual_memory()
     ram_total_gb = round(ram.total / (1024 ** 3), 2)
@@ -76,7 +75,7 @@ def get_system_metrics(db_url: str) -> dict:
         db_path = db_url.replace("sqlite:///", "")
         if os.path.exists(db_path):
             db_size_mb = round(os.path.getsize(db_path) / (1024 * 1024), 2)
-    
+
     return {
         "cpu": {
             "percent": cpu_percent,
@@ -103,9 +102,9 @@ def get_system_metrics(db_url: str) -> dict:
 def get_traffic_summary(time_window_minutes: int = 60) -> dict:
     """Tổng hợp traffic logs trong khoảng thời gian nhất định (mặc định là 60 phút)."""
     cutoff = datetime.utcnow() - timedelta(minutes=time_window_minutes)
-    
+
     recent_requests = [req for req in traffic_registry if req["timestamp"] >= cutoff]
-    
+
     total_requests = len(recent_requests)
     if total_requests == 0:
         return {
@@ -115,10 +114,10 @@ def get_traffic_summary(time_window_minutes: int = 60) -> dict:
             "requests_per_minute": 0.0,
             "slow_endpoints": []
         }
-        
+
     total_latency = sum(req["latency_ms"] for req in recent_requests)
     avg_latency = round(total_latency / total_requests, 2)
-    
+
     # Calculate Latency Percentiles (p50, p90, p99)
     latencies = sorted([req["latency_ms"] for req in recent_requests])
     n = len(latencies)
@@ -128,7 +127,7 @@ def get_traffic_summary(time_window_minutes: int = 60) -> dict:
         p99 = round(latencies[int(n * 0.99)] if int(n * 0.99) < n else latencies[-1], 2)
     else:
         p50 = p90 = p99 = 0.0
-        
+
     # Status codes counter
     status_codes = {"2xx": 0, "3xx": 0, "4xx": 0, "5xx": 0}
     for req in recent_requests:
@@ -141,10 +140,10 @@ def get_traffic_summary(time_window_minutes: int = 60) -> dict:
             status_codes["4xx"] += 1
         elif 500 <= code < 600:
             status_codes["5xx"] += 1
-            
+
     # Calculate requests per minute (rpm)
     rpm = round(total_requests / time_window_minutes, 2)
-    
+
     # Identify top 5 slow endpoints
     path_latencies = {}
     for req in recent_requests:
@@ -152,7 +151,7 @@ def get_traffic_summary(time_window_minutes: int = 60) -> dict:
         if path not in path_latencies:
             path_latencies[path] = []
         path_latencies[path].append(req["latency_ms"])
-        
+
     slow_endpoints = []
     for path, latencies in path_latencies.items():
         avg_path_lat = sum(latencies) / len(latencies)
@@ -162,10 +161,10 @@ def get_traffic_summary(time_window_minutes: int = 60) -> dict:
             "avg_latency_ms": round(avg_path_lat, 2),
             "max_latency_ms": round(max(latencies), 2)
         })
-        
+
     # Sort by average latency descending
     slow_endpoints.sort(key=lambda x: x["avg_latency_ms"], reverse=True)
-    
+
     return {
         "total_requests": total_requests,
         "average_latency_ms": avg_latency,

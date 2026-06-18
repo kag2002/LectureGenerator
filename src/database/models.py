@@ -1,6 +1,7 @@
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, func, CheckConstraint, event
-from sqlalchemy.orm import relationship, Session, with_loader_criteria, Query
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String, Text, event, func
+from sqlalchemy.orm import Query, Session, relationship, with_loader_criteria
 
 from src.database.session import Base
 
@@ -270,14 +271,14 @@ class AIGenerationTrace(Base):
     chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
     clo_id = Column(Integer, ForeignKey("clos.id", ondelete="SET NULL"), nullable=True, index=True)
     bloom_level = Column(Integer, nullable=True)
-    
+
     prompt = Column(Text, nullable=False)
     proposed_content = Column(Text, nullable=True)  # Nội dung slide AI tạo ra ban đầu
     edited_content = Column(Text, nullable=True)  # Nội dung slide người dùng sửa lại
-    
+
     rating = Column(Integer, nullable=True)  # 1-5 sao
     feedback = Column(Text, nullable=True)  # Lý do từ chối/góp ý
-    
+
     created_at = Column(DateTime, server_default=func.now())
 
     # Quan hệ
@@ -332,9 +333,9 @@ def _intercept_deletes(session, flush_context, instances):
         if isinstance(obj, SoftDeleteMixin):
             session.add(obj)  # Add back to session as persistent/dirty
             obj.is_deleted = True
-            now_time = datetime.now(timezone.utc).replace(tzinfo=None)
+            now_time = datetime.now(UTC).replace(tzinfo=None)
             obj.deleted_at = now_time
-            
+
             # Cascade soft-delete to child elements
             if isinstance(obj, Course):
                 session.query(Chapter).filter(Chapter.course_id == obj.id).update(
@@ -361,7 +362,7 @@ def _soft_delete_query(self, synchronize_session="evaluate"):
             return self.update(
                 {
                     "is_deleted": True,
-                    "deleted_at": datetime.now(timezone.utc).replace(tzinfo=None),
+                    "deleted_at": datetime.now(UTC).replace(tzinfo=None),
                 },
                 synchronize_session=synchronize_session,
             )

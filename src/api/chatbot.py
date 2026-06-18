@@ -727,14 +727,15 @@ def direct_action_stream(
         def send(event: str, data: dict) -> str:
             return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
-        from src.database.models import OdinLock, OdinActionLog, Chapter, CLO, ChapterMaterial, Question
-        from src.api.autopilot import publish_autopilot_event
         from datetime import datetime, timedelta
+
+        from src.api.autopilot import publish_autopilot_event
+        from src.database.models import CLO, Chapter, ChapterMaterial, OdinActionLog, OdinLock, Question
 
         async def acquire_lock(context_key: str, seconds: int = 30) -> bool:
             now = datetime.now()
             expires_at = now + timedelta(seconds=seconds)
-            
+
             db.query(OdinLock).filter(
                 OdinLock.course_id == course_id,
                 OdinLock.context_key == context_key,
@@ -859,7 +860,7 @@ def direct_action_stream(
                 await start_heartbeat(active_lock_key)
 
                 yield send("stage", {"message": "Đang soạn storyboard slide..."})
-                
+
                 from src.services.material_orchestrator import MaterialOrchestrator
                 chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
                 if not chapter:
@@ -904,13 +905,13 @@ def direct_action_stream(
                 await start_heartbeat(active_lock_key)
 
                 yield send("stage", {"message": "Đang khởi tạo trình sinh tài liệu..."})
-                
+
                 from src.services.materials_stream_service import generate_chapter_materials_stream_generator
                 chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
                 if not chapter:
                     yield send("error", {"message": "Không tìm thấy chương học"})
                     return
-                    
+
                 stream_gen = generate_chapter_materials_stream_generator(
                     chapter_id=int(chapter_id),
                     req_language="vi",
@@ -923,7 +924,7 @@ def direct_action_stream(
                     course_id=course_id,
                     user_id=user_id
                 )
-                
+
                 async for event_str in stream_gen:
                     if event_str.startswith("event: done"):
                         done_successfully = True
@@ -959,12 +960,12 @@ def direct_action_stream(
                 bloom_level = params.get("bloom_level") or 3
                 count = int(params.get("count", 5))
                 yield send("stage", {"message": f"Đang tạo {count} câu hỏi MCQ..."})
-                
+
                 from src.services.questions_stream_service import generate_questions_stream_generator
                 chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
                 course = db.query(Course).filter(Course.id == course_id).first()
                 clo = db.query(CLO).filter(CLO.id == clo_ids[0]).first() if clo_ids else None
-                
+
                 stream_gen = generate_questions_stream_generator(
                     course_id=course_id,
                     chapter_id=int(chapter_id),
@@ -977,7 +978,7 @@ def direct_action_stream(
                     user_id=user_id,
                     course_name=course.course_name if course else "Môn học"
                 )
-                
+
                 for event_str in stream_gen:
                     if event_str.startswith("event: done"):
                         done_successfully = True
@@ -994,7 +995,7 @@ def direct_action_stream(
 
                 active_lock_key = f"chapter_{chapter_id}"
                 if not await acquire_lock(active_lock_key, 30):
-                    yield send("error", {"message": f"Không thể kích hoạt Autopilot. Chương học đang bị khóa."})
+                    yield send("error", {"message": "Không thể kích hoạt Autopilot. Chương học đang bị khóa."})
                     return
                 await start_heartbeat(active_lock_key)
 
@@ -1127,7 +1128,7 @@ def direct_action_stream(
             await stop_heartbeat()
             if active_lock_key:
                 await release_lock(active_lock_key)
-            
+
             if not done_successfully:
                 try:
                     if cleanup_chapter_id:
@@ -1137,7 +1138,7 @@ def direct_action_stream(
                             Question.created_by == "odin_autopilot",
                             Question.created_at >= run_start_time
                         ).delete()
-                        
+
                         db.query(ChapterMaterial).filter(
                             ChapterMaterial.chapter_id == int(cleanup_chapter_id),
                             ChapterMaterial.created_by == "odin_autopilot",

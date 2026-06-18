@@ -1,7 +1,8 @@
 import pytest
-from src.main import app
+
 from src.auth import get_current_user
 from src.database.models import User
+from src.main import app
 
 mock_admin = User(email="admin@test.com", full_name="Admin User", role="admin")
 mock_user = User(email="user@test.com", full_name="Regular User", role="user")
@@ -46,7 +47,7 @@ async def test_export_finetune_dataset_security(client):
     # Không thể xuất dữ liệu nếu không có quyền admin
     def override_get_current_user():
         return mock_user
-        
+
     app.dependency_overrides[get_current_user] = override_get_current_user
     try:
         response = await client.get("/api/telemetry/admin/analytics/finetune-dataset")
@@ -59,7 +60,7 @@ async def test_export_finetune_dataset_success(client):
     # Xuất thành công khi đăng nhập là admin
     def override_get_current_user():
         return mock_admin
-        
+
     app.dependency_overrides[get_current_user] = override_get_current_user
     try:
         response = await client.get("/api/telemetry/admin/analytics/finetune-dataset")

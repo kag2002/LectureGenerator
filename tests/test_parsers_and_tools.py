@@ -1,9 +1,11 @@
 import io
-import pytest
-from unittest.mock import patch, MagicMock
 
 # Set TESTING to 1 to bypass actual sentence-transformers loading in vector_db if imported
 import os
+from unittest.mock import patch
+
+import pytest
+
 os.environ["TESTING"] = "1"
 
 
@@ -83,7 +85,7 @@ async def test_web_search_ingest_route(client, auth_headers, test_course, db):
     # Patch web_search_tavily, add_document_vector, and ChromaDB collection methods to prevent real operations
     with patch("src.services.web_search_agent.web_search_tavily", return_value=mock_search_results) as mock_search, \
          patch("src.services.web_search_agent.add_document_vector") as mock_add_vector, \
-         patch("src.database.vector_db.collection") as mock_collection:
+         patch("src.database.vector_db.collection"):
 
         response = await client.post(
             f"/api/courses/{course_id}/web-search-ingest",

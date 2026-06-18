@@ -4,9 +4,7 @@ Covers input validation (cheating detection, academic boundary)
 and output validation (grade promises, unprofessional terms).
 """
 
-import pytest
 from src.services.chatbot_guardrails import validate_input, validate_output
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INPUT GUARDRAILS

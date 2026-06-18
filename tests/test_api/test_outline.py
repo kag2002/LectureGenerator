@@ -3,9 +3,9 @@ Tests for /api/courses/{id}/chapters (Outline) endpoints.
 Covers CRUD, AI outline generation (mocked LLM), and reorder.
 """
 
-import pytest
 from unittest.mock import patch
 
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CHAPTER CRUD

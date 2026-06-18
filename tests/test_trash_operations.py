@@ -1,6 +1,8 @@
 import pytest
 from sqlalchemy.orm import Session
-from src.database.models import Course, Chapter, Question
+
+from src.database.models import Chapter, Question
+
 
 @pytest.mark.asyncio
 async def test_trash_retrieval_and_lifecycle(client, auth_headers, db: Session, test_course):

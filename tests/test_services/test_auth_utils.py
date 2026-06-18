@@ -4,6 +4,7 @@ Covers password hashing, JWT token creation, and token verification.
 """
 
 import pytest
+
 from src.auth import (
     create_access_token,
     get_password_hash,
@@ -45,6 +46,7 @@ class TestJWTToken:
 
     def test_create_and_decode_token(self):
         import jwt
+
         from src.config import get_settings
 
         settings = get_settings()
@@ -58,6 +60,7 @@ class TestJWTToken:
 
     def test_token_contains_expiration(self):
         import jwt
+
         from src.config import get_settings
 
         settings = get_settings()
@@ -71,6 +74,7 @@ class TestJWTToken:
         from datetime import timedelta
 
         import jwt
+
         from src.config import get_settings
 
         settings = get_settings()
@@ -86,6 +90,7 @@ class TestJWTToken:
         from datetime import timedelta
 
         import jwt
+
         from src.config import get_settings
 
         settings = get_settings()

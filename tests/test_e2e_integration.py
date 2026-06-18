@@ -1,7 +1,9 @@
 import os
 import re
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from src.database.models import CLO
 
 # Set TESTING to 1 to bypass actual sentence-transformers loading in vector_db if imported

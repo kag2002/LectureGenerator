@@ -3,11 +3,10 @@ Tests for /api/courses/{id}/questions endpoints.
 Covers CRUD, AI generation (mocked), isomorphic generation, and matrix coverage.
 """
 
-import json
 
-import pytest
 from unittest.mock import patch
 
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════
 # QUESTION CRUD

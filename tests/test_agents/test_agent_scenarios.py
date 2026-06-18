@@ -1,10 +1,11 @@
-import json
-import pytest
 from unittest.mock import patch
-from sqlalchemy.orm import Session
+
+import pytest
+
 from src.agents.graph import agent
-from src.database.models import User, Course, CLO, Chapter, ChapterMaterial, Question
+from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
 from src.database.session import SessionLocal
+
 
 @pytest.fixture()
 def setup_db_records():
@@ -56,9 +57,9 @@ def setup_db_records():
         "chapter_id": chapter.id,
         "clo_id": clo.id,
     }
-    
+
     db.close()
-    
+
     yield data
 
     # Cleanup
@@ -275,7 +276,7 @@ async def test_scenario_list_chapters(mock_env, setup_db_records):
 @pytest.mark.asyncio
 async def test_scenario_blocked_output(setup_db_records):
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_choice = MagicMock()
     mock_choice.message.content = "Đảm bảo khóa học này sẽ chắc chắn đỗ 100%."
     mock_choice.message.tool_calls = None
@@ -298,7 +299,7 @@ async def test_scenario_blocked_output(setup_db_records):
         with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
-            
+
             assert result["status"] == "blocked"
             assert "rút lại" in result["final_text"] or "chất lượng" in result["final_text"]
     finally:
@@ -389,7 +390,7 @@ async def test_scenario_precondition_clos_only(mock_env, setup_db_records):
 @pytest.mark.asyncio
 async def test_scenario_history_summarization_flow():
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_choice = MagicMock()
     mock_choice.message.content = "Tóm tắt: Soạn bài giảng cây nhị phân."
     mock_choice.message.tool_calls = None
@@ -421,7 +422,7 @@ async def test_scenario_history_summarization_flow():
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             mock_get_graph_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
-            
+
             assert "summary_history" in result
             assert result["summary_history"] == "Tóm tắt: Soạn bài giảng cây nhị phân."
             assert any("[TÓM TẮT LỊCH SỬ HỘI THOẠI TRƯỚC ĐÓ]" in m["content"] for m in result["messages"] if m["role"] == "system")
@@ -432,7 +433,7 @@ async def test_scenario_history_summarization_flow():
 @pytest.mark.asyncio
 async def test_scenario_direct_response_no_tools():
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_choice = MagicMock()
     mock_choice.message.content = "Tôi là VinUni AI Lecture Assistant, trợ lý ảo thiết kế bài giảng."
     mock_choice.message.tool_calls = None
@@ -455,7 +456,7 @@ async def test_scenario_direct_response_no_tools():
         with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
-            
+
             assert result["status"] == "answered"
             assert "trợ lý ảo" in result["final_text"]
             assert len(result["tool_calls"]) == 0
@@ -533,7 +534,7 @@ async def test_edge_case_invalid_chapter_id(mock_env, setup_db_records):
             "db": db,
         }
         # Pass an invalid string ID to generate_chapter_storyboard_action
-        with patch("src.services.chatbot_tools.execute_chatbot_tool", wraps=execute_chatbot_tool) as mock_tool:
+        with patch("src.services.chatbot_tools.execute_chatbot_tool", wraps=execute_chatbot_tool):
             result = await agent.ainvoke(state_input)
             assert result["status"] == "answered"
     finally:
@@ -588,7 +589,7 @@ async def test_edge_case_academic_violation_cheating(setup_db_records):
 
 @pytest.mark.asyncio
 async def test_edge_case_unprofessional_terms_input(setup_db_records):
-    db = SessionLocal()
+    SessionLocal()
     # Adding unprofessional terms to test output blocking triggers (e.g. vulgar words)
     from src.services.chatbot_guardrails import validate_output
     violations = validate_output("Cái này vcl thật sự")
@@ -599,7 +600,7 @@ async def test_edge_case_unprofessional_terms_input(setup_db_records):
 @pytest.mark.asyncio
 async def test_edge_case_unprofessional_output_blocking(setup_db_records):
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_choice = MagicMock()
     mock_choice.message.content = "Đồ ngu ngốc làm cái này đi."
     mock_choice.message.tool_calls = None
@@ -622,7 +623,7 @@ async def test_edge_case_unprofessional_output_blocking(setup_db_records):
         with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
-            
+
             assert result["status"] == "blocked"
             assert "thiếu chuyên nghiệp" in result["final_text"] or "rút lại" in result["final_text"]
     finally:
@@ -632,7 +633,7 @@ async def test_edge_case_unprofessional_output_blocking(setup_db_records):
 @pytest.mark.asyncio
 async def test_edge_case_max_rounds_reached(setup_db_records):
     from unittest.mock import AsyncMock, MagicMock
-    
+
     mock_choice = MagicMock()
     # LLM always responds with a tool call to simulate infinite loop
     mock_choice.message.content = "Looping"

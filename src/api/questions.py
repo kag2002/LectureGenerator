@@ -1,9 +1,9 @@
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-import logging
 
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User

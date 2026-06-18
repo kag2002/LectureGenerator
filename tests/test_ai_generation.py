@@ -6,10 +6,9 @@ Mocks service layer and LLM output to return deterministic responses immediately
 Tests error handling and fallback mechanisms when the LLM raises exceptions or returns invalid JSON.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from src.database.models import Chapter, ChapterMaterial, Question
+from unittest.mock import patch
 
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════
 # AI OUTLINE GENERATION TESTS

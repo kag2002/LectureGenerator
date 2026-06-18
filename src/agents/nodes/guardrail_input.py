@@ -1,6 +1,8 @@
 from typing import Any
+
 from src.agents.state import AgentState
 from src.services.chatbot_guardrails import validate_input
+
 
 async def guardrail_input_node(state: AgentState) -> dict[str, Any]:
     on_event = state.get("on_event")

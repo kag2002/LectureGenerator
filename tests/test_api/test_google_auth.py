@@ -1,6 +1,7 @@
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import patch, Mock
-from src.database.models import User
+
 
 @pytest.mark.asyncio
 @patch("src.api.auth.requests.get")
@@ -9,7 +10,7 @@ async def test_google_login_new_user(mock_get, client):
     from src.config import get_settings
     settings = get_settings()
     client_id = settings.google_client_id or "your-google-client-id-here.apps.googleusercontent.com"
-    
+
     mock_response = Mock()
     mock_response.status_code = 200
     mock_response.json.return_value = {
@@ -23,7 +24,7 @@ async def test_google_login_new_user(mock_get, client):
     # Call endpoint with a simulated id_token
     response = await client.post("/api/auth/google", json={"id_token": "valid_mock_token"})
     assert response.status_code == 200
-    
+
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"

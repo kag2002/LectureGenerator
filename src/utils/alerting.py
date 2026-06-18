@@ -1,13 +1,14 @@
 import time
+
 import requests
-from typing import Dict
+
 from src.config import get_settings
 from src.utils.telemetry import get_system_metrics
 
 # In-memory throttle cache: key -> timestamp of last sent alert
 # Threshold alerts will throttle to once per 30 minutes per category
 THROTTLE_INTERVAL_SEC = 1800
-last_alert_time: Dict[str, float] = {}
+last_alert_time: dict[str, float] = {}
 
 def send_slack_alert(message: str) -> bool:
     """Gửi cảnh báo tới kênh Slack qua Webhook URL."""

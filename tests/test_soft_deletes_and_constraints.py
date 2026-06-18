@@ -1,8 +1,11 @@
-import pytest
 from datetime import datetime
+
+import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from src.database.models import Course, Chapter, Question, CLO, User
+
+from src.database.models import CLO, Chapter, Course, Question, User
+
 
 def test_bloom_level_constraint_clo(db: Session):
     # 1. Create a test user and course

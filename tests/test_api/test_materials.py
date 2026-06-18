@@ -3,9 +3,9 @@ Tests for /api/courses/chapters/{id}/materials endpoints.
 Covers GET, PUT (save), DELETE, and AI material generation (mocked).
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
+import pytest
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MATERIAL CRUD

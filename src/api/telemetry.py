@@ -1,40 +1,40 @@
 import json
-from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime
 
-from src.auth import get_current_user, oauth2_scheme
-from src.database.models import User, UserEvent, AIGenerationTrace
-from src.database.session import get_db
 from src.api.admin import require_admin
+from src.auth import get_current_user, oauth2_scheme
+from src.database.models import AIGenerationTrace, UserEvent
+from src.database.session import get_db
 
 router = APIRouter(prefix="/api/telemetry", tags=["telemetry"])
 
 # --- SCHEMAS ---
 class TelemetryEventSchema(BaseModel):
-    course_id: Optional[int] = None
+    course_id: int | None = None
     event_type: str
-    element_id: Optional[str] = None
-    payload: Optional[Dict[str, Any]] = None
+    element_id: str | None = None
+    payload: dict[str, Any] | None = None
 
 class TelemetryEventBatch(BaseModel):
-    events: List[TelemetryEventSchema]
+    events: list[TelemetryEventSchema]
 
 class AIFeedbackSubmit(BaseModel):
-    course_id: Optional[int] = None
-    chapter_id: Optional[int] = None
-    clo_id: Optional[int] = None
-    bloom_level: Optional[int] = None
+    course_id: int | None = None
+    chapter_id: int | None = None
+    clo_id: int | None = None
+    bloom_level: int | None = None
     prompt: str
     proposed_content: str
-    edited_content: Optional[str] = None
-    rating: Optional[int] = None
-    feedback: Optional[str] = None
+    edited_content: str | None = None
+    rating: int | None = None
+    feedback: str | None = None
 
 # --- HELPERS FOR ASYNC DB WRITE ---
-def write_events_to_db(events: List[dict], user_id: Optional[int], db_url: str):
+def write_events_to_db(events: list[dict], user_id: int | None, db_url: str):
     """Ghi nhận danh sách events vào database trong thread ngầm (Background Task)."""
     from src.database.session import SessionLocal
     db = SessionLocal()
@@ -55,7 +55,7 @@ def write_events_to_db(events: List[dict], user_id: Optional[int], db_url: str):
     finally:
         db.close()
 
-def write_trace_to_db(trace_data: dict, user_id: Optional[int]):
+def write_trace_to_db(trace_data: dict, user_id: int | None):
     """Ghi nhận dữ liệu trace AI vào database trong thread ngầm."""
     from src.database.session import SessionLocal
     db = SessionLocal()
@@ -84,7 +84,7 @@ def write_trace_to_db(trace_data: dict, user_id: Optional[int]):
 async def receive_telemetry_events(
     batch: TelemetryEventBatch,
     background_tasks: BackgroundTasks,
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
     """Nhận sự kiện telemetry dạng hàng loạt (Batch) và lưu ngầm không chặn luồng chính."""
@@ -101,21 +101,21 @@ async def receive_telemetry_events(
     events_dict = [ev.model_dump() for ev in batch.events]
     from src.config import get_settings
     settings = get_settings()
-    
+
     background_tasks.add_task(
-        write_events_to_db, 
-        events_dict, 
-        user_id, 
+        write_events_to_db,
+        events_dict,
+        user_id,
         settings.database_url
     )
-    
+
     return {"status": "accepted", "count": len(batch.events)}
 
 @router.post("/feedback", status_code=status.HTTP_202_ACCEPTED)
 async def submit_ai_feedback(
     feedback_data: AIFeedbackSubmit,
     background_tasks: BackgroundTasks,
-    token: Optional[str] = Depends(oauth2_scheme),
+    token: str | None = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
     """Nhận phản hồi chất lượng AI (Prompt, Proposed, Edited, Rating) và ghi ngầm để làm dataset fine-tuning."""
@@ -142,7 +142,7 @@ def export_finetune_dataset(db: Session = Depends(get_db)):
             AIGenerationTrace.proposed_content.isnot(None),
             AIGenerationTrace.edited_content.isnot(None)
         ).all()
-        
+
         dataset = []
         for t in traces:
             # Tạo định dạng chuẩn tin nhắn OpenAI SFT format
@@ -159,7 +159,7 @@ def export_finetune_dataset(db: Session = Depends(get_db)):
                     "timestamp": t.created_at.isoformat() if t.created_at else None
                 }
             })
-            
+
         return {
             "status": "success",
             "total_records": len(dataset),

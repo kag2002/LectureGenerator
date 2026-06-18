@@ -445,7 +445,7 @@ async def run_chatbot_agent_loop(
         return course_obj, msgs
 
     course, recent_messages = await asyncio.to_thread(load_context)
-    from src.agents.graph import SYSTEM_PROMPT
+    from src.prompts.chatbot_prompts import SYSTEM_PROMPT
 
     system_prompt = SYSTEM_PROMPT
     if course:

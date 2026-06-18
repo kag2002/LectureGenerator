@@ -1,7 +1,8 @@
 import pytest
-from src.main import app
+
 from src.auth import get_current_user
 from src.database.models import User
+from src.main import app
 
 mock_admin = User(email="admin@test.com", full_name="Admin User", role="admin")
 mock_user = User(email="user@test.com", full_name="Regular User", role="user")
@@ -17,7 +18,7 @@ async def test_admin_endpoints_forbidden(client):
     # Đăng nhập nhưng không có quyền admin sẽ trả về 403
     def override_get_current_user():
         return mock_user
-        
+
     app.dependency_overrides[get_current_user] = override_get_current_user
     try:
         response = await client.get("/api/admin/system/metrics")
@@ -30,7 +31,7 @@ async def test_admin_endpoints_success(client):
     # Đăng nhập bằng tài khoản admin sẽ thành công (200)
     def override_get_current_user():
         return mock_admin
-        
+
     app.dependency_overrides[get_current_user] = override_get_current_user
     try:
         # 1. System metrics
@@ -42,7 +43,7 @@ async def test_admin_endpoints_success(client):
         assert "disk" in data
         assert "db" in data
         assert "system_history" in data
-        
+
         # 2. Traffic summary
         response = await client.get("/api/admin/traffic/summary")
         assert response.status_code == 200
@@ -52,14 +53,14 @@ async def test_admin_endpoints_success(client):
         assert "p50_latency_ms" in data
         assert "p90_latency_ms" in data
         assert "p99_latency_ms" in data
-        
+
         # 3. AI costs
         response = await client.get("/api/admin/ai/costs")
         assert response.status_code == 200
         data = response.json()
         assert "total_messages" in data
         assert "estimated_cost_usd" in data
-        
+
         # 4. DB optimize
         response = await client.post("/api/admin/db/optimize")
         assert response.status_code == 200

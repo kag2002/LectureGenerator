@@ -3,6 +3,7 @@ Tests for /api/auth endpoints: registration, login, and validation.
 """
 
 import pytest
+
 from src.auth import get_password_hash, verify_password
 
 

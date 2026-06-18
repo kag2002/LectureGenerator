@@ -1,6 +1,8 @@
-import os
 import logging
+import os
+
 from openai import AsyncOpenAI
+
 from src.utils.llm_client import FREE_MODELS
 
 logger = logging.getLogger(__name__)

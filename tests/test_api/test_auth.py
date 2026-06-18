@@ -5,7 +5,6 @@ Covers happy-path, validation errors, duplicate-email, and wrong-password cases.
 
 import pytest
 
-
 # ── Register ────────────────────────────────────────────────────────────────
 
 

@@ -4,9 +4,10 @@ Verifies correct event stream formatting (event: ... \n data: ...) and guardrail
 Mocks the LangGraph agent execution loop using unittest.mock.
 """
 
-import json
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
+
 from src.database.models import ChatSession
 
 
@@ -45,17 +46,17 @@ async def test_chat_stream_happy_path(client, auth_headers, db, test_course):
             headers=auth_headers
         ) as response:
             assert response.status_code == 200
-            
+
             # Read and parse SSE lines
             lines = [line async for line in response.aiter_lines() if line.strip()]
 
     # Assert SSE event flow formatting
-    assert any("event: stage" in l for l in lines)
-    assert any("Analyzing query..." in l for l in lines)
-    assert any("event: text" in l for l in lines)
-    assert any("This is a streamed answer from the mock agent." in l for l in lines)
-    assert any("event: done" in l for l in lines)
-    assert any('"status": "answered"' in l for l in lines)
+    assert any("event: stage" in line for line in lines)
+    assert any("Analyzing query..." in line for line in lines)
+    assert any("event: text" in line for line in lines)
+    assert any("This is a streamed answer from the mock agent." in line for line in lines)
+    assert any("event: done" in line for line in lines)
+    assert any('"status": "answered"' in line for line in lines)
 
 
 @pytest.mark.asyncio
@@ -93,10 +94,10 @@ async def test_chat_stream_blocked_guardrail(client, auth_headers, db, test_cour
             lines = [line async for line in response.aiter_lines() if line.strip()]
 
     # Assert guardrail warning event and blocked status
-    assert any("event: stage" in l for l in lines)
-    assert any("Cảnh báo: Phản hồi bị chặn do vi phạm Guardrails." in l for l in lines)
-    assert any("event: done" in l for l in lines)
-    assert any('"status": "blocked"' in l for l in lines)
+    assert any("event: stage" in line for line in lines)
+    assert any("Cảnh báo: Phản hồi bị chặn do vi phạm Guardrails." in line for line in lines)
+    assert any("event: done" in line for line in lines)
+    assert any('"status": "blocked"' in line for line in lines)
 
 
 @pytest.mark.asyncio
@@ -125,8 +126,8 @@ async def test_chat_stream_agent_error(client, auth_headers, db, test_course):
             lines = [line async for line in response.aiter_lines() if line.strip()]
 
     # Assert error event formatting is delivered
-    assert any("event: error" in l for l in lines)
-    assert any("Lỗi hệ thống chatbot: Agent loop crashed unexpectedly" in l for l in lines)
+    assert any("event: error" in line for line in lines)
+    assert any("Lỗi hệ thống chatbot: Agent loop crashed unexpectedly" in line for line in lines)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

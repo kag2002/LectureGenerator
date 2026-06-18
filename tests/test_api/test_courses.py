@@ -5,7 +5,6 @@ Covers happy-path, authorization isolation, and 404 error handling.
 
 import pytest
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # COURSE CRUD
 # ═══════════════════════════════════════════════════════════════════════════

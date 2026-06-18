@@ -1,8 +1,10 @@
 import os
 import re
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import APIRouter, Response
+
 from src.main import app
 
 # Set TESTING to 1 to bypass actual sentence-transformers loading in vector_db if imported

@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -22,21 +21,21 @@ def get_trash_items(
     # Để truy vấn các thực thể đã bị xóa mềm, chúng ta sử dụng skip_filter=True
     query_courses = db.query(Course).execution_options(skip_filter=True).filter(
         Course.user_id == current_user.id,
-        Course.is_deleted == True
+        Course.is_deleted
     )
 
     query_chapters = db.query(Chapter).execution_options(skip_filter=True).join(
         Course, Chapter.course_id == Course.id
     ).filter(
         Course.user_id == current_user.id,
-        Chapter.is_deleted == True
+        Chapter.is_deleted
     )
 
     query_questions = db.query(Question).execution_options(skip_filter=True).join(
         Course, Question.course_id == Course.id
     ).filter(
         Course.user_id == current_user.id,
-        Question.is_deleted == True
+        Question.is_deleted
     )
 
     # Nếu được lọc theo course_id cụ thể (khi đang ở giao diện môn học)
@@ -82,7 +81,7 @@ def get_trash_items(
         parent_chapter = None
         if q.chapter_id:
             parent_chapter = db.query(Chapter).execution_options(skip_filter=True).filter(Chapter.id == q.chapter_id).first()
-            
+
         questions_data.append({
             "id": q.id,
             "type": "question",
@@ -126,30 +125,30 @@ def restore_item(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Môn học không tồn tại trong Thùng rác."
             )
-        
+
         course.is_deleted = False
         course.deleted_at = None
-        
+
         # Nếu khôi phục các mục con đi kèm
         if restore_children:
             # Khôi phục các chapter thuộc môn học này
             chapters = db.query(Chapter).execution_options(skip_filter=True).filter(
                 Chapter.course_id == course.id,
-                Chapter.is_deleted == True
+                Chapter.is_deleted
             ).all()
             for ch in chapters:
                 ch.is_deleted = False
                 ch.deleted_at = None
-                
+
             # Khôi phục các question thuộc môn học này
             questions = db.query(Question).execution_options(skip_filter=True).filter(
                 Question.course_id == course.id,
-                Question.is_deleted == True
+                Question.is_deleted
             ).all()
             for q in questions:
                 q.is_deleted = False
                 q.deleted_at = None
-                
+
         db.commit()
         return {"message": "Khôi phục môn học thành công."}
 
@@ -165,7 +164,7 @@ def restore_item(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Chương học không tồn tại trong Thùng rác."
             )
-            
+
         # Kiểm tra xem Course cha có đang bị xóa không
         parent_course = db.query(Course).execution_options(skip_filter=True).filter(
             Course.id == chapter.course_id
@@ -175,7 +174,7 @@ def restore_item(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Không thể khôi phục chương này vì Môn học '{parent_course.course_name}' chứa nó đang bị xóa. Vui lòng khôi phục Môn học trước."
             )
-            
+
         chapter.is_deleted = False
         chapter.deleted_at = None
         db.commit()
@@ -193,7 +192,7 @@ def restore_item(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Câu hỏi không tồn tại trong Thùng rác."
             )
-            
+
         # Kiểm tra Course cha
         parent_course = db.query(Course).execution_options(skip_filter=True).filter(
             Course.id == question.course_id
@@ -203,7 +202,7 @@ def restore_item(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Không thể khôi phục câu hỏi này vì Môn học '{parent_course.course_name}' chứa nó đang bị xóa."
             )
-            
+
         # Kiểm tra Chapter cha (nếu có liên kết)
         if question.chapter_id:
             parent_chapter = db.query(Chapter).execution_options(skip_filter=True).filter(
@@ -214,7 +213,7 @@ def restore_item(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Không thể khôi phục câu hỏi này vì Chương học '{parent_chapter.title}' chứa nó đang bị xóa. Vui lòng khôi phục Chương học trước."
                 )
-                
+
         question.is_deleted = False
         question.deleted_at = None
         db.commit()
@@ -252,7 +251,7 @@ def hard_delete_item(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Môn học không tồn tại."
                 )
-            
+
             db.delete(course)
             db.commit()
             return {"message": "Đã xóa vĩnh viễn môn học và toàn bộ dữ liệu đi kèm."}
@@ -269,7 +268,7 @@ def hard_delete_item(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Chương học không tồn tại."
                 )
-                
+
             db.delete(chapter)
             db.commit()
             return {"message": "Đã xóa vĩnh viễn chương học."}
@@ -286,7 +285,7 @@ def hard_delete_item(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Câu hỏi không tồn tại."
                 )
-                
+
             db.delete(question)
             db.commit()
             return {"message": "Đã xóa vĩnh viễn câu hỏi."}

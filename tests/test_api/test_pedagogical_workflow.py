@@ -1,9 +1,12 @@
 import json
-import pytest
 import sys
 from unittest.mock import patch
-from src.database.models import User, Course, CLO, Chapter
+
+import pytest
+
+from src.database.models import CLO, Chapter, Course, User
 from src.database.session import SessionLocal
+
 
 def log_debug(msg):
     sys.stderr.write(f"DEBUG: {msg}\n")
@@ -66,14 +69,14 @@ async def test_pedagogical_workflow_scenarios(client):
         # Store IDs and close the test database session to avoid SQLite locks during HTTP requests
         course_id = course.id
         chapter_id = chapter.id
-        clo_id = clo.id
         db.close()
         log_debug("DB session closed. Overriding auth dependency...")
 
         # Helper override for auth dependency (queries dynamically using the request's session)
-        from src.auth import get_current_user
         from fastapi import Depends
         from sqlalchemy.orm import Session
+
+        from src.auth import get_current_user
         from src.database.session import get_db
         def override_get_current_user(db_dep: Session = Depends(get_db)):
             return db_dep.query(User).filter(User.email == "admin@test.com").first()
@@ -89,7 +92,7 @@ async def test_pedagogical_workflow_scenarios(client):
         assert session_res.status_code == 200
         session_id = session_res.json()["id"]
         log_debug(f"Chatbot session created with ID={session_id}")
- 
+
         # Define utility to simulate chat stream in tests
         async def simulate_chat(message: str) -> dict:
             log_debug(f"Simulating chat with message: '{message}'...")
@@ -102,7 +105,7 @@ async def test_pedagogical_workflow_scenarios(client):
                 })
                 log_debug(f"Received response for '{message}' status_code={response.status_code}")
                 assert response.status_code == 200
-                
+
                 # Parse SSE streams output
                 events = []
                 lines = response.text.split("\n\n")
@@ -118,7 +121,7 @@ async def test_pedagogical_workflow_scenarios(client):
                             data_part = subline[6:].strip()
                     if event_part and data_part:
                         events.append((event_part, json.loads(data_part)))
-                log_debug(f"Parsed {len(events)} events from stream.")
+                log_debug(f"Parsed {len(events)} events from stream: {events}")
                 return events
 
         # --- Scenario 1: Step-by-Step Pedagogical Workflow ---
@@ -171,7 +174,7 @@ async def test_pedagogical_workflow_scenarios(client):
 
         # Clean overrides and DB
         app.dependency_overrides.clear()
-        
+
         # Clean up records using a fresh session
         db_clean = SessionLocal()
         try:
@@ -233,9 +236,10 @@ async def test_pedagogical_workflow_alternative_preconditions(client):
         db.refresh(clo)
 
         # Helper override for auth dependency
-        from src.auth import get_current_user
         from fastapi import Depends
         from sqlalchemy.orm import Session
+
+        from src.auth import get_current_user
         from src.database.session import get_db
         def override_get_current_user(db_dep: Session = Depends(get_db)):
             return db_dep.query(User).filter(User.email == "admin@test.com").first()
@@ -304,7 +308,7 @@ async def test_pedagogical_workflow_alternative_preconditions(client):
 
         # Clean overrides and DB records
         app.dependency_overrides.clear()
-        
+
         db_clean = SessionLocal()
         try:
             db_clean.query(CLO).filter(CLO.course_id == course_clos_only_id).delete()
@@ -329,10 +333,11 @@ async def test_pedagogical_workflow_matrix_remediation_and_export(client):
     """
     log_debug("Starting matrix remediation & export decisional test...")
 
-    from src.database.models import ChapterMaterial, Question
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
+    from src.database.models import ChapterMaterial, Question
     from src.database.session import get_db
     from src.main import app
 
@@ -384,7 +389,6 @@ async def test_pedagogical_workflow_matrix_remediation_and_export(client):
         course_id = course.id
         clo_id = clo.id
         chapter_id = chapter.id
-        user_id = user.id
         db.close()
 
         # ---- Auth override ----
@@ -582,10 +586,11 @@ async def test_export_questions_markdown_endpoint(client):
     Verifies that GET /api/courses/{id}/export-questions produces a plain-text
     markdown document containing the question text and the CLO answer key section.
     """
-    from src.database.models import Question, ChapterMaterial
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
+    from src.database.models import Question
     from src.database.session import get_db
     from src.main import app
 
@@ -594,16 +599,24 @@ async def test_export_questions_markdown_endpoint(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="EXP-001", course_name="Export Test Course", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         clo = CLO(course_id=course.id, clo_code="CLO_EXP_1", description="Describe basic exports.", bloom_level=2)
-        db.add(clo); db.commit(); db.refresh(clo)
+        db.add(clo)
+        db.commit()
+        db.refresh(clo)
 
         chapter = Chapter(course_id=course.id, title="Chapter 1", description="Export chapter.", sort_order=1, is_active=True)
-        db.add(chapter); db.commit(); db.refresh(chapter)
+        db.add(chapter)
+        db.commit()
+        db.refresh(chapter)
 
         q = Question(
             course_id=course.id, chapter_id=chapter.id,
@@ -611,10 +624,11 @@ async def test_export_questions_markdown_endpoint(client):
             options_json='["General Import Format Technology", "General Import Format Text", "Generic Import Format Technology", "None"]',
             correct_answer="A", bloom_level=2, clo_id=clo.id, is_active=True
         )
-        db.add(q); db.commit(); db.refresh(q)
+        db.add(q)
+        db.commit()
+        db.refresh(q)
 
         course_id = course.id
-        q_id = q.id
         db.close()
 
         def override_get_current_user(db_dep: Session = Depends(get_db)):
@@ -661,10 +675,11 @@ async def test_multi_clo_partial_coverage_matrix(client):
       - CLO2 → question_levels["3"] >= 1   (covered)
       - CLO3 → question_levels["4"] == 0   (blind spot)
     """
-    from src.database.models import Question
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
+    from src.database.models import Question
     from src.database.session import get_db
     from src.main import app
 
@@ -673,26 +688,35 @@ async def test_multi_clo_partial_coverage_matrix(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="MCLO-001", course_name="Multi-CLO Coverage Test", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         clo1 = CLO(course_id=course.id, clo_code="MCLO_1", description="Recall definitions.", bloom_level=2)
         clo2 = CLO(course_id=course.id, clo_code="MCLO_2", description="Apply formulas.", bloom_level=3)
         clo3 = CLO(course_id=course.id, clo_code="MCLO_3", description="Analyze case studies.", bloom_level=4)
-        db.add_all([clo1, clo2, clo3]); db.commit()
-        for c in [clo1, clo2, clo3]: db.refresh(c)
+        db.add_all([clo1, clo2, clo3])
+        db.commit()
+        for c in [clo1, clo2, clo3]:
+            db.refresh(c)
 
         chapter = Chapter(course_id=course.id, title="Ch1", description="Ch", sort_order=1, is_active=True)
-        db.add(chapter); db.commit(); db.refresh(chapter)
+        db.add(chapter)
+        db.commit()
+        db.refresh(chapter)
 
         # Questions for CLO1 (B2) and CLO2 (B3) only — CLO3 intentionally left empty
         q1 = Question(course_id=course.id, chapter_id=chapter.id, question_text="Define entropy.",
                       options_json='["A","B","C","D"]', correct_answer="A", bloom_level=2, clo_id=clo1.id, is_active=True)
         q2 = Question(course_id=course.id, chapter_id=chapter.id, question_text="Apply Bayes theorem.",
                       options_json='["A","B","C","D"]', correct_answer="B", bloom_level=3, clo_id=clo2.id, is_active=True)
-        db.add_all([q1, q2]); db.commit()
+        db.add_all([q1, q2])
+        db.commit()
 
         course_id = course.id
         db.close()
@@ -747,9 +771,10 @@ async def test_chatbot_clarification_on_ambiguous_message(client):
       - The SSE 'done' event returns status='waiting_for_user'
       - The response text is non-empty (the clarification question)
     """
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
     from src.database.session import get_db
     from src.main import app
 
@@ -758,13 +783,19 @@ async def test_chatbot_clarification_on_ambiguous_message(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="CLR-001", course_name="Clarification Routing Test", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         clo = CLO(course_id=course.id, clo_code="CLO_CLR", description="Basic CLO.", bloom_level=2)
-        db.add(clo); db.commit(); db.refresh(clo)
+        db.add(clo)
+        db.commit()
+        db.refresh(clo)
 
         course_id = course.id
         db.close()
@@ -787,11 +818,14 @@ async def test_chatbot_clarification_on_ambiguous_message(client):
 
         events = []
         for block in resp.text.split("\n\n"):
-            if not block.strip(): continue
+            if not block.strip():
+                continue
             ev_name, ev_data = "", ""
             for subline in block.split("\n"):
-                if subline.startswith("event: "): ev_name = subline[7:].strip()
-                elif subline.startswith("data: "): ev_data = subline[6:].strip()
+                if subline.startswith("event: "):
+                    ev_name = subline[7:].strip()
+                elif subline.startswith("data: "):
+                    ev_data = subline[6:].strip()
             if ev_name and ev_data:
                 events.append((ev_name, json.loads(ev_data)))
 
@@ -836,10 +870,11 @@ async def test_question_crud_lifecycle(client):
       DELETE /questions/{id} → 200
       GET  /questions  → question is no longer in list
     """
-    from src.database.models import Question
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
+    from src.database.models import Question
     from src.database.session import get_db
     from src.main import app
 
@@ -848,16 +883,24 @@ async def test_question_crud_lifecycle(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="CRUD-Q01", course_name="Question CRUD Lifecycle Test", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         clo = CLO(course_id=course.id, clo_code="CLO_CRUD", description="CRUD CLO.", bloom_level=3)
-        db.add(clo); db.commit(); db.refresh(clo)
+        db.add(clo)
+        db.commit()
+        db.refresh(clo)
 
         chapter = Chapter(course_id=course.id, title="Chapter CRUD", description="Test.", sort_order=1, is_active=True)
-        db.add(chapter); db.commit(); db.refresh(chapter)
+        db.add(chapter)
+        db.commit()
+        db.refresh(chapter)
 
         course_id = course.id
         clo_id = clo.id
@@ -950,9 +993,10 @@ async def test_clo_crud_lifecycle(client):
       DELETE /clos/{id} → 200
       GET  /clos   → CLO no longer appears
     """
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
     from src.database.session import get_db
     from src.main import app
 
@@ -961,10 +1005,14 @@ async def test_clo_crud_lifecycle(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="CLO-CRUD-01", course_name="CLO CRUD Test Course", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
         course_id = course.id
         db.close()
 
@@ -990,7 +1038,7 @@ async def test_clo_crud_lifecycle(client):
         assert list_res.status_code == 200
         clo_codes = [c["clo_code"] for c in list_res.json()]
         assert "CLO_TEST_1" in clo_codes, "Newly created CLO should appear in list"
-        log_debug(f"READ CLO list (found CLO_TEST_1): PASSED")
+        log_debug("READ CLO list (found CLO_TEST_1): PASSED")
 
         # ---- UPDATE (bloom_level 2 → 4, description updated) ----
         update_res = await client.put(f"/api/courses/clos/{clo_id}", json={
@@ -1014,7 +1062,7 @@ async def test_clo_crud_lifecycle(client):
         assert list_res2.status_code == 200
         remaining_codes = [c["clo_code"] for c in list_res2.json()]
         assert "CLO_TEST_1_UPD" not in remaining_codes, "Deleted CLO should not appear"
-        log_debug(f"READ after DELETE (CLO_TEST_1_UPD gone): PASSED")
+        log_debug("READ after DELETE (CLO_TEST_1_UPD gone): PASSED")
 
         app.dependency_overrides.clear()
         db_clean = SessionLocal()
@@ -1044,10 +1092,11 @@ async def test_export_materials_markdown_content(client):
       - Slide content verbatim
       - Active learning script verbatim
     """
-    from src.database.models import ChapterMaterial, Question
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
+    from src.database.models import ChapterMaterial
     from src.database.session import get_db
     from src.main import app
 
@@ -1056,21 +1105,29 @@ async def test_export_materials_markdown_content(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="MAT-EXP-01", course_name="Material Export Test", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         chapter = Chapter(course_id=course.id, title="Chapter 1: Test Slides",
                           description="Test chapter.", sort_order=1, is_active=True)
-        db.add(chapter); db.commit(); db.refresh(chapter)
+        db.add(chapter)
+        db.commit()
+        db.refresh(chapter)
 
         mat = ChapterMaterial(
             chapter_id=chapter.id,
             slide_content="# Slide 1: Overview [CLO: CLO_1] [Bloom: B2]\n\nThis is the overview slide.",
             active_learning_script="## Activity: Think-Pair-Share\n\nStudents discuss in pairs for 5 minutes.",
         )
-        db.add(mat); db.commit(); db.refresh(mat)
+        db.add(mat)
+        db.commit()
+        db.refresh(mat)
 
         course_id = course.id
         chapter_id = chapter.id
@@ -1125,10 +1182,11 @@ async def test_matrix_excludes_inactive_questions(client):
     Verifies that questions marked is_active=False are NOT counted in the
     matrix coverage endpoint. Only active questions should contribute to counts.
     """
-    from src.database.models import Question
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
+    from src.database.models import Question
     from src.database.session import get_db
     from src.main import app
 
@@ -1137,16 +1195,24 @@ async def test_matrix_excludes_inactive_questions(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="INACT-001", course_name="Inactive Questions Test", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         clo = CLO(course_id=course.id, clo_code="CLO_INACT", description="Test CLO.", bloom_level=3)
-        db.add(clo); db.commit(); db.refresh(clo)
+        db.add(clo)
+        db.commit()
+        db.refresh(clo)
 
         chapter = Chapter(course_id=course.id, title="Ch1", description="Test.", sort_order=1, is_active=True)
-        db.add(chapter); db.commit(); db.refresh(chapter)
+        db.add(chapter)
+        db.commit()
+        db.refresh(chapter)
 
         # Add one INACTIVE question at bloom 3
         q_inactive = Question(
@@ -1156,8 +1222,9 @@ async def test_matrix_excludes_inactive_questions(client):
             bloom_level=3, clo_id=clo.id,
             is_active=False,  # ← should be excluded from matrix
         )
-        db.add(q_inactive); db.commit(); db.refresh(q_inactive)
-        q_inactive_id = q_inactive.id
+        db.add(q_inactive)
+        db.commit()
+        db.refresh(q_inactive)
 
         course_id = course.id
         chapter_id = chapter.id  # save before db.close() to avoid DetachedInstanceError
@@ -1187,7 +1254,8 @@ async def test_matrix_excludes_inactive_questions(client):
                 bloom_level=3, clo_id=clo_id,
                 is_active=True,
             )
-            db2.add(q_active); db2.commit()
+            db2.add(q_active)
+            db2.commit()
         finally:
             db2.close()
 
@@ -1228,9 +1296,10 @@ async def test_chatbot_session_message_persistence(client):
       - Messages are in chronological order (user → assistant → user → assistant)
       - 'role' field is correctly set for each message
     """
-    from src.auth import get_current_user
     from fastapi import Depends
     from sqlalchemy.orm import Session
+
+    from src.auth import get_current_user
     from src.database.session import get_db
     from src.main import app
 
@@ -1239,13 +1308,19 @@ async def test_chatbot_session_message_persistence(client):
         user = db.query(User).filter(User.email == "admin@test.com").first()
         if not user:
             user = User(email="admin@test.com", password_hash="hashed_pw", full_name="Admin User", role="admin")
-            db.add(user); db.commit(); db.refresh(user)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
 
         course = Course(course_code="PERSIST-01", course_name="Session Persistence Test", user_id=user.id)
-        db.add(course); db.commit(); db.refresh(course)
+        db.add(course)
+        db.commit()
+        db.refresh(course)
 
         clo = CLO(course_id=course.id, clo_code="CLO_PERSIST", description="Persistence CLO.", bloom_level=2)
-        db.add(clo); db.commit(); db.refresh(clo)
+        db.add(clo)
+        db.commit()
+        db.refresh(clo)
 
         course_id = course.id
         db.close()

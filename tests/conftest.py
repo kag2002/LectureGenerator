@@ -7,9 +7,10 @@ authenticated HTTP clients, and common mocks for external services.
 
 import json
 import os
+
 os.environ["TESTING"] = "1"
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -24,10 +25,10 @@ os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["OPENAI_API_KEY"] = "test-key"
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-pytest"
 
+import src.database.session as db_session
 from src.auth import create_access_token, get_password_hash
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
 from src.database.session import Base, get_db
-import src.database.session as db_session
 
 # ---------------------------------------------------------------------------
 # In-memory SQLite engine (shared across all tests in a session)
@@ -53,8 +54,7 @@ TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=TEST_ENG
 db_session.SessionLocal = TestSessionLocal
 db_session.engine = TEST_ENGINE
 
-from src.main import app
-
+from src.main import app  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Database fixtures
