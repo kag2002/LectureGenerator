@@ -159,7 +159,7 @@ async def llm_router_node(state: AgentState) -> dict[str, Any]:
     return {
         "status": "calling_tools",
         "tool_calls": formatted_tool_calls,
-        "current_round": r_idx,
+        "current_round": r_idx + 1,
         "error": "",
         "rounds": new_rounds,
         "prompt_tokens": new_prompt_tokens,

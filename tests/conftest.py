@@ -27,7 +27,7 @@ os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-pytest"
 from src.auth import create_access_token, get_password_hash
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
 from src.database.session import Base, get_db
-from src.main import app
+import src.database.session as db_session
 
 # ---------------------------------------------------------------------------
 # In-memory SQLite engine (shared across all tests in a session)
@@ -48,6 +48,12 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 
 
 TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=TEST_ENGINE)
+
+# Override main application's SessionLocal and engine to point to the shared TEST_ENGINE
+db_session.SessionLocal = TestSessionLocal
+db_session.engine = TEST_ENGINE
+
+from src.main import app
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +88,16 @@ def _override_get_db():
 
 
 app.dependency_overrides[get_db] = _override_get_db
+
+
+@pytest.fixture(autouse=True)
+def cleanup_dependency_overrides():
+    yield
+    # Clear all overrides except get_db after each test to prevent pollution
+    db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides.clear()
+    if db_override is not None:
+        app.dependency_overrides[get_db] = db_override
 
 # ---------------------------------------------------------------------------
 # Async HTTP client

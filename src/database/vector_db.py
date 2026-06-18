@@ -9,7 +9,8 @@ import chromadb
 from chromadb.utils import embedding_functions
 from sqlalchemy import text
 
-from src.database.session import engine, is_sqlite
+from src.database import session as db_session
+from src.database.session import is_sqlite
 
 # Khởi tạo ChromaDB persistent storage trong thư mục backend/data/chroma_db
 DB_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/chroma_db"))
@@ -137,7 +138,7 @@ collection = chroma_client.get_or_create_collection(
 # Khởi tạo bảng ảo FTS5 trong SQLite nếu đang dùng SQLite làm cơ sở dữ liệu
 if is_sqlite:
     try:
-        with engine.begin() as conn:
+        with db_session.engine.begin() as conn:
             conn.execute(
                 text("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS fts_document_chunks USING fts5(
@@ -160,7 +161,7 @@ def index_fts_chunks(user_id: int, course_id: int, file_name: str, chunks: list[
     if not is_sqlite:
         return
     try:
-        with engine.begin() as conn:
+        with db_session.engine.begin() as conn:
             # Delete old chunks for this file
             conn.execute(
                 text("""
@@ -195,7 +196,7 @@ def delete_fts_chunks(user_id: int, course_id: int, file_name: str = None):
     if not is_sqlite:
         return
     try:
-        with engine.begin() as conn:
+        with db_session.engine.begin() as conn:
             if file_name:
                 conn.execute(
                     text("""
@@ -245,7 +246,7 @@ def search_fts_chunks(
         sql_str += " LIMIT 20"
 
         results = []
-        with engine.connect() as conn:
+        with db_session.engine.connect() as conn:
             res = conn.execute(text(sql_str), params)
             for row in res:
                 results.append(

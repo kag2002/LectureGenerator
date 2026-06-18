@@ -6,7 +6,7 @@ from src.agents.graph import agent
 from src.database.models import User, Course, CLO, Chapter, ChapterMaterial, Question
 from src.database.session import SessionLocal
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def setup_db_records():
     db = SessionLocal()
     # Create test user
@@ -295,7 +295,7 @@ async def test_scenario_blocked_output(setup_db_records):
             "user_id": setup_db_records["user_id"],
             "db": db,
         }
-        with patch("src.agents.graph.get_candidate_models") as mock_get_models:
+        with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
             
@@ -416,8 +416,10 @@ async def test_scenario_history_summarization_flow():
             "user_id": 1,
             "db": db,
         }
-        with patch("src.agents.graph.get_candidate_models") as mock_get_models:
+        with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models, \
+             patch("src.agents.graph.get_candidate_models") as mock_get_graph_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
+            mock_get_graph_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
             
             assert "summary_history" in result
@@ -450,7 +452,7 @@ async def test_scenario_direct_response_no_tools():
             "user_id": 1,
             "db": db,
         }
-        with patch("src.agents.graph.get_candidate_models") as mock_get_models:
+        with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
             
@@ -617,7 +619,7 @@ async def test_edge_case_unprofessional_output_blocking(setup_db_records):
             "user_id": setup_db_records["user_id"],
             "db": db,
         }
-        with patch("src.agents.graph.get_candidate_models") as mock_get_models:
+        with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
             
@@ -656,7 +658,7 @@ async def test_edge_case_max_rounds_reached(setup_db_records):
             "max_rounds": 2,  # Force maximum 2 rounds
             "current_round": 1,
         }
-        with patch("src.agents.graph.get_candidate_models") as mock_get_models:
+        with patch("src.agents.nodes.llm_router.get_candidate_models") as mock_get_models:
             mock_get_models.return_value = [{"client": mock_client, "model": "mock-model"}]
             result = await agent.ainvoke(state_input)
             # Should terminate and not run forever

@@ -288,7 +288,7 @@ def dummy_limit_func(request: Request):
 # HTTP middleware to intercept and rate limit high-risk endpoints
 @app.middleware("http")
 async def dynamic_rate_limit_middleware(request: Request, call_next):
-    if request.method == "POST":
+    if request.method == "POST" and get_settings().app_env != "test":
         request_path = request.url.path
         is_high_risk = any(pattern.match(request_path) for pattern in compiled_patterns)
         if is_high_risk:
