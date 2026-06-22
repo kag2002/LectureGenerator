@@ -1,6 +1,8 @@
 # Evaluation Report
 
-> Báo cáo đánh giá chất lượng sản phẩm theo tiêu chí BTC.
+> Báo cáo đánh giá chất lượng sản phẩm VinUni AI Lecture Assistant theo tiêu chí BTC.
+>
+> **Last updated:** 2026-06-22
 
 ---
 
@@ -8,39 +10,91 @@
 
 | Metric | Target | Actual | Status |
 |--------|--------|--------|--------|
-| Response accuracy | >80% | 66.7% | ⏳ |
-| Response latency | <3s | 1.97s | ✅ |
-| User satisfaction | >4/5 | — | ⏳ |
-| Test coverage | >60% | — | ⏳ |
+| Response accuracy | >80% | 66.7% | ⏳ Cần cải thiện |
+| Response latency | <3s | 1.97s | ✅ Đạt |
+| User satisfaction | >4/5 | — | ⏳ Chưa khảo sát |
+| Test coverage | >60% | 51% | ⏳ Đang nâng lên |
+| Tests passing | 100% | 100% (241/241) | ✅ Đạt |
 
 ## 2. Test Results
 
 ### Unit Tests
 ```
-pytest tests/ -v
-# Paste output here
+$ python -m pytest tests/ --tb=short -q
+241 passed, 593 warnings in 57.15s
 ```
 
+### Coverage Report
+```
+$ python -m pytest tests/ --cov=src --cov-report=term-missing -q
+TOTAL    7332   3623    51%
+241 passed, 593 warnings in 68.98s
+```
+
+### Coverage Breakdown (Top modules)
+
+| Module | Coverage | Notes |
+|--------|----------|-------|
+| `src/api/` | ~60-80% | Routes được test tốt |
+| `src/agents/` | ~50-70% | Graph nodes, tools tested |
+| `src/database/` | 80%+ | Models, session tested |
+| `src/services/chatbot_agent.py` | 57% | Core chatbot logic |
+| `src/services/chatbot_guardrails.py` | 85% | Input/output guardrails |
+| `src/services/memory_service.py` | 85% | Agent memory management |
+| `src/services/document_service.py` | 92% | Document parsing |
+| `src/services/image_service.py` | 82% | Image processing |
+| `src/utils/telemetry.py` | 80% | System metrics |
+| `src/services/material_orchestrator.py` | 12% | Needs improvement |
+| `src/services/slide_renderer.py` | 39% | Needs improvement |
+| `src/utils/llm_client.py` | 28% | Needs improvement |
+
+### Test Categories
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| API endpoint tests | ~60 | CRUD, auth, pagination |
+| Agent/graph tests | ~30 | State machine, nodes, tools |
+| Chatbot SSE tests | ~15 | Streaming, sessions |
+| Parser format tests | ~20 | PDF, DOCX, TXT parsing |
+| Auth tests | ~10 | JWT, login, registration |
+| Soft delete tests | ~10 | Delete, restore, constraints |
+| Memory architecture tests | ~15 | Agent memory, summarization |
+| AI generation tests | ~20 | Outline, materials, questions |
+| Integration tests | ~30 | E2E, service integration |
+| Export tests | ~10 | PPTX, DOCX, ZIP |
+| **Total** | **241** | **All passing** |
+
 ### Integration Tests
-```
-# Mô tả test scenarios và kết quả
-```
+- End-to-end flow: Login → Create Course → Upload Syllabus → Generate Outline → Generate Questions → Export
+- Chatbot SSE streaming with RAG context
+- Autopilot execution with locking mechanism
+- Soft delete and restore operations
 
 ## 3. User Feedback
 
 | User | Feedback | Rating |
 |------|----------|--------|
-| [User 1] | [feedback] | [1-5] |
-| [User 2] | [feedback] | [1-5] |
+| Internal testing | Chatbot phản hồi nhanh, outline generation mượt mà | 4/5 |
+| Internal testing | Export PPTX cần thêm template đẹp hơn | 3/5 |
 
 ## 4. Demo Results
 
-- Ngày demo: [YYYY-MM-DD]
-- Người tham gia: [số người]
-- Feedback chung: [tóm tắt]
-- Issues phát hiện: [danh sách]
+- Ngày demo: Chưa diễn ra (đang chuẩn bị)
+- Người tham gia: —
+- Feedback chung: —
+- Issues phát hiện: —
 
-## 5. Action Items
+## 5. Known Issues & Limitations
 
-- [ ] [Cần cải thiện 1]
-- [ ] [Cần cải thiện 2]
+- Response accuracy 66.7% — cần fine-tune prompts và mở rộng RAG context
+- Test coverage 51% — cần bổ sung tests cho `material_orchestrator`, `slide_renderer`, `llm_client`
+- `psutil` dependency cần được khai báo rõ trong venv setup guide
+- Evaluation harness dataset nhỏ (chỉ có vài test cases)
+
+## 6. Action Items
+
+- [ ] Nâng response accuracy > 80% (cải thiện prompts, RAG retrieval)
+- [ ] Nâng test coverage > 60% (thêm tests cho services layer)
+- [ ] Mở rộng evaluation dataset (thêm diverse test cases)
+- [ ] Khảo sát user satisfaction với giảng viên thực tế
+- [ ] Chuẩn bị demo video và pitch deck

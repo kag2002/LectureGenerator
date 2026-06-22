@@ -1,204 +1,203 @@
-# 🤖 AI20K Agent Template
+# 🎓 VinUni AI Lecture Assistant
 
-> [!NOTE]
-> **Last updated:** 2026-06-09. Note: This is the official VinUni AI20K Build Phase starter-code-template README. The team will customize it using [README_boilerplate.md](file:///c:/Users/Admin/Documents/VinUni/CodeLab/C2-App-023/README_boilerplate.md) once development is complete.
+> Giảng viên mất hàng giờ soạn giáo án → AI Agent tự động thiết kế bài giảng, storyboard slide, và ngân hàng câu hỏi theo chuẩn CLO & Bloom cho giảng viên VinUni.
 
-Template chính thức cho học viên **VinUni AI20K Build Phase** — cung cấp sẵn cấu trúc dự án, code mẫu, và hướng dẫn kỹ thuật chi tiết để xây dựng AI Agent đạt điểm cao (35+/50).
+## Vấn đề (Problem)
 
-> 📖 **Technical Guidebook:** [phoenix.note.transformerlabs.ai/technical-book](https://phoenix.note.transformerlabs.ai/technical-book)
+Giảng viên đại học tại VinUni dành trung bình **8-12 giờ/tuần** để:
+- Soạn đề cương môn học chi tiết (course outline) theo chuẩn đầu ra CLO
+- Thiết kế kịch bản hoạt động giảng dạy (storyboard) cho từng buổi học
+- Tạo slide bài giảng và tài liệu đọc chi tiết
+- Soạn ngân hàng câu hỏi trắc nghiệm theo thang tư duy Bloom
 
-## 🎯 Template này dùng để làm gì?
+Các giải pháp hiện tại (Google Docs, PowerPoint thủ công) **không** đảm bảo tính nhất quán giữa CLO, nội dung giảng dạy, và đề thi.
 
-Khi tham gia AI20K Build Phase, mỗi đội cần xây dựng một AI Agent hoàn chỉnh — từ kiến trúc, code, test, đến deploy. Thay vì bắt đầu từ con số không, template này cung cấp:
+## Giải pháp (Solution)
 
-- **Cấu trúc thư mục chuẩn** — đã được thiết kế theo best practices (separation of concerns)
-- **Code mẫu** cho các phần cốt lõi: LangGraph agent, FastAPI API, config, schemas
-- **Docker + CI/CD sẵn** — Dockerfile multi-stage, GitHub Actions workflow
-- **Hướng dẫn kỹ thuật 10 chương** — từ clone template đến nộp bài Demo Day
-- **Checklist 10 deliverables** — đảm bảo không bỏ sót yêu cầu BTC
-- **AI Usage Logging tự động** — Pre-configured hooks cho Claude Code, Cursor, Codex, Gemini CLI, Antigravity, và GitHub Copilot
+**VinUni AI Lecture Assistant** — hệ thống AI Agent end-to-end hỗ trợ giảng viên:
 
-## ⚡ Quick Start
+- 🧠 **AI Course Outline Generator:** Tự động sinh đề cương chi tiết từ syllabus, streaming từng chương qua SSE
+- 📊 **CLO × Bloom Heatmap Matrix:** Trực quan hóa độ phủ chuẩn đầu ra, tính toán real-time ở client
+- 🎯 **Storyboard & Slide Designer:** Timeline hoạt động Flexbox, slide preview 16:9, theme VinUni
+- ❓ **Smart Question Bank:** Accordion cards, slider điều chỉnh độ khó, AI regenerate theo Bloom level
+- 📤 **Export Engine:** Xuất PowerPoint (.pptx), Word (.docx), ZIP đóng gói — LaTeX → OMML
+- 🤖 **Chatbot Trợ lý:** Side drawer AI hiểu ngữ cảnh trang hiện tại, RAG từ tài liệu môn học
+- 🔒 **Autopilot & Locking:** AI chạy ngầm với SSE real-time sync, cơ chế khóa giao diện chống ghi đè
 
-### Bước 1: Fork hoặc Clone
+## Target User
 
-```bash
-# Clone template
-git clone https://github.com/AI20K-Build-Cohort-2/starter-code-template.git team-YOUR_TEAM_NAME
-cd team-YOUR_TEAM_NAME
+- **Primary:** Giảng viên đại học VinUni cần soạn giáo án theo chuẩn CLO & Bloom
+- **Secondary:** Trợ giảng (TA) hỗ trợ chuẩn bị tài liệu giảng dạy
 
-# Xóa git history cũ và khởi tạo lại
-rm -rf .git
-git init
-git add .
-git commit -m "feat: khởi tạo dự án từ template"
-```
-
-### Bước 2: Setup môi trường
-
-```bash
-# Tạo virtual environment
-python3.11 -m venv .venv
-source .venv/bin/activate
-
-# Cài dependencies
-pip install -e ".[dev]"
-
-# Cấu hình API keys
-cp .env.example .env
-# Mở .env và thêm OPENAI_API_KEY của bạn
-# Đồng thời cập nhật AI_LOG_API_KEY bằng key riêng từ link mời của BTC
-# (giá trị trong .env.example chỉ là placeholder)
-```
-
-### Bước 3: Cài AI Logging Hooks
-
-```bash
-# Linux / macOS / Git Bash
-bash scripts/setup_hooks.sh
-
-# Windows PowerShell
-# powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1
-```
-
-Hooks tự động log mọi AI prompt khi dùng Claude Code, Cursor, Codex, Gemini CLI, Antigravity, hoặc GitHub Copilot. Không cần thao tác thủ công.
-
-### Bước 4: Chạy server
-
-```bash
-# Chạy FastAPI backend
-uvicorn src.main:app --reload --port 8000
-
-# Mở Swagger UI
-# http://localhost:8000/docs
-```
-
-### Bước 5: Đọc hướng dẫn
-
-📖 Mở **[Technical Guidebook](https://phoenix.note.transformerlabs.ai/technical-book)** và làm theo từng chương.
-
-## 📁 Cấu trúc dự án
-
-```
-├── src/
-│   ├── agents/           # 🧠 LangGraph Agent
-│   │   ├── graph.py      #    State graph (nodes + edges)
-│   │   ├── state.py      #    State schema (TypedDict)
-│   │   ├── nodes/        #    Node functions
-│   │   └── tools/        #    Agent tools (@tool)
-│   ├── api/              # 🌐 FastAPI Backend
-│   │   └── routes.py     #    API endpoints
-│   ├── models/           # 📋 Pydantic schemas
-│   ├── services/         # 🔧 Business logic (LLM, etc.)
-│   ├── config.py         # ⚙️ Pydantic Settings
-│   └── main.py           # 🚀 App entry point
-├── tests/                # 🧪 pytest suite
-│   ├── test_agents/      #    Agent/graph tests
-│   └── test_api/         #    API endpoint tests
-├── scripts/              # 🔌 AI Logging Hooks
-│   ├── log_hook.py       #    Auto-log cho Claude/Cursor/Codex/Gemini/Copilot
-│   ├── log_antigravity.py#    Antigravity IDE prompt scanner
-│   ├── log_manual.py     #    Manual log cho ChatGPT / web tools
-│   ├── submit_log.py     #    Submit logs on git push
-│   └── setup_hooks.sh    #    One-time hook installer
-├── .claude/ .codex/ .cursor/ .gemini/  # Per-tool hook configs
-├── .agents/              # Antigravity rules + workflows
-├── .ai-log/              # 📊 AI usage logs (auto-generated)
-├── docs/
-│   ├── guide/            # 📖 Technical Guidebook (10 chapters)
-│   └── architecture_diagram.md
-├── eval/                 # 📊 Evaluation results
-├── presentation/         # 🎤 Demo Day slides
-├── .github/workflows/    # ⚡ CI/CD (GitHub Actions)
-├── .github/hooks/        # 🪝 Copilot hook config
-├── Dockerfile            # 🐳 Multi-stage build
-├── docker-compose.yml    # 🐙 Full stack orchestration
-└── README_boilerplate.md # 📝 README template cho đội của bạn
-```
-
-## 📚 Technical Guidebook — 10 Chương
-
-| Chương | Nội dung | Thời gian |
-|---------|----------|-----------|
-| 1 | Lời mở đầu — Mục tiêu, cách sử dụng | 15 phút |
-| 2 | Khởi tạo dự án — Clone, setup, git workflow | 4 giờ |
-| 3 | Thiết kế kiến trúc — 3-tier, diagrams, ADR | 6 giờ |
-| 4 | **LangGraph Agent** — State, nodes, edges, tools, RAG | 8 giờ |
-| 5 | FastAPI — Routes, validation, error handling, streaming | 6 giờ |
-| 6 | Giao diện — Next.js + Streamlit quickstart | 6 giờ |
-| 7 | DevOps — Docker, CI/CD, deploy, logging | 6 giờ |
-| 8 | Kiểm thử — Unit test, integration test, RAGAS | 4 giờ |
-| 9 | Demo Day — 10 deliverables, checklist, tips | 2 giờ |
-| 10 | Tài nguyên — Khóa học, docs, BMAD method | tham khảo |
-
-📖 **Đọc online:** [phoenix.note.transformerlabs.ai/technical-book](https://phoenix.note.transformerlabs.ai/technical-book)
-
-## 📋 10 Deliverables cho Demo Day
-
-| # | Deliverable | File vị trí | Template có sẵn |
-|---|-------------|-------------|:---:|
-| 1 | Source Code | `src/` | ✅ |
-| 2 | README.md | `README_boilerplate.md` → copy thành `README.md` | ✅ |
-| 3 | Architecture Diagram | `docs/architecture_diagram.md` | ✅ |
-| 4 | AI Logs | LangSmith (3 env vars) + Auto AI Usage Logging | ✅ |
-| 5 | Live URL | Deploy lên Render/Vercel | ⚡ CI/CD sẵn |
-| 6 | Video Demo | `presentation/` | 📝 |
-| 7 | Pitch Deck | `presentation/` | 📝 |
-| 8 | Development Journal | `JOURNAL.md` | ✅ |
-| 9 | Worklog | `WORKLOG.md` | ✅ |
-| 10 | Evaluation Evidence | `eval/` | 📝 |
-
-## 🛠 Tech Stack
+## Tech Stack
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
 | AI Agent | LangGraph + LangChain | Latest |
-| Backend | FastAPI + Uvicorn | 0.100+ |
-| LLM | OpenAI GPT-4o-mini | API |
-| Frontend | Next.js / Streamlit | 14+ / 1.30+ |
-| Database | SQLite (dev) / PostgreSQL (prod) | — |
-| DevOps | Docker + GitHub Actions | — |
+| Backend | FastAPI + Uvicorn | 0.115+ |
+| LLM | OpenAI GPT-4o-mini / Gemini / Claude | Multi-provider |
+| Frontend | Next.js (React + TypeScript) | 14+ |
+| Database | SQLite (dev) / PostgreSQL (prod) | WAL mode |
+| Vector Store | ChromaDB + SentenceTransformers | all-MiniLM-L6-v2 |
+| Migrations | Alembic | Latest |
+| DevOps | Docker + GitHub Actions | Multi-stage |
 | Testing | pytest + pytest-asyncio | 8+ |
+| Monitoring | psutil + custom telemetry | Built-in |
 
-## 📊 AI Usage Logging
+## Quick Start
 
-Template đã tích hợp sẵn auto-logging hooks cho 6 AI tools:
-
-| Tool | Cơ chế | Config |
-|------|--------|--------|
-| Claude Code | `.claude/settings.json` hooks | Tự động |
-| Cursor | `.cursor/hooks.json` | Tự động |
-| OpenAI Codex CLI | `.codex/hooks.json` | Tự động |
-| Gemini CLI | `.gemini/settings.json` | Tự động |
-| GitHub Copilot | `.github/hooks/hooks.json` | Tự động |
-| Antigravity IDE | Pre-push scan transcript | Tự động trên `git push` |
-
-Tất cả prompts và tool calls được log vào `.ai-log/session.jsonl` và tự động submit lên grading server mỗi khi `git push`.
-
-**ChatGPT / web tools khác** — log thủ công:
 ```bash
-bash scripts/_pyrun.sh scripts/log_manual.py --tool chatgpt --prompt "What you asked"
+# 1. Clone repo
+git clone https://github.com/AI20K-Build-Cohort-2/C2-App-023.git
+cd C2-App-023
+
+# 2. Setup environment
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3. Configure API keys
+cp .env.example .env
+# Edit .env: add OPENAI_API_KEY, etc.
+
+# 4. Install AI Logging Hooks
+bash scripts/setup_hooks.sh
+
+# 5. Run backend
+uvicorn src.main:app --reload --port 8000
+# Swagger UI: http://localhost:8000/docs
+
+# 6. Run frontend
+cd frontend && npm install && npm run dev
+# App: http://localhost:3000
 ```
 
-> ⚠️ Chạy `bash scripts/setup_hooks.sh` một lần sau khi clone để cài pre-push hook.
+## Project Structure
 
-## 📖 Đọc Technical Guidebook
+```
+├── src/
+│   ├── agents/              # 🧠 LangGraph Agent
+│   │   ├── graph.py         #    State graph (modular nodes + edges)
+│   │   ├── state.py         #    AgentState TypedDict
+│   │   ├── nodes/           #    Modular node functions
+│   │   └── tools/           #    Agent tools (@tool decorators)
+│   ├── api/                 # 🌐 FastAPI Backend (13 route modules)
+│   │   ├── auth.py          #    JWT authentication
+│   │   ├── courses.py       #    Course CRUD + materials upload
+│   │   ├── outline.py       #    SSE streaming outline generation
+│   │   ├── materials.py     #    Storyboard & slide management
+│   │   ├── questions.py     #    Question bank CRUD + AI regenerate
+│   │   ├── export.py        #    PPTX/DOCX/ZIP export engine
+│   │   ├── chatbot.py       #    SSE chatbot with RAG context
+│   │   ├── admin.py         #    Admin dashboard API
+│   │   ├── autopilot.py     #    AI autopilot + SSE notifications
+│   │   ├── trash.py         #    Soft-delete & restore
+│   │   └── telemetry.py     #    System metrics & monitoring
+│   ├── services/            # 🔧 Business logic (LLM, RAG, export)
+│   ├── models/              # 📋 Pydantic schemas
+│   ├── database/            # 💾 SQLAlchemy models + session
+│   ├── prompts/             # 📝 LLM prompt templates
+│   ├── utils/               # 🛠 Utilities (parser, cache, alerting)
+│   ├── config.py            # ⚙️ Pydantic Settings
+│   └── main.py              # 🚀 App entry point
+├── frontend/                # 🎨 Next.js React Frontend
+│   └── src/views/           #    14 view components
+├── tests/                   # 🧪 241 tests (51% coverage)
+│   ├── test_agents/         #    Agent/graph tests
+│   ├── test_api/            #    API endpoint tests
+│   ├── test_integration/    #    Integration tests
+│   └── test_services/       #    Service layer tests
+├── alembic/                 # 📦 Database migrations
+├── eval/                    # 📊 Evaluation harness & results
+├── docs/plans/              # 📖 7 implementation plans
+├── presentation/            # 🎤 Demo Day materials
+├── .ai-log/                 # 📊 AI usage logs (auto-generated)
+├── Dockerfile               # 🐳 Multi-stage build
+├── docker-compose.yml       # 🐙 Full stack orchestration
+└── .github/workflows/       # ⚡ CI/CD pipeline
+```
 
-**Online (khuyến nghị):** [phoenix.note.transformerlabs.ai/technical-book](https://phoenix.note.transformerlabs.ai/technical-book)
+## API Endpoints
 
-Đăng nhập bằng GitHub (cùng account đã được BTC mời vào org `AI20K-Build-Cohort-2`)
-→ chọn tab **Technical Book** ở sidebar trái → đọc 10 chương + topic sections,
-có table of contents bên phải, hỗ trợ light/dark/cyberpunk theme.
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/auth/login` | JWT authentication |
+| POST | `/api/auth/register` | User registration |
+| GET | `/api/courses` | List courses (paginated) |
+| POST | `/api/courses` | Create course |
+| POST | `/api/courses/{id}/materials` | Upload course materials (RAG) |
+| POST | `/api/outline/generate` | SSE streaming outline generation |
+| GET | `/api/outline/chapters/{id}` | Get chapter details |
+| POST | `/api/materials/generate` | Generate storyboard & slides |
+| GET | `/api/questions/{chapter_id}` | List questions |
+| POST | `/api/questions/{id}/regenerate` | AI regenerate question |
+| POST | `/api/export/pptx` | Export PowerPoint |
+| POST | `/api/export/docx` | Export Word document |
+| POST | `/api/export/all-zip` | Export all as ZIP |
+| POST | `/api/chatbot/message` | SSE chatbot with RAG |
+| GET | `/api/autopilot/notifications/stream` | SSE autopilot events |
+| GET | `/api/admin/telemetry` | System metrics |
+| GET | `/health` | Health check |
 
-**Offline:** mọi chương đều ở thư mục `docs/guide/` trong template này — mở bằng
-bất kỳ markdown viewer/editor nào (VS Code, Obsidian, GitHub UI, …).
+## Architecture
 
-## 🔗 Liên kết
+```mermaid
+graph TB
+    subgraph Frontend
+        UI[React/Next.js UI]
+    end
 
-- 📖 **Technical Guidebook:** [phoenix.note.transformerlabs.ai/technical-book](https://phoenix.note.transformerlabs.ai/technical-book)
-- 🏫 **AI20K Program:** VinUni AI20K Build Phase
-- 👨‍🏫 **Mentor:** Đặng Hải Lộc
+    subgraph Backend[FastAPI Backend]
+        API[API Routes & SSE Broadcaster]
+        Agent[LangGraph Agent]
+        LLM[LLM Service]
+        Tools[Agent Tools]
+    end
 
-## 📄 License
+    subgraph Data[Data Layer]
+        DB[(Database: Locks & Logs)]
+        Vector[Vector Store]
+    end
+
+    UI -->|HTTP/REST| API
+    UI <---|SSE Stream| API
+    API --> Agent
+    Agent --> LLM
+    Agent --> Tools
+    Agent --> Vector
+    Tools --> DB
+    API --> DB
+```
+
+## Test Results
+
+```
+241 passed, 0 failed in 57s
+Test coverage: 51%
+Response accuracy: 66.7%
+Response latency: < 2s average
+```
+
+## Deliverables Checklist
+
+- [x] Source Code (GitHub)
+- [x] README.md (customized)
+- [x] Architecture Diagram (`ARCHITECTURE.md` + `docs/architecture_diagram.md`)
+- [x] AI Logs (auto-collected via hooks)
+- [ ] Live URL / Deploy
+- [ ] Video Demo
+- [ ] Pitch Deck (`presentation/`)
+- [x] Weekly Journal (`JOURNAL.md`)
+- [x] Worklog (`WORKLOG.md`)
+- [x] Evaluation Evidence (`eval/results/report.md`)
+
+## Team
+
+| Member | Role | Student ID |
+|--------|------|-----------|
+| Phạm Thành Nam | Full-stack Developer & AI Agent Engineer | — |
+| Lê Thiên Khang | DevOps & Repository Management | — |
+
+## License
 
 MIT — Sử dụng tự do cho mục đích giáo dục.
