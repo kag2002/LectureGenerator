@@ -1322,8 +1322,9 @@ function ReactFlowEditor({
               nodeTypes={nodeTypes}
               edgeTypes={edgeTypes}
               fitView
+              proOptions={{ hideAttribution: true }}
             >
-              <Controls style={{ background: '#1C2541', border: '1px solid rgba(255,255,255,0.1)', color: '#fff' }} />
+              <Controls />
               <Background color="rgba(255,255,255,0.12)" gap={16} />
               
               <Panel position="top-left" style={{ display: 'flex', gap: '8px' }} className="flow-top-toolbar">

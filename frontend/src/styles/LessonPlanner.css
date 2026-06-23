@@ -6831,6 +6831,53 @@ body.editor-fullscreen .planner-layout {
   will-change: auto !important;
 }
 
+/* Custom React Flow Controls styling for dark theme compatibility */
+.react-flow__controls {
+  background: #1C2541 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.react-flow__controls-button {
+  background: #1C2541 !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: #f8fafc !important;
+  fill: #f8fafc !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+}
+
+.react-flow__controls-button:last-child {
+  border-bottom: none !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #8C6239 !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #f8fafc !important;
+  color: #f8fafc !important;
+  width: 14px !important;
+  height: 14px !important;
+}
+
+/* Fallback for icon stroke/fill color */
+.react-flow__controls-button svg path {
+  stroke: #f8fafc !important;
+  fill: #f8fafc !important;
+}
+
 
 
 
