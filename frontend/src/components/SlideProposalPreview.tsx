@@ -1,10 +1,228 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import client from '../api/client';
 import { parseMarkdownToSlidesJS, optimizeSlideItemsJS, splitBulletText, THEMES, Slide, SlideItem } from '../utils/slideParser';
 import { renderBoldRuns, renderMarkdownInline } from '../utils/markdown';
-import { Loader2, BookOpen, BarChart2, Presentation, LayoutGrid, Plus, ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
+import { 
+  Loader2, BookOpen, BarChart2, Presentation, LayoutGrid, Plus, 
+  ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle, 
+  Maximize2, Minimize2, Settings, Play, GitFork, CheckCircle2, Layers 
+} from 'lucide-react';
 import MermaidDiagram from './MermaidDiagram';
+import { 
+  ReactFlow, 
+  Background, 
+  Handle, 
+  Position, 
+  BaseEdge, 
+  EdgeLabelRenderer, 
+  getSmoothStepPath,
+  type EdgeProps
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+
+// --- Read-Only Custom Modern Node Design for Preview ---
+const ReadOnlyCustomNode = ({ data }: any) => {
+  const type = data.type || 'process';
+  
+  // Theme styling configurations based on node type
+  let borderStyle = '1px solid rgba(255,255,255,0.15)';
+  let bgStyle = 'rgba(15, 23, 42, 0.9)'; // Slate 900 Glassmorphic
+  let accentColor = '#8C6239'; // Default gold accent
+  let IconComponent = Settings;
+  let labelType = 'Tiến trình';
+
+  if (type === 'input') {
+    accentColor = '#10B981'; // Green
+    bgStyle = 'rgba(16, 185, 129, 0.08)';
+    borderStyle = `1px solid ${accentColor}`;
+    IconComponent = Play;
+    labelType = 'Đầu vào';
+  } else if (type === 'decision') {
+    accentColor = '#FF9100'; // Amber
+    bgStyle = 'rgba(255, 145, 0, 0.08)';
+    borderStyle = `1px solid ${accentColor}`;
+    IconComponent = GitFork;
+    labelType = 'Quyết định';
+  } else if (type === 'output') {
+    accentColor = '#3b82f6'; // Blue
+    bgStyle = 'rgba(59, 130, 246, 0.08)';
+    borderStyle = `1px solid ${accentColor}`;
+    IconComponent = CheckCircle2;
+    labelType = 'Kết quả';
+  } else {
+    IconComponent = Layers;
+  }
+
+  // Base layout styles
+  const baseNodeStyle: React.CSSProperties = {
+    padding: '12px 18px',
+    background: bgStyle,
+    color: '#f8fafc',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    minWidth: '160px',
+    maxWidth: '220px',
+    textAlign: 'center',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+    position: 'relative',
+    backdropFilter: 'blur(12px)',
+  };
+
+  // Render Decision Node as a beautiful diamond shape
+  if (type === 'decision') {
+    return (
+      <div style={{
+        width: '110px',
+        height: '110px',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#f8fafc',
+        fontSize: '12px',
+        fontWeight: 'bold',
+      }}>
+        {/* Rotated Diamond Background */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: bgStyle,
+          border: borderStyle,
+          borderRadius: '8px',
+          transform: 'rotate(45deg)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+          zIndex: 1,
+        }} />
+        
+        {/* Hidden handles for connection rendering */}
+        <Handle type="target" position={Position.Top} id="t-top" style={{ opacity: 0, pointerEvents: 'none' }} />
+        <Handle type="target" position={Position.Left} id="t-left" style={{ opacity: 0, pointerEvents: 'none' }} />
+        <Handle type="source" position={Position.Bottom} id="s-bottom" style={{ opacity: 0, pointerEvents: 'none' }} />
+        <Handle type="source" position={Position.Right} id="s-right" style={{ opacity: 0, pointerEvents: 'none' }} />
+
+        {/* Upright Text Container */}
+        <div style={{
+          position: 'relative',
+          zIndex: 2,
+          padding: '8px',
+          textAlign: 'center',
+          maxWidth: '85px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '2px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px' }}>
+            <IconComponent size={10} />
+            <span>{labelType}</span>
+          </div>
+
+          <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', userSelect: 'none', fontSize: '12px', lineHeight: '1.2' }}>
+            {data.label}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Oval shape for Input/Output Nodes, Rounded Rectangle for Process Node
+  const nodeStyle: React.CSSProperties = {
+    ...baseNodeStyle,
+    borderRadius: (type === 'input' || type === 'output') ? '24px' : '8px',
+    border: borderStyle,
+    borderLeft: `5px solid ${accentColor}`,
+  };
+
+  return (
+    <div style={nodeStyle}>
+      <Handle type="target" position={Position.Top} id="t-top" style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="target" position={Position.Left} id="t-left" style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="source" position={Position.Bottom} id="s-bottom" style={{ opacity: 0, pointerEvents: 'none' }} />
+      <Handle type="source" position={Position.Right} id="s-right" style={{ opacity: 0, pointerEvents: 'none' }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px' }}>
+          <IconComponent size={10} />
+          <span>{labelType}</span>
+        </div>
+
+        <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', userSelect: 'none', fontSize: '13px', lineHeight: '1.3' }}>
+          {data.label}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- Read-Only Custom Edge Design for Preview ---
+const ReadOnlyEditableEdge = ({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style = {},
+  markerEnd,
+  label
+}: EdgeProps) => {
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  });
+
+  return (
+    <>
+      <BaseEdge 
+        path={edgePath} 
+        markerEnd={markerEnd} 
+        style={{
+          ...style,
+          stroke: style.stroke || '#8C6239',
+          strokeWidth: style.strokeWidth || 2,
+        }} 
+      />
+      {label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+              pointerEvents: 'none',
+              zIndex: 1000,
+            }}
+          >
+            <div
+              style={{
+                background: '#0B132B',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: '4px',
+                padding: '2px 8px',
+                color: '#f8fafc',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                userSelect: 'none',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }}
+            >
+              <span>{label}</span>
+            </div>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+};
 
 export interface SlideProposalPreviewProps {
   mdContent: string;
@@ -18,6 +236,7 @@ export interface SlideProposalPreviewProps {
   created_by?: string | null;
   activeSlideIndex?: number;
   onActiveSlideIndexChange?: (index: number) => void;
+  diagramLayouts?: string | null;
 }
 
 export default function SlideProposalPreview({
@@ -31,10 +250,33 @@ export default function SlideProposalPreview({
   onSaveRevisedSlide,
   created_by,
   activeSlideIndex,
-  onActiveSlideIndexChange
+  onActiveSlideIndexChange,
+  diagramLayouts = null
 }: SlideProposalPreviewProps) {
   const slides = parseMarkdownToSlidesJS(mdContent);
   const [localIndex, setLocalIndex] = useState(0);
+
+  const nodeTypes = useMemo(() => ({
+    custom: ReadOnlyCustomNode,
+  }), []);
+
+  const edgeTypes = useMemo(() => ({
+    editable: ReadOnlyEditableEdge,
+  }), []);
+
+  const getCustomLayoutForSlide = (slideIdx: number): { nodes: any[]; edges: any[] } | null => {
+    if (!diagramLayouts) return null;
+    try {
+      const parsed = JSON.parse(diagramLayouts);
+      const slideLayout = parsed[`slide_${slideIdx}`];
+      if (slideLayout && slideLayout.nodes && slideLayout.edges) {
+        return slideLayout;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  };
 
   const currentIndex = activeSlideIndex !== undefined ? activeSlideIndex : localIndex;
 
@@ -331,6 +573,7 @@ export default function SlideProposalPreview({
         );
       }
     } else if (s.mermaidContent) {
+      const customLayout = getCustomLayoutForSlide(idx);
       if (textItems.length > 0) {
         bodySection = isThumbnail ? (
           <div className="slide-split-svg-text thumbnail-view">
@@ -338,7 +581,7 @@ export default function SlideProposalPreview({
               {textItems[0].rawText ? textItems[0].rawText.replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '').substring(0, 35) : ''}...
             </div>
             <div className="slide-body-svg thumbnail-view" style={{ color: theme.titleColor }}>
-              <Presentation size={10} aria-hidden="true" /> [Sơ đồ]
+              <Presentation size={10} aria-hidden="true" /> [Sơ đồ{customLayout ? ' tùy chỉnh' : ''}]
             </div>
           </div>
         ) : (
@@ -362,19 +605,67 @@ export default function SlideProposalPreview({
                 })}
               </ul>
             </div>
-            <div className="slide-svg-graphic-col">
-              <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+            <div className="slide-svg-graphic-col" style={{ position: 'relative' }}>
+              {customLayout ? (
+                <div style={{ width: '100%', height: '100%', minHeight: '280px', position: 'relative' }}>
+                  <ReactFlow
+                    nodes={customLayout.nodes}
+                    edges={customLayout.edges}
+                    nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
+                    fitView
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    elementsSelectable={false}
+                    panOnDrag={false}
+                    zoomOnScroll={false}
+                    preventScrolling={true}
+                    zoomOnDoubleClick={false}
+                  >
+                    <Background color="rgba(255,255,255,0.05)" gap={12} size={1} />
+                  </ReactFlow>
+                  <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: 'var(--vinuni-gold)', zIndex: 10, backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    ✨ Bố cục tùy chỉnh
+                  </div>
+                </div>
+              ) : (
+                <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+              )}
             </div>
           </div>
         );
       } else {
         bodySection = isThumbnail ? (
           <div className="slide-body-svg thumbnail-view" style={{ color: theme.titleColor }}>
-            <Presentation size={12} aria-hidden="true" /> [Sơ đồ Mermaid]
+            <Presentation size={12} aria-hidden="true" /> [Sơ đồ Mermaid{customLayout ? ' (Tùy chỉnh)' : ''}]
           </div>
         ) : (
           <div className="slide-body-svg full-view" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+            {customLayout ? (
+              <div style={{ width: '100%', height: '100%', minHeight: '350px', position: 'relative' }}>
+                <ReactFlow
+                  nodes={customLayout.nodes}
+                  edges={customLayout.edges}
+                  nodeTypes={nodeTypes}
+                  edgeTypes={edgeTypes}
+                  fitView
+                  nodesDraggable={false}
+                  nodesConnectable={false}
+                  elementsSelectable={false}
+                  panOnDrag={false}
+                  zoomOnScroll={false}
+                  preventScrolling={true}
+                  zoomOnDoubleClick={false}
+                >
+                  <Background color="rgba(255,255,255,0.05)" gap={12} size={1} />
+                </ReactFlow>
+                <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: 'var(--vinuni-gold)', zIndex: 10, backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  ✨ Bố cục tùy chỉnh
+                </div>
+              </div>
+            ) : (
+              <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+            )}
           </div>
         );
       }

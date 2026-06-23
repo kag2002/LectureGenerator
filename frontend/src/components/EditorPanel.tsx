@@ -1177,6 +1177,7 @@ export default function EditorPanel({
                       created_by={materialCreatedBy}
                       activeSlideIndex={activeVisualSlideIdx}
                       onActiveSlideIndexChange={setActiveVisualSlideIdx}
+                      diagramLayouts={diagramLayouts}
                     />
                   </div>
                 </div>
@@ -1215,6 +1216,7 @@ export default function EditorPanel({
                     created_by={materialCreatedBy}
                     activeSlideIndex={activeVisualSlideIdx}
                     onActiveSlideIndexChange={setActiveVisualSlideIdx}
+                    diagramLayouts={diagramLayouts}
                   />
                 </>
               )}
