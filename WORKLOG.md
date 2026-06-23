@@ -118,8 +118,9 @@
 | Lê Thiên Khang | Tối ưu hóa cấu trúc thư mục backend và modular hóa tích hợp LLM | ✅ Done | `models` -> `schemas`, đóng gói LLM vào `src/utils/llm`, thêm package initializers | 3h |
 | Lê Thiên Khang | Chạy kiểm thử toàn diện & cập nhật đánh giá | ✅ Done | 308/308 tests pass thành công, cập nhật `walkthrough.md` | 1h |
 | Lê Thiên Khang | Khắc phục lỗi overlap giao diện: Sử dụng React Portal để đưa ReactFlowEditorModal ra body level | ✅ Done | Modal hiển thị đè lên top header/sidebar đúng z-index | 0.5h |
+| Lê Thiên Khang | Định dạng Controls & Ẩn logo React Flow: Thêm style CSS tối cho zoom/fit panel và ẩn logo attribution ở góc phải | ✅ Done | Sơ đồ đồng bộ dark theme, không còn liên kết React Flow gốc | 0.5h |
 
-**Tổng kết:** Refactoring & Optimization Day — Đại tu cấu trúc thư mục backend/frontend, loại bỏ code smells, mở rộng kiểm thử toàn diện đạt 308 tests pass, khắc phục lỗi chồng lấp giao diện của React Flow editor.
+**Tổng kết:** Refactoring & Optimization Day — Đại tu cấu trúc thư mục backend/frontend, loại bỏ code smells, mở rộng kiểm thử toàn diện đạt 308 tests pass, khắc phục lỗi chồng lấp và tối ưu hóa hiển thị giao diện React Flow editor.
 
 ---
 
