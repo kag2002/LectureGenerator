@@ -1323,6 +1323,8 @@ function ReactFlowEditor({
               edgeTypes={edgeTypes}
               fitView
               proOptions={{ hideAttribution: true }}
+              nodeExtent={[[-300, -300], [1300, 1100]]}
+              translateExtent={[[-500, -500], [1500, 1300]]}
             >
               <Controls />
               <Background color="rgba(255,255,255,0.12)" gap={16} />
