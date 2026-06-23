@@ -107,7 +107,12 @@ export function useMaterialsStream({
     if (!selectedChapter) return;
     setChapterWarnings(prev => ({ ...prev, [selectedChapter.id]: warns }));
   };
-  const [isGeneratingStoryboard, setIsGeneratingStoryboard] = useState(false);
+  const [isGeneratingStoryboard, setIsGeneratingStoryboardState] = useState(false);
+  const isGeneratingStoryboardRef = useRef(false);
+  const setIsGeneratingStoryboard = (val: boolean) => {
+    isGeneratingStoryboardRef.current = val;
+    setIsGeneratingStoryboardState(val);
+  };
   const [currentStage, setCurrentStage] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [totalSlides, setTotalSlides] = useState(0);
@@ -128,9 +133,13 @@ export function useMaterialsStream({
 
   useEffect(() => {
     if (selectedChapter && generatingChapterId === selectedChapter.id) {
-      setAiViewMode('slides');
+      if (isGeneratingStoryboard) {
+        setAiViewMode('storyboard');
+      } else {
+        setAiViewMode('slides');
+      }
     }
-  }, [selectedChapter, generatingChapterId]);
+  }, [selectedChapter, generatingChapterId, isGeneratingStoryboard]);
 
   const handleGenerateStoryboard = async () => {
     if (!selectedChapter) {
@@ -152,6 +161,7 @@ export function useMaterialsStream({
     setApiStatus('generating');
     setGenLog('Giai đoạn 1: AI đang lập cấu trúc slide (Storyboard)…');
     setStoryboardDraft(null);
+    setAiViewMode('storyboard');
     
     setActiveAgent('storyboard_architect');
     setAgentStatus('running');
@@ -199,6 +209,7 @@ export function useMaterialsStream({
       setApiStatus('success');
       setMessage(response.data.message);
       setGenLog('');
+      setAiViewMode('storyboard');
 
       window.dispatchEvent(new CustomEvent('programmatic-storyboard-generated', {
         detail: {
@@ -571,6 +582,7 @@ export function useMaterialsStream({
         if (actType === 'generate_chapter_storyboard_action') {
           setIsGeneratingStoryboard(true);
           setGenLog('Giai đoạn 1: AI đang lập cấu trúc slide (Storyboard)…');
+          setAiViewMode('storyboard');
         } else {
           setGenLog('Giai đoạn 2: AI đang viết slide chi tiết & kịch bản tương tác…');
           setAiSlideProposals(prev => ({ ...prev, [chapterId]: '' }));
@@ -578,6 +590,7 @@ export function useMaterialsStream({
           setCurrentStage(1);
           setCurrentSlide(0);
           setTotalSlides(0);
+          setAiViewMode('slides');
         }
         
         setError('');
@@ -667,6 +680,7 @@ export function useMaterialsStream({
       const targetChapterId = generatingChapterId;
       if (!targetChapterId) return;
 
+      const wasGeneratingStoryboard = isGeneratingStoryboardRef.current;
       setIsGeneratingStoryboard(false);
       setGeneratingChapterId(null);
       setAIProcessingStatus(false);
@@ -692,6 +706,12 @@ export function useMaterialsStream({
           setActiveAgent('saver');
           setAgentStatus('completed');
           setSelfCorrectionAttempt(null);
+
+          if (wasGeneratingStoryboard || data.storyboard !== undefined) {
+            setAiViewMode('storyboard');
+          } else if (data.slide_content !== undefined) {
+            setAiViewMode('slides');
+          }
 
           try {
             const response = await client.get(`/api/courses/chapters/${targetChapterId}/materials`);

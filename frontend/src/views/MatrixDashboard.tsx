@@ -5,22 +5,12 @@ import FlowSteps from '../components/FlowSteps';
 import { ArrowLeft, ClipboardList, Image, Zap, AlertCircle, AlertTriangle, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Course, QueueItem } from '@/types';
 import '../styles/MatrixDashboard.css';
+import { useQueue } from '../context/QueueContext';
 
 export interface MatrixDashboardProps {
   course: Course;
   onBack: () => void;
   onNavigate: (view: string, extra?: any) => void;
-  queue: QueueItem[];
-  isQueueRunning: boolean;
-  showQueuePanel: boolean;
-  queueProgressMsg: string;
-  setIsQueueRunning: (val: boolean) => void;
-  setQueue: (queue: QueueItem[]) => void;
-  setShowQueuePanel: (show: boolean) => void;
-  setQueueProgressMsg: (msg: string) => void;
-  setQueueMode: (mode: 'questions' | 'materials') => void;
-  cancelRef: React.MutableRefObject<boolean>;
-  runGlobalQueue: (queue: QueueItem[], mode: 'questions' | 'materials', courseId: number) => Promise<void>;
   isActive?: boolean;
 }
 
@@ -28,16 +18,18 @@ export default function MatrixDashboard({
   course, 
   onBack, 
   onNavigate,
-  queue,
-  isQueueRunning,
-  setIsQueueRunning,
-  setQueue,
-  setShowQueuePanel,
-  setQueueProgressMsg,
-  setQueueMode,
-  runGlobalQueue,
   isActive
 }: MatrixDashboardProps) {
+  const {
+    queue,
+    isQueueRunning,
+    setIsQueueRunning,
+    setQueue,
+    setShowQueuePanel,
+    setQueueProgressMsg,
+    setQueueMode,
+    runGlobalQueue
+  } = useQueue();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
   useEffect(() => {

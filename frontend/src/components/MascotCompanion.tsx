@@ -5,7 +5,7 @@ import '../styles/MascotCompanion.css';
 import { renderMarkdown } from '../utils/markdown';
 import { useUILock } from '../context/UILockContext';
 import ExecutionView, { CourseReadiness } from './mascot/ExecutionView';
-import { MascotAction } from '../config/mascotActions';
+import { MascotAction, ACTION_REGISTRY } from '../config/mascotActions';
 
 type MascotMode = 'chat' | 'execution';
 
@@ -35,28 +35,20 @@ interface MascotAvatarProps {
   isDragging: boolean;
   isProcessing?: boolean;
   isOffline?: boolean;
+  isJumping?: boolean;
 }
 
-function MascotAvatar({ onMouseDown, onTouchStart, hasNotification, isDragging, isProcessing, isOffline }: MascotAvatarProps) {
-  const [frame, setFrame] = useState(1);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFrame(f => (f === 1 ? 2 : 1));
-    }, isProcessing ? 150 : 300);
-    return () => clearInterval(interval);
-  }, [isProcessing]);
-
+function MascotAvatar({ onMouseDown, onTouchStart, hasNotification, isDragging, isProcessing, isOffline, isJumping }: MascotAvatarProps) {
   return (
     <div
-      className="mascot-avatar-wrapper"
+      className={`mascot-avatar-wrapper ${isJumping ? 'jump' : ''}`}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
       title="Trợ lý ảo ODIN AI (Đang thử nghiệm)"
       style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
       <img
-        src={`/mascot_frame${frame}.png?v=penguin`}
+        src="/mascot_new.png"
         alt="AI Assistant Mascot"
         className="mascot-avatar-image"
         style={isProcessing ? { filter: 'brightness(1.15) saturate(1.3)', animation: 'mascotPulse 1s ease-in-out infinite' } : undefined}
@@ -177,6 +169,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
   // Bug fix: Track xem response có chứa tool mutating không để quyết định dispatch db-state-changed
   const [hadMutatingTool, setHadMutatingTool] = useState(false);
   const [pendingAction, setPendingAction] = useState<any | null>(null);
+  const pendingActionRef = useRef<any>(null);
 
   // Drag & Drop / Syllabus Upload States in Mascot Companion
   const [isDragging, setIsDragging] = useState(false);
@@ -187,12 +180,54 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
   const [extractedClos, setExtractedClos] = useState<any[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatAbortRef = useRef<AbortController | null>(null);
 
   // Dragging states for the mascot companion
   const [isDraggingMascot, setIsDraggingMascot] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isMounted, setIsMounted] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
+
+  // Jumping state for notifications & status updates
+  const [isJumping, setIsJumping] = useState(false);
+  const prevIsProcessing = useRef(false);
+  const prevHasNotification = useRef(false);
+  const prevSseStatus = useRef<'connected' | 'reconnecting' | 'failed'>('connected');
+
+  const triggerJump = useCallback(() => {
+    setIsJumping(true);
+  }, []);
+
+  useEffect(() => {
+    if (isJumping) {
+      const timer = setTimeout(() => {
+        setIsJumping(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isJumping]);
+
+  useEffect(() => {
+    const isProcessing = !!(isAutopilotActive || aiStatus?.isProcessing || isThinking || execRunning);
+    if (isProcessing !== prevIsProcessing.current) {
+      triggerJump();
+      prevIsProcessing.current = isProcessing;
+    }
+  }, [isAutopilotActive, aiStatus?.isProcessing, isThinking, execRunning, triggerJump]);
+
+  useEffect(() => {
+    if (hasNotification && !prevHasNotification.current) {
+      triggerJump();
+    }
+    prevHasNotification.current = hasNotification;
+  }, [hasNotification, triggerJump]);
+
+  useEffect(() => {
+    if (sseStatus !== prevSseStatus.current) {
+      triggerJump();
+      prevSseStatus.current = sseStatus;
+    }
+  }, [sseStatus, triggerJump]);
 
   const clampPosition = (x: number, y: number, isBubbleOpen: boolean) => {
     const margin = 16;
@@ -367,7 +402,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     const handleSSEStatus = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       setSseStatus(detail.status);
-      
+
       if (detail.status === 'reconnecting' || detail.status === 'failed') {
         if (!reconnectStart) {
           reconnectStart = Date.now();
@@ -398,15 +433,37 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
 
   const handleManualUnlock = async () => {
     if (!selectedCourse?.id) return;
-    
-    // Giải phóng tất cả các khóa trên giao diện của môn học này
+
+    // Hủy các tiến trình ngầm trước khi mở khóa giao diện
     const lockedKeys = Object.keys(locks);
+    for (const key of lockedKeys) {
+      if (key.startsWith('chapter_')) {
+        const parts = key.split('_');
+        const chapterId = parts[1];
+        if (chapterId && !isNaN(Number(chapterId))) {
+          try {
+            // Hủy cả task direct-action và task materials-generation song song
+            await Promise.all([
+              client.post(`/api/chatbot/courses/${selectedCourse.id}/chapters/${chapterId}/cancel-direct-action`),
+              client.post(`/api/courses/chapters/${chapterId}/cancel-materials-generation`)
+            ]).catch(err => {
+              // Bỏ qua lỗi nếu task không chạy
+              console.warn("Hủy task chạy ngầm trả về cảnh báo:", err.message);
+            });
+          } catch (err) {
+            console.error("Lỗi khi hủy tiến trình chạy ngầm:", err);
+          }
+        }
+      }
+    }
+
+    // Giải phóng tất cả các khóa trên giao diện của môn học này
     for (const key of lockedKeys) {
       await releaseLock(selectedCourse.id, key);
     }
-    
+
     setShowManualUnlock(false);
-    setMessage("Đã mở khóa thủ công giao diện thành công.");
+    setMessage("Đã dừng các tiến trình ngầm và mở khóa giao diện thành công.");
     window.dispatchEvent(new CustomEvent('db-state-changed'));
   };
 
@@ -430,11 +487,156 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     }
   }, [isOpen, message, pendingAction, uploadingFile, isMounted]);
 
+  // ── handleExecuteAction — Execution Mode direct API call ──────────────
+  const handleExecuteAction = useCallback(async (action: MascotAction, params: Record<string, any>) => {
+    if (!selectedCourse || !action.backendAction) return;
+    setExecRunning(true);
+    setExecResult(null);
+    setExecLog('Đang khởi động...');
+
+    const chapterId = params.chapter_id ? Number(params.chapter_id) : null;
+    setExecChapterId(chapterId);
+
+    // Phát sự kiện bắt đầu sinh ở Mascot
+    window.dispatchEvent(new CustomEvent('mascot-execution-start', { detail: { action, params } }));
+
+    let endDispatched = false;
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      // Đọc cấu hình lớp học sư phạm mặc định từ localStorage để đồng bộ hóa bối cảnh
+      let mergedParams = { ...params };
+      try {
+        const stored = localStorage.getItem('vinuni_class_defaults');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          mergedParams = {
+            ...mergedParams,
+            class_size: parsed.classSize,
+            has_wifi: parsed.hasWifi,
+            furniture_type: parsed.furnitureType,
+            session_duration: parsed.sessionDuration
+          };
+        }
+      } catch (e) {
+        console.warn("Lỗi khi đọc vinuni_class_defaults từ localStorage:", e);
+      }
+
+      const response = await fetch(
+        `${client.defaults.baseURL || 'http://localhost:8000'}/api/chatbot/direct-action`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            course_id: selectedCourse.id,
+            action_type: action.backendAction,
+            params: mergedParams,
+          }),
+        }
+      );
+
+      if (!response.body) throw new Error('No response body');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const eventMatch = line.match(/^event:\s*(.+)$/m);
+          const dataMatch = line.match(/^data:\s*(.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+          const evt = eventMatch[1].trim();
+          const data = JSON.parse(dataMatch[1].trim());
+          if (evt === 'stage') {
+            setExecLog(data.message);
+            // Đồng bộ nhanh trạng thái khóa lên UI
+            fetchLocks(selectedCourse.id);
+
+            // Phát sự kiện cập nhật tiến trình của Mascot để đồng bộ stepper & logs
+            window.dispatchEvent(new CustomEvent('mascot-execution-stage', {
+              detail: {
+                message: data.message,
+                stage: data.stage,
+                current_slide: data.current_slide,
+                total_slides: data.total_slides,
+                active_agent: data.active_agent,
+                agent_status: data.agent_status,
+                self_correction_attempt: data.self_correction_attempt
+              }
+            }));
+          } else if (evt === 'token') {
+            // Phát sự kiện sinh token để preview slide trực tiếp
+            window.dispatchEvent(new CustomEvent('mascot-execution-token', {
+              detail: { token: data.token }
+            }));
+          } else if (evt === 'done') {
+            endDispatched = true;
+            setExecResult({ success: true, message: data.message, navigateTo: data.navigate_to });
+            if (data.navigate_to) {
+              window.dispatchEvent(new CustomEvent('db-state-changed'));
+            }
+            // Phát sự kiện kết thúc thành công
+            window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+              detail: {
+                success: true,
+                message: data.message,
+                slide_content: data.slide_content,
+                active_learning_script: data.active_learning_script,
+                warnings: data.warnings,
+                storyboard: data.storyboard
+              }
+            }));
+          } else if (evt === 'error') {
+            endDispatched = true;
+            setExecResult({ success: false, message: data.message });
+            // Phát sự kiện kết thúc thất bại
+            window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+              detail: {
+                success: false,
+                message: data.message
+              }
+            }));
+          }
+        }
+      }
+    } catch (err: any) {
+      endDispatched = true;
+      setExecResult({ success: false, message: `Lỗi kết nối: ${err.message}` });
+      // Phát sự kiện kết thúc thất bại khi gặp ngoại lệ mạng
+      window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+        detail: {
+          success: false,
+          message: err.message
+        }
+      }));
+    } finally {
+      if (!endDispatched) {
+        window.dispatchEvent(new CustomEvent('mascot-execution-end', {
+          detail: {
+            success: false,
+            message: 'Tiến trình thực thi bị gián đoạn hoặc hủy.'
+          }
+        }));
+      }
+      setExecRunning(false);
+      setExecChapterId(null);
+      fetchLocks(selectedCourse.id);
+    }
+  }, [selectedCourse, fetchLocks]);
+
   useEffect(() => {
     const handleDispatchAction = (e: Event) => {
       const customEvent = e as CustomEvent;
       const detail = customEvent.detail;
       setPendingAction(detail);
+      pendingActionRef.current = detail;
       setHasNotification(true);
       if (detail && detail.message) {
         setMessage(detail.message);
@@ -445,11 +647,31 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       setHasNotification(false);
     };
     const handleClearAction = () => {
+      const currentPending = pendingActionRef.current;
+      if (currentPending && currentPending.action) {
+        const actionObj = ACTION_REGISTRY.find(a => a.id === currentPending.action);
+        const EXCLUDED_ACTIONS = ['generate_materials', 'generate_storyboard'];
+        if (
+          actionObj && 
+          actionObj.type === 'execution' && 
+          !EXCLUDED_ACTIONS.includes(currentPending.action)
+        ) {
+          // Trigger the execution via direct-action stream (locks screen and supports cancel/heartbeat)
+          setMascotMode('execution');
+          setIsOpen(true);
+          handleExecuteAction(actionObj, currentPending.params || {});
+          setPendingAction(null);
+          pendingActionRef.current = null;
+          return;
+        }
+      }
       setPendingAction(null);
+      pendingActionRef.current = null;
       setMessage("Dạ, em đang thực hiện hành động theo yêu cầu của Thầy/Cô ạ!");
     };
     const handleCancelActionGlobal = () => {
       setPendingAction(null);
+      pendingActionRef.current = null;
       setMessage("Em đã hủy lệnh theo yêu cầu của Thầy/Cô.");
     };
 
@@ -464,7 +686,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       window.removeEventListener('confirm-chatbot-action', handleClearAction);
       window.removeEventListener('cancel-chatbot-action', handleCancelActionGlobal);
     };
-  }, []);
+  }, [handleExecuteAction]);
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -601,130 +823,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     }
   };
 
-  // ── handleExecuteAction — Execution Mode direct API call ──────────────
-  const handleExecuteAction = useCallback(async (action: MascotAction, params: Record<string, any>) => {
-    if (!selectedCourse || !action.backendAction) return;
-    setExecRunning(true);
-    setExecResult(null);
-    setExecLog('Đang khởi động...');
 
-    const chapterId = params.chapter_id ? Number(params.chapter_id) : null;
-    setExecChapterId(chapterId);
-
-    // Phát sự kiện bắt đầu sinh ở Mascot
-    window.dispatchEvent(new CustomEvent('mascot-execution-start', { detail: { action, params } }));
-
-    let endDispatched = false;
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${client.defaults.baseURL || 'http://localhost:8000'}/api/chatbot/direct-action`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            course_id: selectedCourse.id,
-            action_type: action.backendAction,
-            params,
-          }),
-        }
-      );
-
-      if (!response.body) throw new Error('No response body');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          const eventMatch = line.match(/^event:\s*(.+)$/m);
-          const dataMatch = line.match(/^data:\s*(.+)$/m);
-          if (!eventMatch || !dataMatch) continue;
-          const evt = eventMatch[1].trim();
-          const data = JSON.parse(dataMatch[1].trim());
-          if (evt === 'stage') {
-            setExecLog(data.message);
-            // Đồng bộ nhanh trạng thái khóa lên UI
-            fetchLocks(selectedCourse.id);
-
-            // Phát sự kiện cập nhật tiến trình của Mascot để đồng bộ stepper & logs
-            window.dispatchEvent(new CustomEvent('mascot-execution-stage', {
-              detail: {
-                message: data.message,
-                stage: data.stage,
-                current_slide: data.current_slide,
-                total_slides: data.total_slides,
-                active_agent: data.active_agent,
-                agent_status: data.agent_status,
-                self_correction_attempt: data.self_correction_attempt
-              }
-            }));
-          } else if (evt === 'token') {
-            // Phát sự kiện sinh token để preview slide trực tiếp
-            window.dispatchEvent(new CustomEvent('mascot-execution-token', {
-              detail: { token: data.token }
-            }));
-          } else if (evt === 'done') {
-            endDispatched = true;
-            setExecResult({ success: true, message: data.message, navigateTo: data.navigate_to });
-            if (data.navigate_to) {
-              window.dispatchEvent(new CustomEvent('db-state-changed'));
-            }
-            // Phát sự kiện kết thúc thành công
-            window.dispatchEvent(new CustomEvent('mascot-execution-end', {
-              detail: {
-                success: true,
-                message: data.message,
-                slide_content: data.slide_content,
-                active_learning_script: data.active_learning_script,
-                warnings: data.warnings,
-                storyboard: data.storyboard
-              }
-            }));
-          } else if (evt === 'error') {
-            endDispatched = true;
-            setExecResult({ success: false, message: data.message });
-            // Phát sự kiện kết thúc thất bại
-            window.dispatchEvent(new CustomEvent('mascot-execution-end', {
-              detail: {
-                success: false,
-                message: data.message
-              }
-            }));
-          }
-        }
-      }
-    } catch (err: any) {
-      endDispatched = true;
-      setExecResult({ success: false, message: `Lỗi kết nối: ${err.message}` });
-      // Phát sự kiện kết thúc thất bại khi gặp ngoại lệ mạng
-      window.dispatchEvent(new CustomEvent('mascot-execution-end', {
-        detail: {
-          success: false,
-          message: err.message
-        }
-      }));
-    } finally {
-      if (!endDispatched) {
-        window.dispatchEvent(new CustomEvent('mascot-execution-end', {
-          detail: {
-            success: false,
-            message: 'Tiến trình thực thi bị gián đoạn hoặc hủy.'
-          }
-        }));
-      }
-      setExecRunning(false);
-      setExecChapterId(null);
-      fetchLocks(selectedCourse.id);
-    }
-  }, [selectedCourse, fetchLocks]);
 
   const handleNavigateAction = useCallback((view: string, triggerEvent?: string) => {
     onNavigate(view);
@@ -778,6 +877,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
       }
 
       // 2. Gọi API stream chatbot
+      chatAbortRef.current = new AbortController();
       const response = await fetch(`${client.defaults.baseURL || 'http://localhost:8000'}/api/chatbot/chat-stream`, {
         method: 'POST',
         headers: {
@@ -788,7 +888,8 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
           session_id: sessionId,
           message: userText,
           course_id: selectedCourse.id
-        })
+        }),
+        signal: chatAbortRef.current.signal
       });
 
       if (!response.body) {
@@ -842,12 +943,26 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
           }
         }
       }
-    } catch (err) {
-      console.error("Mascot chat error:", err);
-      setMessage("ODIN AI: Gặp sự cố kết nối LLM.");
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        setMessage("ODIN AI: Đã hủy yêu cầu xử lý theo yêu cầu của Thầy/Cô.");
+      } else {
+        console.error("Mascot chat error:", err);
+        setMessage("ODIN AI: Gặp sự cố kết nối LLM.");
+      }
     } finally {
+      chatAbortRef.current = null;
       setIsThinking(false);
     }
+  };
+
+  const handleCancelChat = () => {
+    if (chatAbortRef.current) {
+      chatAbortRef.current.abort();
+      chatAbortRef.current = null;
+    }
+    setIsThinking(false);
+    setMessage("ODIN AI: Đã hủy yêu cầu xử lý theo yêu cầu của Thầy/Cô.");
   };
 
   // Bug fix: Dùng câu hỏi gốc của USER để xác định action buttons — không dùng bot response
@@ -887,13 +1002,15 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
     <div
       className="mascot-companion-container"
       style={isMounted ? {
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+        left: 0,
+        top: 0,
         bottom: 'auto',
         right: 'auto',
         width: `${avatarSize}px`,
         height: `${avatarSize}px`,
         opacity: 1,
+        transition: isDraggingMascot ? 'none' : 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease',
       } : {
         opacity: 0,
       }}
@@ -906,6 +1023,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
         isDragging={isDraggingMascot}
         isProcessing={isAutopilotActive || aiStatus?.isProcessing}
         isOffline={sseStatus !== 'connected'}
+        isJumping={isJumping}
       />
 
       {/* Speech Bubble / Drawer */}
@@ -990,27 +1108,10 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
                     </div>
                     {execChapterId && (
                       <button
-                        className="exec-cancel-btn"
+                        className="mascot-cancel-btn exec-cancel-btn"
                         onClick={handleCancelExecution}
-                        style={{
-                          marginTop: '10px',
-                          background: 'rgba(239, 68, 68, 0.15)',
-                          border: '1px solid rgba(239, 68, 68, 0.3)',
-                          color: '#fca5a5',
-                          fontSize: '11px',
-                          padding: '5px 10px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          width: '100%',
-                          transition: 'all 0.2s ease',
-                          fontWeight: 500
-                        }}
                       >
-                        <X size={12} /> Hủy thực thi (Mascot)
+                        <X size={12} /> Hủy thực thi
                       </button>
                     )}
                   </div>
@@ -1029,7 +1130,7 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
                           className="exec-result-btn primary"
                           onClick={() => { onNavigate(execResult.navigateTo!); setIsOpen(false); }}
                         >
-                          <Check size={12} /> Xem kết quả
+                          Xem kết quả
                         </button>
                       )}
                       <button
@@ -1059,264 +1160,276 @@ export default function MascotCompanion({ onNavigate, onTriggerPedagogicalConfig
 
             {/* ── CHAT MODE VIEW (original) ───────────────────── */}
             {(mascotMode === 'chat' || uploadingFile) && (
-            <>{uploadingFile ? (
-              <div className="mascot-upload-card">
-                <div className="mascot-upload-header">
-                  <span>NẠP SYLLABUS:</span>
-                  <span className="mascot-upload-filename">{uploadingFile}</span>
-                </div>
-                <div className="mascot-upload-bar-track">
-                  <div className="mascot-upload-bar-fill" style={{ width: `${(uploadStage / 4) * 100}%` }} />
-                </div>
-                <div className="mascot-upload-stages">
-                  <div className={uploadStage >= 1 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    1. Đọc và trích xuất tài liệu {uploadStage > 1 && <Check size={11} style={{ display: 'inline' }} />}
+              <>{uploadingFile ? (
+                <div className="mascot-upload-card">
+                  <div className="mascot-upload-header">
+                    <span>NẠP SYLLABUS:</span>
+                    <span className="mascot-upload-filename">{uploadingFile}</span>
                   </div>
-                  <div className={uploadStage >= 2 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    2. AI phân tích cấu trúc CLOs {uploadStage > 2 && <Check size={11} style={{ display: 'inline' }} />}
+                  <div className="mascot-upload-bar-track">
+                    <div className="mascot-upload-bar-fill" style={{ width: `${(uploadStage / 4) * 100}%` }} />
                   </div>
-                  <div className={uploadStage >= 3 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    3. Ánh xạ Bloom {uploadStage > 3 && <Check size={11} style={{ display: 'inline' }} />}
-                  </div>
-                  <div className={uploadStage >= 4 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    4. Lưu trữ và đồng bộ hóa {uploadStage > 4 && <Check size={11} style={{ display: 'inline' }} />}
-                  </div>
-                </div>
-                {uploadLog && (
-                  <div className="mascot-upload-log">
-                    {uploadLog}
-                  </div>
-                )}
-                {extractedClos.length > 0 && (
-                  <div style={{ marginTop: '8px', background: 'rgba(0,0,0,0.2)', padding: '6px', maxHeight: '80px', overflowY: 'auto' }}>
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>ĐÃ TRÍCH XUẤT ({extractedClos.length}):</div>
-                    {extractedClos.map((c, idx) => (
-                      <div key={idx} style={{ fontSize: '13px' }}>
-                        - <strong style={{ color: 'var(--vinuni-gold)' }}>{c.clo_code}</strong>: {c.description.slice(0, 30)}...
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <>
-                {isAutopilotActive ? (
-                  <div className="mascot-autopilot-card">
-                    <div className="mascot-autopilot-title">
-                      <Loader2 size={14} className="animate-spin" />
-                      <span>ODIN Autopilot Active</span>
+                  <div className="mascot-upload-stages">
+                    <div className={uploadStage >= 1 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      1. Đọc và trích xuất tài liệu {uploadStage > 1 && <Check size={11} style={{ display: 'inline' }} />}
                     </div>
-                    <p className="mascot-autopilot-msg">
-                      Em đang tự động tương tác và thiết kế bài giảng thay cho Thầy/Cô. Tiến trình này đang chạy ngầm và giao diện tương ứng sẽ tạm thời khóa để đảm bảo an toàn dữ liệu.
-                    </p>
-                    <div style={{
-                      height: '4px',
-                      background: 'rgba(255,255,255,0.06)',
-                      borderRadius: '2px',
-                      overflow: 'hidden',
-                      marginTop: '4px'
-                    }}>
-                      <div style={{
-                        height: '100%',
-                        background: 'linear-gradient(90deg, var(--vinuni-gold), #b8860b)',
-                        width: '75%',
-                        animation: 'pulse 1.5s infinite'
-                      }} />
+                    <div className={uploadStage >= 2 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      2. AI phân tích cấu trúc CLOs {uploadStage > 2 && <Check size={11} style={{ display: 'inline' }} />}
                     </div>
-                    {showManualUnlock && (
-                      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontSize: '11.5px', fontWeight: 600 }}>
-                          <WifiOff size={13} />
-                          <span>Mất kết nối thời gian thực!</span>
+                    <div className={uploadStage >= 3 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      3. Ánh xạ Bloom {uploadStage > 3 && <Check size={11} style={{ display: 'inline' }} />}
+                    </div>
+                    <div className={uploadStage >= 4 ? "stage-active" : "stage-pending"} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      4. Lưu trữ và đồng bộ hóa {uploadStage > 4 && <Check size={11} style={{ display: 'inline' }} />}
+                    </div>
+                  </div>
+                  {uploadLog && (
+                    <div className="mascot-upload-log">
+                      {uploadLog}
+                    </div>
+                  )}
+                  {extractedClos.length > 0 && (
+                    <div style={{ marginTop: '8px', background: 'rgba(0,0,0,0.2)', padding: '6px', maxHeight: '80px', overflowY: 'auto' }}>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>ĐÃ TRÍCH XUẤT ({extractedClos.length}):</div>
+                      {extractedClos.map((c, idx) => (
+                        <div key={idx} style={{ fontSize: '13px' }}>
+                          - <strong style={{ color: 'var(--vinuni-gold)' }}>{c.clo_code}</strong>: {c.description.slice(0, 30)}...
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleManualUnlock}
-                          style={{
-                            background: '#ef4444',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '6px 12px',
-                            borderRadius: '4px',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            alignSelf: 'flex-start',
-                            boxShadow: '0 2px 4px rgba(239,68,68,0.2)'
-                          }}
-                        >
-                          Mở khóa thủ công
-                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {isAutopilotActive ? (
+                    <div className="mascot-autopilot-card">
+                      <div className="mascot-autopilot-title">
+                        <Loader2 size={14} className="animate-spin" />
+                        <span>ODIN Autopilot Active</span>
+                      </div>
+                      <p className="mascot-autopilot-msg">
+                        Em đang tự động tương tác và thiết kế bài giảng thay cho Thầy/Cô. Tiến trình này đang chạy ngầm và giao diện tương ứng sẽ tạm thời khóa để đảm bảo an toàn dữ liệu.
+                      </p>
+                      <div style={{
+                        height: '4px',
+                        background: 'rgba(255,255,255,0.06)',
+                        borderRadius: '2px',
+                        overflow: 'hidden',
+                        marginTop: '4px'
+                      }}>
+                        <div style={{
+                          height: '100%',
+                          background: 'linear-gradient(90deg, var(--vinuni-gold), #b8860b)',
+                          width: '75%',
+                          animation: 'pulse 1.5s infinite'
+                        }} />
+                      </div>
+                      {showManualUnlock && (
+                        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f87171', fontSize: '11.5px', fontWeight: 600 }}>
+                            <WifiOff size={13} />
+                            <span>Mất kết nối thời gian thực!</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleManualUnlock}
+                            style={{
+                              background: '#ef4444',
+                              color: '#ffffff',
+                              border: 'none',
+                              padding: '6px 12px',
+                              borderRadius: '4px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              alignSelf: 'flex-start',
+                              boxShadow: '0 2px 4px rgba(239,68,68,0.2)'
+                            }}
+                          >
+                            Mở khóa thủ công
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {lastUserInput && (
+                        <div className="mascot-user-question">
+                          <strong>Thầy/Cô:</strong> {lastUserInput}
+                        </div>
+                      )}
+                      <div
+                        className="mascot-bubble-body"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(message) }}
+                      />
+                    </>
+                  )}
+                </>
+              )}
+
+                {pendingAction && (
+                  <div className="mascot-proposal-card">
+                    <div className="mascot-proposal-card-title">
+                      <Zap size={14} className="animate-pulse" />
+                      <span>Đề xuất tự động từ ODIN AI</span>
+                    </div>
+
+                    {pendingAction.params && (
+                      <div className="mascot-proposal-card-params">
+                        {pendingAction.params.chapter_title && <div><strong>Chương:</strong> {pendingAction.params.chapter_title}</div>}
+                        {pendingAction.params.clo_code && <div><strong>CLO:</strong> {pendingAction.params.clo_code}</div>}
+                        {pendingAction.params.bloom_level && <div><strong>Bloom:</strong> Bậc B{pendingAction.params.bloom_level}</div>}
+                        {pendingAction.params.count && <div><strong>Số câu:</strong> {pendingAction.params.count}</div>}
                       </div>
                     )}
+
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('confirm-chatbot-action'));
+                          setPendingAction(null);
+                        }}
+                        style={{
+                          background: 'var(--vinuni-gold)',
+                          color: '#000000',
+                          border: 'none',
+                          padding: '5px 10px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          fontSize: '11.5px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <Check size={12} /> Xác nhận
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent('cancel-chatbot-action'));
+                          setPendingAction(null);
+                        }}
+                        style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          color: '#ffffff',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          padding: '5px 10px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '11.5px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        <X size={12} /> Hủy bỏ
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <>
-                {lastUserInput && (
-                      <div className="mascot-user-question">
-                        <strong>Thầy/Cô:</strong> {lastUserInput}
-                      </div>
+                )}
+
+                {hasActions && (
+                  <div className="mascot-bubble-actions">
+                    {showPedagogical && (
+                      <button
+                        onClick={() => handleAction('pedagogical_config')}
+                        className="mascot-action-btn"
+                      >
+                        <span>Mở cấu hình lớp học</span>
+                        <Settings size={14} />
+                      </button>
                     )}
-                    <div
-                      className="mascot-bubble-body"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdown(message) }}
-                    />
-                  </>
-                )}
-              </>
-            )}
 
-            {pendingAction && (
-              <div className="mascot-proposal-card">
-                <div className="mascot-proposal-card-title">
-                  <Zap size={14} className="animate-pulse" />
-                  <span>Đề xuất tự động từ ODIN AI</span>
-                </div>
+                    {showMatrix && (
+                      <button
+                        onClick={() => handleAction('matrix')}
+                        className="mascot-action-btn"
+                      >
+                        <span>Xem ma trận CLO x Bloom</span>
+                        <BarChart2 size={14} />
+                      </button>
+                    )}
 
-                {pendingAction.params && (
-                  <div className="mascot-proposal-card-params">
-                    {pendingAction.params.chapter_title && <div><strong>Chương:</strong> {pendingAction.params.chapter_title}</div>}
-                    {pendingAction.params.clo_code && <div><strong>CLO:</strong> {pendingAction.params.clo_code}</div>}
-                    {pendingAction.params.bloom_level && <div><strong>Bloom:</strong> Bậc B{pendingAction.params.bloom_level}</div>}
-                    {pendingAction.params.count && <div><strong>Số câu:</strong> {pendingAction.params.count}</div>}
+                    {showQuestions && (
+                      <button
+                        onClick={() => handleAction('questions')}
+                        className="mascot-action-btn"
+                      >
+                        <span>Đi đến ngân hàng đề thi</span>
+                        <HelpCircle size={14} />
+                      </button>
+                    )}
+
+                    {showSyllabus && (
+                      <button
+                        onClick={() => handleAction('syllabus')}
+                        className="mascot-action-btn"
+                      >
+                        <span>Bóc tách Syllabus</span>
+                        <FileText size={14} />
+                      </button>
+                    )}
                   </div>
                 )}
-
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.dispatchEvent(new CustomEvent('confirm-chatbot-action'));
-                      setPendingAction(null);
-                    }}
-                    style={{
-                      background: 'var(--vinuni-gold)',
-                      color: '#000000',
-                      border: 'none',
-                      padding: '5px 10px',
-                      borderRadius: '4px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      fontSize: '11.5px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Check size={12} /> Xác nhận
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.dispatchEvent(new CustomEvent('cancel-chatbot-action'));
-                      setPendingAction(null);
-                    }}
-                    style={{
-                      background: 'rgba(255,255,255,0.06)',
-                      color: '#ffffff',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      padding: '5px 10px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '11.5px',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <X size={12} /> Hủy bỏ
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {hasActions && (
-              <div className="mascot-bubble-actions">
-                {showPedagogical && (
-                  <button
-                    onClick={() => handleAction('pedagogical_config')}
-                    className="mascot-action-btn"
-                  >
-                    <span>Mở cấu hình lớp học</span>
-                    <Settings size={14} />
-                  </button>
-                )}
-
-                {showMatrix && (
-                  <button
-                    onClick={() => handleAction('matrix')}
-                    className="mascot-action-btn"
-                  >
-                    <span>Xem ma trận CLO x Bloom</span>
-                    <BarChart2 size={14} />
-                  </button>
-                )}
-
-                {showQuestions && (
-                  <button
-                    onClick={() => handleAction('questions')}
-                    className="mascot-action-btn"
-                  >
-                    <span>Đi đến ngân hàng đề thi</span>
-                    <HelpCircle size={14} />
-                  </button>
-                )}
-
-                {showSyllabus && (
-                  <button
-                    onClick={() => handleAction('syllabus')}
-                    className="mascot-action-btn"
-                  >
-                    <span>Bóc tách Syllabus</span>
-                    <FileText size={14} />
-                  </button>
-                )}
-              </div>
-            )}
-            {/* END CHAT MODE VIEW fragment */}
-            </>)}
+                {/* END CHAT MODE VIEW fragment */}
+              </>)}
           </div>
 
           {/* Chat footer — only in chat mode */}
           {(mascotMode === 'chat' || uploadingFile) && (
-          <div className="mascot-bubble-chat">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  handleFileUpload(e.target.files[0]);
-                }
-              }}
-              accept=".pdf,.docx,.txt"
-              style={{ display: 'none' }}
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="mascot-attach-btn"
-              disabled={isThinking || isAutopilotActive || !selectedCourse}
-              title="Đính kèm file đề cương Syllabus (.pdf, .docx, .txt)"
-            >
-              <Paperclip size={16} />
-            </button>
-            <input
-              type="text"
-              placeholder={isAutopilotActive ? "ODIN đang chạy tự động..." : isThinking ? "ODIN AI đang suy nghĩ..." : "Hỏi ODIN AI..."}
-              value={chatInput}
-              disabled={isThinking || isAutopilotActive}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-              className="mascot-chat-input"
-            />
-            <button
-              onClick={handleSendChat}
-              disabled={isThinking || isAutopilotActive || !chatInput.trim()}
-              className="mascot-chat-send-btn"
-            >
-              Gửi
-            </button>
-          </div>
+            <div className="mascot-bubble-chat">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleFileUpload(e.target.files[0]);
+                  }
+                }}
+                accept=".pdf,.docx,.txt"
+                style={{ display: 'none' }}
+              />
+              {isThinking ? (
+                <button
+                  type="button"
+                  className="mascot-cancel-btn chat-cancel-btn"
+                  onClick={handleCancelChat}
+                >
+                  <X size={13} /> Hủy xử lý
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mascot-attach-btn"
+                    disabled={isAutopilotActive || !selectedCourse}
+                    title="Đính kèm file đề cương Syllabus (.pdf, .docx, .txt)"
+                  >
+                    <Paperclip size={16} />
+                  </button>
+                  <input
+                    type="text"
+                    placeholder={isAutopilotActive ? "ODIN đang chạy tự động..." : "Hỏi ODIN AI..."}
+                    value={chatInput}
+                    disabled={isAutopilotActive}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
+                    className="mascot-chat-input"
+                  />
+                  <button
+                    onClick={handleSendChat}
+                    disabled={isAutopilotActive || !chatInput.trim()}
+                    className="mascot-chat-send-btn"
+                  >
+                    Gửi
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
       )}

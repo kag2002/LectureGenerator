@@ -1,11 +1,12 @@
 import React from 'react';
 import SlideProposalPreview from './SlideProposalPreview';
 import { renderMarkdown } from '../utils/markdown';
+import { parseMarkdownToSlidesJS, parseSlideForVisualEdit } from '../utils/slideParser';
 import { Chapter } from '@/types';
 import { 
   Sparkles, Loader2, Layers, Trash2, X, Plus, 
   Play, Presentation, Activity, Lightbulb, AlertTriangle, ArrowRight, ArrowUp, ArrowDown, Check, ChevronRight, EyeOff,
-  Clock, Search, Shield, Save
+  Clock, Search, Shield, Save, ChevronDown, ChevronUp, MapPin, RefreshCw
 } from 'lucide-react';
 
 const cleanLogText = (text: string) => {
@@ -87,6 +88,10 @@ export interface AIProposalPanelProps {
     total_cost: number;
     model_name: string;
   } | null;
+  onInsertContent?: (content: string, type: 'slides' | 'script', mode: 'cursor' | 'end' | 'replace') => void;
+  classSize?: number;
+  hasWifi?: boolean;
+  furnitureType?: string;
 }
 
 export default function AIProposalPanel({
@@ -123,10 +128,33 @@ export default function AIProposalPanel({
   activeAgent = null,
   agentStatus = null,
   selfCorrectionAttempt = null,
-  tokenUsage = null
+  tokenUsage = null,
+  onInsertContent,
+  classSize = 40,
+  hasWifi = true,
+  furnitureType = 'movable'
 }: AIProposalPanelProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const [showAgentMonitor, setShowAgentMonitor] = React.useState<boolean>(false);
+  const [shouldAnimate, setShouldAnimate] = React.useState(false);
+  const [isAIRationaleExpanded, setIsAIRationaleExpanded] = React.useState(false);
+  const [isInsertDropdownOpen, setIsInsertDropdownOpen] = React.useState(false);
+  const [toast, setToast] = React.useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  React.useEffect(() => {
+    if (selectedChapter) {
+      setShouldAnimate(true);
+      const timer = setTimeout(() => {
+        setShouldAnimate(false);
+      }, 7000); // 2 cycles (3.5s each)
+      return () => clearTimeout(timer);
+    }
+  }, [selectedChapter]);
 
   const getExpectedReferences = (slideTitle: string, targetClo: string) => {
     if (!ragReferences || ragReferences.length === 0) return [];
@@ -486,7 +514,7 @@ export default function AIProposalPanel({
           <div className="agent-flow-correction-alert animate-pulse">
             <AlertTriangle size={14} style={{ flexShrink: 0 }} />
             <span>
-              ⚠️ Đang tự động hiệu chỉnh độ dài Slide {currentSlide} (Lần thử {selfCorrectionAttempt}/2)...
+              Đang tự động hiệu chỉnh độ dài Slide {currentSlide} (Lần thử {selfCorrectionAttempt}/2)...
             </span>
           </div>
         )}
@@ -500,7 +528,14 @@ export default function AIProposalPanel({
         <h3 className="planner-section-title">AI Đề xuất nội dung</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {selectedChapter && (
-            <button onClick={() => setShowConfigModal(true)} id="lp-generate-materials-btn" className="planner-generate-btn">
+            <button 
+              onClick={() => {
+                setShouldAnimate(false);
+                setShowConfigModal(true);
+              }} 
+              id="lp-generate-materials-btn" 
+              className={`planner-generate-btn ${shouldAnimate ? 'glow-bounce-hint' : ''}`}
+            >
               <Sparkles size={14} /> {aiSlideProposal ? 'Tạo lại Bài giảng' : 'Tạo Bài giảng'}
             </button>
           )}
@@ -599,15 +634,15 @@ export default function AIProposalPanel({
             </div>
           ) : (storyboardDraft && aiViewMode === 'storyboard') ? (
             <div className="planner-storyboard-wrapper">
-              {apiStatus === 'generating' && (
-                <div className="planner-storyboard-locked-banner">
-                  <AlertTriangle size={16} className="planner-storyboard-locked-banner-icon" />
-                  <p className="planner-storyboard-locked-banner-text">
-                    AI đang sinh slide chi tiết dựa trên dàn ý này. Bản thiết kế đề cương tạm thời được khóa để đảm bảo tính nhất quán.
-                  </p>
-                </div>
-              )}
-              <div className="planner-storyboard-banner" style={{ padding: '16px 20px' }}>
+              <div className="planner-storyboard-banner">
+                {apiStatus === 'generating' && (
+                  <div className="planner-storyboard-locked-banner" style={{ margin: '0 0 16px 0' }}>
+                    <AlertTriangle size={16} className="planner-storyboard-locked-banner-icon" />
+                    <p className="planner-storyboard-locked-banner-text">
+                      AI đang sinh slide chi tiết dựa trên dàn ý này. Bản thiết kế đề cương tạm thời được khóa để đảm bảo tính nhất quán.
+                    </p>
+                  </div>
+                )}
                 <h4 className="planner-storyboard-banner-title" style={{ margin: 0, fontSize: '15px' }}>
                   <Layers size={14} /> Giai đoạn 1: Phê duyệt Đề cương Slide (Storyboard)
                 </h4>
@@ -629,7 +664,7 @@ export default function AIProposalPanel({
                     disabled={apiStatus === 'generating'}
                     onClick={() => handleGenerateMaterialsFromStoryboard(storyboardDraft)}
                     id="ai-generate-materials-confirm-btn"
-                    className="planner-storyboard-footer-btn planner-storyboard-footer-btn-confirm"
+                    className={`planner-storyboard-footer-btn planner-storyboard-footer-btn-confirm ${apiStatus !== 'generating' ? 'glow-bounce-hint' : ''}`}
                     style={{ flex: 2, minHeight: '38px', height: '38px', padding: '6px 12px', fontSize: '12.5px', borderRadius: '8px', boxShadow: 'none' }}
                   >
                     <Play size={12} /> Bắt đầu sinh học liệu chi tiết
@@ -803,24 +838,7 @@ export default function AIProposalPanel({
                 </button>
               </div>
 
-              <div className="planner-storyboard-footer">
-                <button
-                  type="button"
-                  disabled={apiStatus === 'generating'}
-                  onClick={() => setStoryboardDraft(null)}
-                  className="planner-storyboard-footer-btn planner-storyboard-footer-btn-cancel"
-                >
-                  <X size={14} /> Hủy bỏ
-                </button>
-                <button
-                  type="button"
-                  disabled={apiStatus === 'generating'}
-                  onClick={() => handleGenerateMaterialsFromStoryboard(storyboardDraft)}
-                  className="planner-storyboard-footer-btn planner-storyboard-footer-btn-confirm"
-                >
-                  <Play size={14} /> Bắt đầu sinh học liệu chi tiết
-                </button>
-              </div>
+
             </div>
           ) : (!aiSlideProposal && !aiActiveLearningProposal && apiStatus !== 'generating') ? (
             <div className="planner-empty-state">
@@ -890,9 +908,15 @@ export default function AIProposalPanel({
               <div className="planner-proposal-blocks">
                 {activeWorkTab === 'slides' ? (
                   <div className="planner-proposal-block">
+                    {toast && (
+                      <div className="planner-toast" style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 99999, background: 'rgba(16, 185, 129, 0.95)', color: '#ffffff', padding: '12px 20px', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', animation: 'slideUp 0.3s ease-out' }}>
+                        <Check size={16} />
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{toast}</span>
+                      </div>
+                    )}
                     <div className="planner-block-header">
                       <span className="planner-block-title"><Presentation size={15} /> Đề xuất Slide Bài giảng</span>
-                      <div className="planner-block-header-actions">
+                      <div className="planner-block-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <div className="planner-tab-toggle-container">
                           <button 
                             onClick={() => setSlideProposalViewMode('visual')} 
@@ -903,28 +927,90 @@ export default function AIProposalPanel({
                           <button 
                             onClick={() => setSlideProposalViewMode('code')} 
                             className={slideProposalViewMode === 'code' ? 'planner-tab-toggle-active' : 'planner-tab-toggle-inactive'}
+                            title="Hiển thị dạng cấu trúc văn bản dễ đọc"
                           >
-                            Mã nguồn
+                            Dạng văn bản
                           </button>
                         </div>
-                        <button 
-                          onClick={() => {
-                            if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ slide hiện tại để thay thế bằng bản đề xuất từ AI. Bạn có chắc chắn không?')) {
-                              setSlideContent(aiSlideProposal);
-                            }
-                          }}
-                          disabled={apiStatus === 'generating'}
-                          className="planner-btn-override"
-                        >
-                          Thay thế bài giảng <AlertTriangle size={12} />
-                        </button>
-                        <button 
-                          onClick={() => setSlideContent((prev: string) => prev ? (prev + '\n\n' + aiSlideProposal) : aiSlideProposal)}
-                          disabled={apiStatus === 'generating'}
-                          className="planner-insert-btn"
-                        >
-                          Chèn vào cuối bài giảng <ArrowRight size={12} />
-                        </button>
+                        
+                        <div className="planner-insertion-wrapper" style={{ display: 'inline-flex', position: 'relative', alignItems: 'stretch' }}>
+                          <button 
+                            onClick={() => {
+                              if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ slide hiện tại để thay thế bằng bản đề xuất từ AI. Bạn có chắc chắn không?')) {
+                                if (onInsertContent) {
+                                  onInsertContent(aiSlideProposal, 'slides', 'replace');
+                                } else {
+                                  setSlideContent(aiSlideProposal);
+                                }
+                                showToast('Đã thay thế toàn bộ slides bằng bản đề xuất AI!');
+                              }
+                            }}
+                            disabled={apiStatus === 'generating'}
+                            className="planner-btn-override primary-apply-btn"
+                            title="Thay thế toàn bộ bài giảng hiện tại"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', borderTopRightRadius: 0, borderBottomRightRadius: 0, paddingRight: '12px' }}
+                          >
+                            <RefreshCw size={12} /> Áp dụng đề xuất
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setIsInsertDropdownOpen(!isInsertDropdownOpen)}
+                            disabled={apiStatus === 'generating'}
+                            className="planner-dropdown-toggle-btn"
+                            style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              padding: '0 8px', 
+                              background: 'rgba(255, 255, 255, 0.05)', 
+                              border: '1px solid rgba(255, 255, 255, 0.1)', 
+                              borderLeft: 'none', 
+                              borderTopRightRadius: '6px', 
+                              borderBottomRightRadius: '6px', 
+                              cursor: 'pointer',
+                              color: 'var(--text-secondary)'
+                            }}
+                            title="Tùy chọn chèn khác"
+                          >
+                            <ChevronDown size={12} />
+                          </button>
+                          
+                          {isInsertDropdownOpen && (
+                            <div className="planner-insertion-dropdown-menu" style={{ position: 'absolute', right: 0, top: '100%', marginTop: '4px', zIndex: 100, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '8px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)', padding: '6px', minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onInsertContent) {
+                                    onInsertContent(aiSlideProposal, 'slides', 'cursor');
+                                  } else {
+                                    setSlideContent((prev: string) => prev ? (prev + '\n\n' + aiSlideProposal) : aiSlideProposal);
+                                  }
+                                  setIsInsertDropdownOpen(false);
+                                  showToast('Đã chèn đề xuất tại con trỏ!');
+                                }}
+                                className="planner-dropdown-item"
+                                style={{ background: 'none', border: 'none', padding: '8px 12px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '12px' }}
+                              >
+                                <MapPin size={12} /> Chèn tại con trỏ
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (onInsertContent) {
+                                    onInsertContent(aiSlideProposal, 'slides', 'end');
+                                  } else {
+                                    setSlideContent((prev: string) => prev ? (prev + '\n\n' + aiSlideProposal) : aiSlideProposal);
+                                  }
+                                  setIsInsertDropdownOpen(false);
+                                  showToast('Đã chèn đề xuất vào cuối!');
+                                }}
+                                className="planner-dropdown-item"
+                                style={{ background: 'none', border: 'none', padding: '8px 12px', textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', borderRadius: '4px', color: 'var(--text-primary)', fontSize: '12px' }}
+                              >
+                                <ArrowDown size={12} /> Chèn cuối
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                     {slideProposalViewMode === 'code' ? (
@@ -933,7 +1019,33 @@ export default function AIProposalPanel({
                           <Loader2 size={16} className="animate-spin" /> Đang thiết kế slide...
                         </div>
                       ) : (
-                        <pre className="planner-proposal-code">{aiSlideProposal}</pre>
+                        <div className="proposal-slide-cards-deck">
+                          {parseMarkdownToSlidesJS(aiSlideProposal).map((s, idx) => {
+                            const vs = parseSlideForVisualEdit(s);
+                            const currentLayout = s.layout || 'standard_list';
+                            
+                            return (
+                              <div key={idx} className="proposal-slide-card">
+                                <div className="proposal-slide-card-header">
+                                  <span className="proposal-slide-card-number">Slide {idx + 1} (Đề xuất)</span>
+                                  <span className="proposal-slide-card-layout-badge">{currentLayout}</span>
+                                </div>
+                                <div className="proposal-slide-card-body">
+                                  <div className="proposal-slide-field-group">
+                                    <div className="proposal-slide-field-label">Tiêu đề slide:</div>
+                                    <div className="proposal-slide-field-value">{vs.title || "Không có tiêu đề"}</div>
+                                  </div>
+                                  <div className="proposal-slide-field-group">
+                                    <div className="proposal-slide-field-label">Nội dung đề xuất:</div>
+                                    <div className="proposal-slide-field-value-body">
+                                      <pre className="proposal-slide-body-pre">{vs.body || "Không có nội dung"}</pre>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       )
                     ) : (
                       <SlideProposalPreview 
@@ -942,7 +1054,14 @@ export default function AIProposalPanel({
                         themeName={selectedTheme} 
                         onCitationClick={handleCitationClick} 
                         isFullscreen={false}
-                        onInsertSlide={(slideMarkdown) => setSlideContent((prev: string) => prev ? (prev + '\n\n' + slideMarkdown) : slideMarkdown)}
+                        onInsertSlide={(slideMarkdown) => {
+                          if (onInsertContent) {
+                            onInsertContent(slideMarkdown, 'slides', 'cursor');
+                          } else {
+                            setSlideContent((prev: string) => prev ? (prev + '\n\n' + slideMarkdown) : slideMarkdown);
+                          }
+                          showToast('Đã chèn slide được chọn vào con trỏ!');
+                        }}
                       />
                     )}
                   </div>
@@ -950,24 +1069,41 @@ export default function AIProposalPanel({
                   <div className="planner-proposal-block">
                     <div className="planner-block-header">
                       <span className="planner-block-title"><Activity size={15} /> Kịch bản tương tác (Active Learning)</span>
-                      <div className="planner-block-header-actions">
+                      <div className="planner-block-header-actions" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <button 
+                          onClick={() => onInsertContent ? onInsertContent(aiActiveLearningProposal, 'script', 'cursor') : setActiveLearningScript(activeLearningScript ? (activeLearningScript + '\n\n' + aiActiveLearningProposal) : aiActiveLearningProposal)}
+                          disabled={apiStatus === 'generating'}
+                          className="planner-insert-btn cursor-insert"
+                          title="Chèn kịch bản tương tác tại vị trí con trỏ chuột"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <MapPin size={12} /> Chèn tại con trỏ
+                        </button>
+                        <button 
+                          onClick={() => onInsertContent ? onInsertContent(aiActiveLearningProposal, 'script', 'end') : setActiveLearningScript(activeLearningScript ? (activeLearningScript + '\n\n' + aiActiveLearningProposal) : aiActiveLearningProposal)}
+                          disabled={apiStatus === 'generating'}
+                          className="planner-insert-btn end-insert"
+                          title="Chèn kịch bản tương tác vào cuối bài giảng"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <ArrowDown size={12} /> Chèn cuối
+                        </button>
                         <button 
                           onClick={() => {
                             if (window.confirm('Hành động này sẽ XÓA TOÀN BỘ kịch bản hiện tại để thay thế bằng kịch bản tương tác từ AI. Bạn có chắc chắn không?')) {
-                              setActiveLearningScript(aiActiveLearningProposal);
+                              if (onInsertContent) {
+                                onInsertContent(aiActiveLearningProposal, 'script', 'replace');
+                              } else {
+                                setActiveLearningScript(aiActiveLearningProposal);
+                              }
                             }
                           }}
                           disabled={apiStatus === 'generating'}
                           className="planner-btn-override"
+                          title="Thay thế toàn bộ kịch bản hiện tại"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         >
-                          Thay thế kịch bản <AlertTriangle size={12} />
-                        </button>
-                        <button 
-                          onClick={() => setActiveLearningScript(activeLearningScript ? (activeLearningScript + '\n\n' + aiActiveLearningProposal) : aiActiveLearningProposal)}
-                          disabled={apiStatus === 'generating'}
-                          className="planner-insert-btn"
-                        >
-                          Chèn vào cuối bài giảng <ArrowRight size={12} />
+                          <RefreshCw size={12} /> Thay thế
                         </button>
                       </div>
                     </div>
@@ -985,14 +1121,33 @@ export default function AIProposalPanel({
                         />
                       )}
                       {parseActiveLearningScript(aiActiveLearningProposal).rationale && (
-                        <div className="planner-rationale-box">
-                          <div className="planner-rationale-title">
-                            <span className="planner-rationale-icon-wrapper"><Lightbulb size={12} /></span>
-                            <span>Giải trình Sư phạm của Trợ lý AI:</span>
-                          </div>
-                          <div className="planner-rationale-content">
-                            {parseActiveLearningScript(aiActiveLearningProposal).rationale}
-                          </div>
+                        <div className={`planner-rationale-box ${isAIRationaleExpanded ? 'expanded' : 'collapsed'}`}>
+                          <button
+                            type="button"
+                            className="planner-rationale-header-toggle"
+                            onClick={() => setIsAIRationaleExpanded(!isAIRationaleExpanded)}
+                            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                          >
+                            <span className="planner-rationale-title" style={{ margin: 0 }}>
+                              <span className="planner-rationale-icon-wrapper"><Lightbulb size={12} /></span>
+                              <span>Giải trình Sư phạm của Trợ lý AI</span>
+                            </span>
+                            <div className="planner-rationale-badges" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span className="rationale-badge size-badge" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', color: 'var(--text-secondary)' }}>Sĩ số: {classSize}</span>
+                              <span className="rationale-badge wifi-badge" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', color: 'var(--text-secondary)' }}>Wifi: {hasWifi ? 'Khỏe' : 'Yếu'}</span>
+                              <span className="rationale-badge furniture-badge" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.06)', borderRadius: '4px', color: 'var(--text-secondary)' }}>Bàn ghế: {furnitureType === 'movable' ? 'Di động' : 'Cố định'}</span>
+                              <span className="rationale-chevron-icon" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+                                {isAIRationaleExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                              </span>
+                            </div>
+                          </button>
+                          {isAIRationaleExpanded && (
+                            <div className="planner-rationale-content-wrapper" style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                              <div className="planner-rationale-content">
+                                {parseActiveLearningScript(aiActiveLearningProposal).rationale}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

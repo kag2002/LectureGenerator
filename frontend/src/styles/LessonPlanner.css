@@ -2,6 +2,7 @@
    LessonPlanner.css - Senior-Lecturer Accessible Lesson Planner
    ============================================================ */
 .planner-container {
+  position: relative; /* Added relative positioning for absolute children handles */
   min-height: 100vh;
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -1638,12 +1639,16 @@
 }
 
 .planner-storyboard-banner {
-  background: var(--accent-light);
-  border: 1px solid var(--border-glow);
-  border-radius: 12px;
-  padding: 16px 18px;
+  position: sticky;
+  top: -20px;
+  margin: -20px -20px 20px -20px;
+  z-index: 10;
+  background: linear-gradient(var(--accent-light), var(--accent-light)), var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 0;
+  padding: 16px 20px;
   color: var(--text-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }
 
 .planner-storyboard-banner-title {
@@ -2178,9 +2183,11 @@
 
 .slide-frame.thumbnail-view {
   width: 100%;
+  aspect-ratio: 16 / 9;
   height: auto;
+  min-height: 112px;
+  max-height: 180px;
   padding: 10px;
-  max-height: 120px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   cursor: pointer;
 }
@@ -2992,6 +2999,7 @@
   transition: transform 0.2s ease;
   border-radius: 12px;
   overflow: hidden;
+  min-height: 112px;
 }
 
 .slide-thumbnail-wrapper:hover {
@@ -4251,7 +4259,7 @@
   backdrop-filter: blur(20px);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: -10px 0 30px rgba(0,0,0,0.5);
-  z-index: 11000;
+  z-index: 13000;
   display: flex;
   flex-direction: column;
   font-family: "Inter", sans-serif;
@@ -4534,8 +4542,8 @@
 
 /* Floating side handles when collapsed */
 .planner-sidebar-toggle-floating {
-  position: fixed;
-  left: 260px; /* Offset by AppShell sidebar width */
+  position: absolute;
+  left: 0;
   top: 50%;
   transform: translateY(-50%);
   width: 24px;
@@ -4552,12 +4560,7 @@
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 100;
-  transition: left 0.35s cubic-bezier(0.16, 1, 0.3, 1), width 0.2s, background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
-}
-
-/* Adjust position dynamically when AppShell sidebar is collapsed */
-.app-sidebar.collapsed + .app-main-wrapper .planner-sidebar-toggle-floating {
-  left: 72px; /* Offset by collapsed AppShell sidebar width */
+  transition: width 0.2s, background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
 }
 
 [data-theme="dark"] .planner-sidebar-toggle-floating {
@@ -4579,7 +4582,7 @@
 }
 
 .planner-ai-toggle-floating {
-  position: fixed;
+  position: absolute;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
@@ -5534,5 +5537,1301 @@
   position: relative !important;
   z-index: 10 !important;
 }
+
+/* ============================================================
+   3D Carousel Layout Mode Styles
+   ============================================================ */
+.planner-carousel-3d-container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 130px);
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  font-family: "Outfit", "Inter", sans-serif;
+  gap: 16px;
+}
+
+/* Tabs Header - Positioned at the bottom below viewport */
+.planner-carousel-tabs-header {
+  position: relative;
+  margin: 0 auto 8px auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 6px;
+  width: fit-content;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+/* Tab Navigation Arrow Buttons */
+.tab-nav-arrow {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.tab-nav-arrow:hover {
+  background: var(--vinuni-navy);
+  border-color: var(--vinuni-navy);
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+[data-theme="dark"] .tab-nav-arrow:hover {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.planner-carousel-tab-indicator-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.planner-carousel-tab-indicator-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.planner-carousel-tab-indicator-btn.active {
+  background: var(--vinuni-navy);
+  color: #ffffff;
+  border-color: var(--vinuni-navy);
+  box-shadow: 0 4px 12px rgba(9, 13, 26, 0.2);
+}
+
+[data-theme="dark"] .planner-carousel-tab-indicator-btn.active {
+  background: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+/* 3D Viewport */
+.planner-carousel-3d-viewport {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 1200px;
+  overflow: hidden;
+  padding: 16px 40px 16px 40px;
+  box-sizing: border-box;
+}
+
+.planner-carousel-3d-viewport.is-dragging {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  cursor: grabbing !important;
+}
+
+.planner-carousel-3d-viewport.is-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  pointer-events: none !important;
+}
+
+/* Nav arrows */
+.planner-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 150;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.planner-carousel-arrow:hover {
+  background: var(--vinuni-navy);
+  border-color: var(--vinuni-navy);
+  transform: translateY(-50%) scale(1.1);
+}
+
+[data-theme="dark"] .planner-carousel-arrow:hover {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.planner-carousel-arrow.arrow-left {
+  left: 20px;
+}
+
+.planner-carousel-arrow.arrow-right {
+  right: 20px;
+}
+
+/* Cards Wrapper */
+.planner-carousel-3d-cards-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+.planner-carousel-card-3d {
+  position: absolute;
+  width: 72%;
+  height: 98%;
+  min-width: 320px;
+  max-width: 1100px;
+  transition: transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              opacity 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), 
+              filter 0.45s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform-style: preserve-3d;
+  border-radius: 16px;
+  box-sizing: border-box;
+}
+
+.planner-carousel-card-inner {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Card Roles */
+.planner-carousel-card-3d.card-center {
+  transform: translate3d(0, 0, 0) scale(1) rotateY(0deg);
+  z-index: 10;
+  opacity: 1;
+  filter: none;
+  pointer-events: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), 0 0 2px var(--vinuni-gold);
+}
+
+.planner-carousel-card-3d.card-left {
+  transform: translate3d(-20%, 0, -160px) scale(0.8);
+  z-index: 5;
+  opacity: 0.35;
+  filter: blur(1.5px) grayscale(40%) brightness(60%);
+  pointer-events: none;
+  cursor: pointer;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.planner-carousel-card-3d.card-left * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.planner-carousel-card-3d.card-right {
+  transform: translate3d(20%, 0, -160px) scale(0.8);
+  z-index: 5;
+  opacity: 0.35;
+  filter: blur(1.5px) grayscale(40%) brightness(60%);
+  pointer-events: none;
+  cursor: pointer;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.planner-carousel-card-3d.card-right * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.planner-carousel-card-3d.card-center * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Hover on side cards to show they are clickable */
+.planner-carousel-card-3d.card-left:hover,
+.planner-carousel-card-3d.card-right:hover {
+  opacity: 0.55;
+  filter: blur(0.5px) grayscale(20%) brightness(80%);
+}
+
+.planner-carousel-card-3d.card-left:hover .planner-carousel-card-inner,
+.planner-carousel-card-3d.card-right:hover .planner-carousel-card-inner {
+  border-color: var(--accent-color);
+  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="dark"] .planner-carousel-card-3d.card-left:hover .planner-carousel-card-inner,
+[data-theme="dark"] .planner-carousel-card-3d.card-right:hover .planner-carousel-card-inner {
+  border-color: var(--vinuni-gold);
+  box-shadow: 0 8px 30px rgba(212, 163, 89, 0.2);
+}
+
+/* Side Cards Hover Overlay */
+.planner-carousel-card-click-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  cursor: pointer;
+  background: transparent;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 0;
+  border-radius: 16px;
+}
+
+.planner-carousel-card-3d:hover .planner-carousel-card-click-overlay {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  opacity: 1;
+}
+
+[data-theme="dark"] .planner-carousel-card-3d:hover .planner-carousel-card-click-overlay {
+  background: rgba(9, 13, 26, 0.5);
+}
+
+.card-click-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(30, 41, 59, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 12px 20px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transform: translateY(12px);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
+}
+
+[data-theme="dark"] .card-click-overlay-content {
+  background: rgba(20, 24, 33, 0.85);
+  border-color: var(--vinuni-gold);
+  color: var(--vinuni-gold);
+}
+
+.planner-carousel-card-3d:hover .card-click-overlay-content {
+  transform: translateY(0);
+}
+
+.card-click-overlay-content .overlay-icon {
+  animation: horizontal-bounce 2s infinite ease-in-out;
+  width: 20px;
+  height: 20px;
+}
+
+@keyframes horizontal-bounce {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-4px);
+  }
+}
+
+/* Disable page-wide text selection during drag */
+body.carousel-dragging * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+}
+
+/* Swipe Guide Docks at Viewport margins */
+.planner-carousel-swipe-dock {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 16%;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto; /* Active hover and click zones */
+  cursor: grab;
+  z-index: 140;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+.planner-carousel-swipe-dock.dock-left {
+  left: 0;
+  background: linear-gradient(to right, rgba(99, 102, 241, 0.04) 0%, rgba(99, 102, 241, 0.01) 60%, transparent 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+[data-theme="dark"] .planner-carousel-swipe-dock.dock-left {
+  background: linear-gradient(to right, rgba(212, 163, 89, 0.02) 0%, rgba(212, 163, 89, 0.003) 60%, transparent 100%);
+  border-right: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.planner-carousel-swipe-dock.dock-right {
+  right: 0;
+  background: linear-gradient(to left, rgba(99, 102, 241, 0.04) 0%, rgba(99, 102, 241, 0.01) 60%, transparent 100%);
+  border-left: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+[data-theme="dark"] .planner-carousel-swipe-dock.dock-right {
+  background: linear-gradient(to left, rgba(212, 163, 89, 0.02) 0%, rgba(212, 163, 89, 0.003) 60%, transparent 100%);
+  border-left: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+/* Vertical Glass Grab Handle bar */
+.planner-carousel-grab-handle {
+  width: 12px;
+  height: 200px;
+  background: rgba(30, 41, 59, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+}
+
+[data-theme="dark"] .planner-carousel-grab-handle {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.planner-carousel-swipe-dock.dock-left .planner-carousel-grab-handle {
+  margin-left: 20px;
+}
+
+.planner-carousel-swipe-dock.dock-right .planner-carousel-grab-handle {
+  margin-right: 20px;
+}
+
+/* Grip dots indicating friction surface */
+.grab-grip-dots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.grip-dot {
+  width: 4px;
+  height: 4px;
+  background-color: var(--text-muted);
+  border-radius: 50%;
+}
+
+/* Tooltip luôn hiển thị nhẹ để người dùng dễ định vị */
+.swipe-dock-tooltip {
+  position: absolute;
+  bottom: 35px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0.65;
+  transform: translateY(0);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.planner-carousel-swipe-dock.dock-left .swipe-dock-tooltip {
+  left: 45px;
+}
+
+.planner-carousel-swipe-dock.dock-right .swipe-dock-tooltip {
+  right: 45px;
+}
+
+/* Hover Docker effects */
+.planner-carousel-swipe-dock:hover {
+  background: linear-gradient(to right, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 75%, transparent 100%);
+}
+
+.planner-carousel-swipe-dock.dock-right:hover {
+  background: linear-gradient(to left, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0.02) 75%, transparent 100%);
+}
+
+[data-theme="dark"] .planner-carousel-swipe-dock:hover {
+  background: linear-gradient(to right, rgba(212, 163, 89, 0.05) 0%, rgba(212, 163, 89, 0.01) 75%, transparent 100%);
+}
+
+[data-theme="dark"] .planner-carousel-swipe-dock.dock-right:hover {
+  background: linear-gradient(to left, rgba(212, 163, 89, 0.05) 0%, rgba(212, 163, 89, 0.01) 75%, transparent 100%);
+}
+
+.planner-carousel-swipe-dock:hover .planner-carousel-grab-handle {
+  width: 18px;
+  background: var(--bg-secondary);
+  border-color: rgba(99, 102, 241, 0.45);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="dark"] .planner-carousel-swipe-dock:hover .planner-carousel-grab-handle {
+  border-color: rgba(212, 163, 89, 0.45);
+  box-shadow: 0 8px 24px rgba(212, 163, 89, 0.15);
+}
+
+.planner-carousel-swipe-dock:hover .grab-grip-dots {
+  opacity: 0.9;
+}
+
+.planner-carousel-swipe-dock:hover .swipe-dock-tooltip {
+  opacity: 1;
+  transform: scale(1.05);
+}
+
+/* Tooltip animations */
+.swipe-dock-tooltip .tooltip-icon.animating-left {
+  animation: tooltip-bounce-left 1.8s infinite ease-in-out;
+}
+
+.swipe-dock-tooltip .tooltip-icon.animating-right {
+  animation: tooltip-bounce-right 1.8s infinite ease-in-out;
+}
+
+@keyframes tooltip-bounce-left {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-5px); }
+}
+
+@keyframes tooltip-bounce-right {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(5px); }
+}
+
+/* Side Card visual hover and depth scale */
+.planner-carousel-card-3d.card-left:hover {
+  transform: translate3d(-17%, 0, -120px) scale(0.83) !important;
+  opacity: 0.65 !important;
+  filter: blur(0px) grayscale(10%) brightness(90%) !important;
+}
+
+.planner-carousel-card-3d.card-right:hover {
+  transform: translate3d(17%, 0, -120px) scale(0.83) !important;
+  opacity: 0.65 !important;
+  filter: blur(0px) grayscale(10%) brightness(90%) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+  .planner-carousel-card-3d {
+    width: 80%;
+  }
+  .planner-carousel-card-3d.card-left {
+    transform: translate3d(-14%, 0, -200px) scale(0.75);
+  }
+  .planner-carousel-card-3d.card-right {
+    transform: translate3d(14%, 0, -200px) scale(0.75);
+  }
+  .planner-carousel-swipe-dock {
+    width: 12%;
+  }
+}
+
+@media (max-width: 576px) {
+  .planner-carousel-card-3d {
+    width: 94%;
+  }
+  .planner-carousel-card-3d.card-left {
+    transform: translate3d(-6%, 0, -250px) scale(0.7);
+    opacity: 0.15;
+  }
+  .planner-carousel-card-3d.card-right {
+    transform: translate3d(6%, 0, -250px) scale(0.7);
+    opacity: 0.15;
+  }
+  .planner-carousel-arrow {
+    width: 36px;
+    height: 36px;
+  }
+  .planner-carousel-swipe-dock {
+    display: none; /* Hide margins on small touch screens to avoid clutter */
+  }
+}
+
+/* Carousel help footer */
+.planner-carousel-help {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px;
+}
+
+.planner-carousel-help strong {
+  color: var(--vinuni-gold);
+}
+
+/* Layout Selector pill */
+.planner-layout-mode-selector {
+  display: flex;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 4px;
+  gap: 4px;
+  box-shadow: var(--shadow-sm);
+  margin-right: 8px;
+}
+
+.planner-layout-mode-btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planner-layout-mode-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.planner-layout-mode-btn.active {
+  background: var(--vinuni-navy);
+  color: #ffffff;
+  border-color: var(--vinuni-navy);
+}
+
+[data-theme="dark"] .planner-layout-mode-btn.active {
+  background: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
+}
+/* Quick Slide Navigation Outline */
+.editor-slide-outline-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.editor-slide-outline-nav-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.editor-slide-outline-nav-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  padding-bottom: 3px;
+}
+
+/* Custom scrollbars for slide outline list */
+.editor-slide-outline-nav-list::-webkit-scrollbar {
+  height: 4px;
+}
+.editor-slide-outline-nav-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.editor-slide-outline-nav-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+.editor-slide-outline-nav-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.editor-slide-outline-nav-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.editor-slide-outline-nav-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  transform: translateY(-1px);
+}
+
+/* Collapsible Editor Pedagogical Rationale Accordion */
+.editor-pedagogical-rationale {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  margin-top: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.editor-pedagogical-rationale.collapsed {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.editor-pedagogical-rationale.expanded {
+  border-color: var(--border-glow);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.06);
+}
+
+.editor-pedagogical-rationale-header-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: none;
+  padding: 12px 16px;
+  cursor: pointer;
+  color: var(--text-primary);
+  outline: none;
+  transition: background 0.2s ease;
+}
+
+.editor-pedagogical-rationale-header-toggle:hover {
+  background: var(--accent-light);
+}
+
+.editor-pedagogical-rationale-header-toggle .rationale-bulb-icon {
+  color: #fbbf24; /* yellow lightbulb */
+}
+
+.editor-pedagogical-rationale-header-toggle .rationale-chevron-icon {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.editor-pedagogical-rationale-content-wrapper {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.editor-pedagogical-rationale-content {
+  padding: 14px 18px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  font-style: italic;
+}
+
+/* AI Proposal Rationale Accordion Panel */
+.planner-rationale-box {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0 !important; /* Reset padding to contain inside accordion */
+}
+
+.planner-rationale-box.collapsed {
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.planner-rationale-box.expanded {
+  border-color: var(--border-glow);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.06);
+}
+
+.planner-rationale-header-toggle {
+  background: var(--bg-tertiary) !important;
+  padding: 12px 16px !important;
+  transition: background 0.2s ease;
+}
+
+.planner-rationale-header-toggle:hover {
+  background: var(--accent-light) !important;
+}
+
+.planner-rationale-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.planner-rationale-badges .rationale-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.planner-rationale-badges .rationale-chevron-icon {
+  margin-left: 4px;
+}
+
+.planner-rationale-content-wrapper {
+  background: var(--bg-secondary);
+}
+
+.planner-rationale-content {
+  padding: 14px 18px !important;
+}
+
+/* Intelligent Insertion Buttons Styling */
+.planner-insert-btn.cursor-insert {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #818cf8;
+}
+
+.planner-insert-btn.cursor-insert:hover {
+  background: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
+}
+
+.planner-insert-btn.end-insert {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.planner-insert-btn.end-insert:hover {
+  background: var(--success-color);
+  color: #ffffff;
+  border-color: var(--success-color);
+}
+
+
+
+
+/* ============================================================
+   Visual Slide Editor & Optimization Styles
+   ============================================================ */
+
+/* Toggle Container */
+.visual-editor-toggle-container {
+  margin-left: 8px;
+}
+
+/* Glassmorphic/Generating Overlay */
+.visual-slide-editor-generating-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.generating-overlay-content {
+  text-align: center;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Empty State */
+.visual-slide-editor-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  text-align: center;
+  gap: 16px;
+  margin: 10px 0;
+}
+
+.visual-slide-editor-add-btn {
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+.visual-slide-editor-add-btn:hover {
+  background: var(--accent-hover, #4f46e5);
+  transform: translateY(-1px);
+}
+
+/* Slide Deck Wrapper */
+.visual-slide-editor-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+  padding-right: 6px;
+  padding-bottom: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Scrollbars for Slide Deck */
+.visual-slide-editor-deck::-webkit-scrollbar {
+  width: 6px;
+}
+.visual-slide-editor-deck::-webkit-scrollbar-track {
+  background: transparent;
+}
+.visual-slide-editor-deck::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+.visual-slide-editor-deck::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Visual Slide Card */
+.visual-slide-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  cursor: default;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.visual-slide-card:hover {
+  border-color: var(--border-glow);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+.visual-slide-card.active-highlight {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2), 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Highlight glow keyframe */
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0px rgba(99, 102, 241, 0.8);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(99, 102, 241, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(99, 102, 241, 0);
+  }
+}
+
+.highlight-glow {
+  animation: highlight-pulse 1.2s cubic-bezier(0.24, 0, 0.38, 1) 1;
+}
+
+/* Card Header & Actions */
+.visual-slide-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.visual-slide-card-number {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--vinuni-gold, #d4a359);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.visual-slide-card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.visual-slide-action-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.visual-slide-action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.visual-slide-action-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.visual-slide-action-btn.btn-add:hover {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.visual-slide-action-btn.btn-delete:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+/* Card Inputs styling */
+.visual-slide-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.visual-slide-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.visual-slide-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.visual-slide-input,
+.visual-slide-select,
+.visual-slide-textarea {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.visual-slide-input:focus,
+.visual-slide-select:focus,
+.visual-slide-textarea:focus {
+  border-color: var(--accent-color);
+}
+
+.visual-slide-textarea {
+  resize: vertical;
+}
+
+.visual-slide-add-end-btn {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.visual-slide-add-end-btn:hover {
+  background: rgba(99, 102, 241, 0.05);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  transform: translateY(1px);
+}
+
+/* Slide outline nav collapsible custom styling */
+.editor-slide-outline-nav.collapsed {
+  padding: 8px 14px;
+}
+
+.editor-slide-outline-nav-btn.active {
+  background: var(--accent-color) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-color) !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+/* ============================================================
+   AI Proposal structured view & Simplified action dropdown styles
+   ============================================================ */
+
+/* Proposal slide cards list */
+.proposal-slide-cards-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding-right: 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.proposal-slide-cards-deck::-webkit-scrollbar {
+  width: 4px;
+}
+.proposal-slide-cards-deck::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+}
+
+.proposal-slide-card {
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.proposal-slide-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 6px;
+}
+
+.proposal-slide-card-number {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #38bdf8;
+}
+
+.proposal-slide-card-layout-badge {
+  font-size: 9px;
+  padding: 2px 6px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 4px;
+  color: #38bdf8;
+  text-transform: capitalize;
+}
+
+.proposal-slide-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.proposal-slide-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.proposal-slide-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.proposal-slide-field-value {
+  font-size: 12.5px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.proposal-slide-field-value-body {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.proposal-slide-body-pre {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Simplified primary buttons and split dropdown styles */
+.planner-insertion-wrapper {
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.primary-apply-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid #10b981 !important;
+  box-shadow: none !important;
+  font-weight: 700 !important;
+  padding: 6px 14px !important;
+  height: 32px !important;
+}
+
+.primary-apply-btn:hover {
+  background: linear-gradient(135deg, #34d399 0%, #059669 100%) !important;
+}
+
+.planner-dropdown-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: var(--text-primary) !important;
+}
+
+.planner-dropdown-item {
+  transition: background 0.2s, color 0.2s;
+}
+
+.planner-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--accent-color) !important;
+}
+
+/* Toast alert visual popup */
+.planner-toast {
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.4), 0 4px 10px rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Fix containing block constraints when Editor Panel is fullscreen */
+body.editor-fullscreen .planner-layout-flex,
+body.editor-fullscreen .planner-sidebar-wrapper,
+body.editor-fullscreen .planner-ai-wrapper,
+body.editor-fullscreen .planner-editor-wrapper,
+body.editor-fullscreen .planner-carousel-3d-container,
+body.editor-fullscreen .planner-carousel-3d-viewport,
+body.editor-fullscreen .planner-carousel-3d-cards-wrapper,
+body.editor-fullscreen .planner-carousel-card-3d,
+body.editor-fullscreen .planner-carousel-card-inner,
+body.editor-fullscreen .planner-layout {
+  transform: none !important;
+  filter: none !important;
+  perspective: none !important;
+  transform-style: flat !important;
+  transition: none !important;
+  will-change: auto !important;
+}
+
+
+
 
 

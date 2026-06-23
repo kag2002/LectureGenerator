@@ -2398,6 +2398,8 @@
 .zip-preview-card {
   width: 620px !important;
   max-width: 95% !important;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .zip-preview-header {

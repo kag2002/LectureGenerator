@@ -14,7 +14,8 @@ import {
   ArrowLeft, BookOpen, ClipboardList, Plus, AlertTriangle, 
   Scissors, Loader2, Lightbulb, Search, Presentation, 
   Activity, Eye, X, ChevronUp, ChevronDown, Palette, 
-  History, Save, Trash2, Download, FileText, Check, Printer, HelpCircle, Sparkles, Pencil 
+  History, Save, Trash2, Download, FileText, Check, Printer, HelpCircle, Sparkles, Pencil,
+  ChevronLeft, ChevronRight, Columns, Layers, ChevronsLeftRight
 } from 'lucide-react';
 import { Course, CLO, Chapter } from '@/types';
 import '../styles/LessonPlanner.css';
@@ -129,6 +130,9 @@ export default function LessonPlanner({
     loading,
     saving,
     exporting,
+    diagramLayouts,
+    setDiagramLayouts,
+    savedDiagramLayouts,
     revisions,
     loadRevisions,
     chapterMcqs,
@@ -174,6 +178,92 @@ export default function LessonPlanner({
     setAIProcessingStatus
   });
 
+  // Layout mode state for 3D Carousel or traditional Split view
+  const [layoutMode, setLayoutMode] = useState<'split' | 'carousel_3d'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('planner_layout_mode_v2');
+      if (saved === 'split' || saved === 'carousel_3d') return saved;
+    }
+    return 'split';
+  });
+
+  const [activeCarouselTab, setActiveCarouselTab] = useState<number>(1); // Default to AI Proposal (Index 1)
+
+  const handleSelectChapterWithTabSwitch = async (chapter: Chapter) => {
+    const result = await handleSelectChapter(chapter);
+    if (layoutMode === 'carousel_3d' && result) {
+      if (result.hasContent) {
+        setActiveCarouselTab(2); // Slide to Editor (Index 2)
+      } else {
+        setActiveCarouselTab(1); // Slide to AI Proposal (Index 1)
+      }
+    }
+  };
+
+  const setSlideContentWithTabSwitch = (valOrFunc: string | ((prev: string) => string)) => {
+    setSlideContent(valOrFunc);
+    if (layoutMode === 'carousel_3d') {
+      setActiveCarouselTab(2); // Auto switch to Editor tab (Index 2)
+    }
+  };
+
+  const setActiveLearningScriptWithTabSwitch = (valOrFunc: string | ((prev: string) => string)) => {
+    setActiveLearningScript(valOrFunc);
+    if (layoutMode === 'carousel_3d') {
+      setActiveCarouselTab(2); // Auto switch to Editor tab (Index 2)
+    }
+  };
+
+  const slideTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const scriptTextareaRef = React.useRef<HTMLTextAreaElement | null>(null);
+
+  const handleInsertContent = (content: string, type: 'slides' | 'script', mode: 'cursor' | 'end' | 'replace') => {
+    if (mode === 'replace') {
+      if (type === 'slides') {
+        setSlideContentWithTabSwitch(content);
+      } else {
+        setActiveLearningScriptWithTabSwitch(content);
+      }
+      return;
+    }
+
+    const textarea = type === 'slides' ? slideTextareaRef.current : scriptTextareaRef.current;
+    
+    if (mode === 'cursor' && textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      const before = text.substring(0, start);
+      const after = text.substring(end);
+      const separatorBefore = (before === '' || before.endsWith('\n\n')) ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+      const separatorAfter = (after === '' || after.startsWith('\n\n')) ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+      const updated = before + separatorBefore + content + separatorAfter + after;
+      
+      if (type === 'slides') {
+        setSlideContentWithTabSwitch(updated);
+      } else {
+        setActiveLearningScriptWithTabSwitch(updated);
+      }
+      
+      setTimeout(() => {
+        textarea.focus();
+        const newCursorPos = start + separatorBefore.length + content.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }, 50);
+    } else {
+      // mode === 'end' or fallback
+      if (type === 'slides') {
+        setSlideContentWithTabSwitch(prev => prev ? prev + '\n\n' + content : content);
+      } else {
+        setActiveLearningScriptWithTabSwitch(prev => prev ? prev + '\n\n' + content : content);
+      }
+    }
+  };
+
+  useEffect(() => {
+    localStorage.setItem('planner_layout_mode_v2', layoutMode);
+  }, [layoutMode]);
+
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [reverting, setReverting] = useState(false);
@@ -195,7 +285,7 @@ export default function LessonPlanner({
        getLockOwner(`chapter_${selectedChapter.id}_materials`))
     : null;
 
-  const isDirty = slideContent !== savedSlideContent || activeLearningScript !== savedScript;
+  const isDirty = slideContent !== savedSlideContent || activeLearningScript !== savedScript || diagramLayouts !== savedDiagramLayouts;
   useDirtyState(isDirty, handleSaveMaterials);
 
   useEffect(() => {
@@ -299,6 +389,15 @@ export default function LessonPlanner({
     handleForceIngest,
     handleWebSearch
   } = search;
+
+  // Auto-slide to AI Proposal tab if AI starts generating
+  useEffect(() => {
+    if (layoutMode === 'carousel_3d') {
+      if (apiStatus === 'generating' || isGeneratingStoryboard) {
+        setActiveCarouselTab(1);
+      }
+    }
+  }, [apiStatus, isGeneratingStoryboard, layoutMode]);
 
   const renderJustifications = (justification: string) => {
     if (!justification) return null;
@@ -486,11 +585,175 @@ export default function LessonPlanner({
     return drawerContent;
   };
 
+  const handleGenerateMaterialsFromStoryboardWithTabSwitch = async (draft: any[]) => {
+    if (layoutMode === 'carousel_3d') {
+      setActiveCarouselTab(2); // Auto switch to Editor tab (Index 2)
+    }
+    return handleGenerateMaterialsFromStoryboard(draft);
+  };
+
+  const sidebarNode = (
+    <LessonPlannerSidebar
+      chapters={chapters}
+      selectedChapter={selectedChapter}
+      activeLeftTab={activeLeftTab}
+      setActiveLeftTab={setActiveLeftTab}
+      clos={clos}
+      documents={documents}
+      uploadFile={uploadFile}
+      setUploadFile={setUploadFile}
+      loading={loading}
+      handleSelectChapter={handleSelectChapter}
+      handleGenerateOutline={handleGenerateOutline}
+      handleUploadDocument={handleUploadDocument}
+      handleDeleteDocument={handleDeleteDocument}
+      handleWebSearch={handleWebSearch}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      searching={searching}
+      showAdvancedSearch={showAdvancedSearch}
+      setShowAdvancedSearch={setShowAdvancedSearch}
+      maxResults={maxResults}
+      setMaxResults={setMaxResults}
+      credibilityThreshold={credibilityThreshold}
+      setCredibilityThreshold={setCredibilityThreshold}
+      suggestedQueries={suggestedQueries}
+      searchResult={searchResult}
+      expandedSearch={expandedSearch}
+      toggleSearchDetail={toggleSearchDetail}
+      handleSummarizeContent={handleSummarizeContent}
+      summarizing={summarizing}
+      summaries={summaries}
+      selectedRejected={selectedRejected}
+      setSelectedRejected={setSelectedRejected}
+      handleForceIngest={(chapterId?: number | '') => handleForceIngest(chapterId || selectedChapter?.id)}
+      isCloCovered={isCloCovered}
+      renderJustifications={renderJustifications}
+      chapterMcqs={chapterMcqs}
+      loadingMcqs={loadingMcqs}
+      onClose={layoutMode === 'split' ? () => setShowSidebar(false) : undefined}
+      ragReferences={ragReferences}
+      onCitationClick={(ref) => handleCitationClick(`${ref.file_name} - Page: ${ref.page_number}`)}
+      generatingChapterId={generatingChapterId}
+      onEditChapter={handleOpenEditChapter}
+      onDeleteChapter={handleDeleteChapter}
+    />
+  );
+
+  const aiNode = (
+    <AIProposalPanel
+      selectedChapter={selectedChapter}
+      activeWorkTab={activeWorkTab}
+      aiSlideProposal={aiSlideProposal}
+      aiActiveLearningProposal={aiActiveLearningProposal}
+      apiStatus={apiStatus}
+      genLog={genLog}
+      slideContent={slideContent}
+      setSlideContent={setSlideContentWithTabSwitch}
+      activeLearningScript={activeLearningScript}
+      setActiveLearningScript={setActiveLearningScriptWithTabSwitch}
+      selectedTheme={selectedTheme}
+      slideProposalViewMode={slideProposalViewMode}
+      setSlideProposalViewMode={setSlideProposalViewMode}
+      handleCitationClick={handleCitationClick}
+      setShowConfigModal={setShowConfigModal}
+      currentStage={currentStage}
+      currentSlide={currentSlide}
+      totalSlides={totalSlides}
+      parseActiveLearningScript={parseActiveLearningScript}
+      storyboardDraft={storyboardDraft}
+      setStoryboardDraft={setStoryboardDraft}
+      isGeneratingStoryboard={isGeneratingStoryboard}
+      handleGenerateMaterialsFromStoryboard={handleGenerateMaterialsFromStoryboardWithTabSwitch}
+      handleCancelMaterialsGeneration={handleCancelMaterialsGeneration}
+      handleCancelStoryboardGeneration={handleCancelStoryboardGeneration}
+      onClose={layoutMode === 'split' ? () => setShowAIProposal(false) : undefined}
+      aiViewMode={aiViewMode}
+      setAiViewMode={setAiViewMode}
+      warnings={stream.warnings}
+      ragReferences={ragReferences}
+      activeAgent={stream.activeAgent}
+      agentStatus={stream.agentStatus}
+      selfCorrectionAttempt={stream.selfCorrectionAttempt}
+      tokenUsage={stream.tokenUsage}
+      onInsertContent={handleInsertContent}
+    />
+  );
+
+  const editorNode = (
+    <EditorPanel
+      selectedChapter={selectedChapter}
+      activeWorkTab={activeWorkTab}
+      slideContent={slideContent}
+      setSlideContent={setSlideContent}
+      savedSlideContent={savedSlideContent}
+      activeLearningScript={activeLearningScript}
+      setActiveLearningScript={setActiveLearningScript}
+      savedScript={savedScript}
+      slideEditMode={slideEditMode}
+      setSlideEditMode={setSlideEditMode}
+      scriptEditMode={scriptEditMode}
+      setScriptEditMode={setScriptEditMode}
+      selectedTheme={selectedTheme}
+      setSelectedTheme={setSelectedTheme}
+      isFullscreen={isFullscreen}
+      setIsFullscreen={setIsFullscreen}
+      handleCitationClick={handleCitationClick}
+      parseActiveLearningScript={parseActiveLearningScript}
+      editorFontSize={editorFontSize}
+      setEditorFontSize={setEditorFontSize}
+      onRecordAIUsage={onRecordAIUsage}
+      setAIProcessingStatus={setAIProcessingStatus}
+      saving={saving}
+      handleSaveMaterials={handleSaveMaterials}
+      handleResetMaterials={handleResetMaterials}
+      setShowRevisionModal={setShowRevisionModal}
+      loadRevisionsExternal={loadRevisions}
+      isAIGenerating={apiStatus === 'generating' && selectedChapter?.id === generatingChapterId}
+      handleUndo={handleUndo}
+      handleRedo={handleRedo}
+      canUndo={canUndo}
+      canRedo={canRedo}
+      materialCreatedBy={materialCreatedBy}
+      slideTextareaRef={slideTextareaRef}
+      scriptTextareaRef={scriptTextareaRef}
+      diagramLayouts={diagramLayouts}
+      setDiagramLayouts={setDiagramLayouts}
+      savedDiagramLayouts={savedDiagramLayouts}
+      setActiveWorkTab={setActiveWorkTab}
+      layoutMode={layoutMode}
+      setLayoutMode={setLayoutMode}
+      handleExportPPTX={handleExportPPTX}
+      handleExportLessonPlan={handleExportLessonPlan}
+      exporting={exporting}
+    />
+  );
+
   return (
     <div className="planner-container">
       {/* HEADER */}
       {isActive && portalTarget ? createPortal(
         <div className="header-merged-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* Layout mode switcher pill */}
+          <div className="planner-layout-mode-selector">
+            <button
+              onClick={() => setLayoutMode('split')}
+              className={`planner-layout-mode-btn ${layoutMode === 'split' ? 'active' : ''}`}
+              title="Chế độ phân cột (mặc định)"
+            >
+              <Columns size={13} />
+              <span>Cột</span>
+            </button>
+            <button
+              onClick={() => setLayoutMode('carousel_3d')}
+              className={`planner-layout-mode-btn ${layoutMode === 'carousel_3d' ? 'active' : ''}`}
+              title="Chế độ 3D Băng chuyền"
+            >
+              <Layers size={13} />
+              <span>3D Carousel</span>
+            </button>
+          </div>
+
           <div className="planner-work-tab-container-new" style={{ marginRight: '8px' }}>
             <button 
               onClick={() => setActiveWorkTab('slides')} 
@@ -545,6 +808,26 @@ export default function LessonPlanner({
               <ArrowLeft size={14} aria-hidden="true" /> Sơ đồ
             </button>
             
+            {/* Layout mode switcher pill */}
+            <div className="planner-layout-mode-selector">
+              <button
+                onClick={() => setLayoutMode('split')}
+                className={`planner-layout-mode-btn ${layoutMode === 'split' ? 'active' : ''}`}
+                title="Chế độ phân cột (mặc định)"
+              >
+                <Columns size={13} />
+                <span>Cột</span>
+              </button>
+              <button
+                onClick={() => setLayoutMode('carousel_3d')}
+                className={`planner-layout-mode-btn ${layoutMode === 'carousel_3d' ? 'active' : ''}`}
+                title="Chế độ 3D Băng chuyền"
+              >
+                <Layers size={13} />
+                <span>3D Carousel</span>
+              </button>
+            </div>
+
             <div className="planner-work-tab-container-new">
               <button 
                 onClick={() => setActiveWorkTab('slides')} 
@@ -596,6 +879,27 @@ export default function LessonPlanner({
         </div>
       )}
 
+      {selectedChapter && !slideContent && !isZenMode && chapters.length > 0 && documents.length === 0 && (
+        <div className="planner-whats-next-banner animate-fade-in" style={{ borderColor: 'rgba(59, 130, 246, 0.3)', background: 'rgba(59, 130, 246, 0.04)' }}>
+          <div className="planner-whats-next-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="whats-next-sparkle" style={{ display: 'inline-flex', alignItems: 'center' }}><BookOpen size={16} /></span>
+            <div style={{ textAlign: 'left' }}>
+              <strong>Gợi ý:</strong> Trước khi AI sinh bài giảng, Thầy/Cô nên nạp tài liệu nguồn (giáo trình, bài báo) vào <strong>Thư viện RAG</strong> để AI tham chiếu nội dung chính thống, nâng cao chất lượng bài soạn.
+            </div>
+          </div>
+          <div className="planner-whats-next-actions">
+            <button 
+              onClick={() => onNavigate('knowledge_base')}
+              className="whats-next-action-btn questions"
+              title="Mở Thư viện RAG & Học thuật để nạp tài liệu nguồn"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', justifyContent: 'center', background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)' }}
+            >
+              <BookOpen size={13} /> Mở Thư viện RAG & Học thuật
+            </button>
+          </div>
+        </div>
+      )}
+
       {selectedChapter && slideContent && !isZenMode && (
         <div className="planner-whats-next-banner animate-fade-in">
           <div className="planner-whats-next-content" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -618,132 +922,31 @@ export default function LessonPlanner({
       )}
 
 
-      <ResizableLayout
-        showSidebar={showSidebar}
-        showAIProposal={showAIProposal}
-        isStoryboardLocked={isStoryboardLocked}
-        isMaterialsLocked={isMaterialsLocked}
-        lockOwner={lockOwner}
-      >
-        <LessonPlannerSidebar
-            chapters={chapters}
-            selectedChapter={selectedChapter}
-            activeLeftTab={activeLeftTab}
-            setActiveLeftTab={setActiveLeftTab}
-            clos={clos}
-            documents={documents}
-            uploadFile={uploadFile}
-            setUploadFile={setUploadFile}
-            loading={loading}
-            handleSelectChapter={handleSelectChapter}
-            handleGenerateOutline={handleGenerateOutline}
-            handleUploadDocument={handleUploadDocument}
-            handleDeleteDocument={handleDeleteDocument}
-            handleWebSearch={handleWebSearch}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            searching={searching}
-            showAdvancedSearch={showAdvancedSearch}
-            setShowAdvancedSearch={setShowAdvancedSearch}
-            maxResults={maxResults}
-            setMaxResults={setMaxResults}
-            credibilityThreshold={credibilityThreshold}
-            setCredibilityThreshold={setCredibilityThreshold}
-            suggestedQueries={suggestedQueries}
-            searchResult={searchResult}
-            expandedSearch={expandedSearch}
-            toggleSearchDetail={toggleSearchDetail}
-            handleSummarizeContent={handleSummarizeContent}
-            summarizing={summarizing}
-            summaries={summaries}
-            selectedRejected={selectedRejected}
-            setSelectedRejected={setSelectedRejected}
-            handleForceIngest={handleForceIngest}
-            isCloCovered={isCloCovered}
-            renderJustifications={renderJustifications}
-            chapterMcqs={chapterMcqs}
-            loadingMcqs={loadingMcqs}
-            onClose={() => setShowSidebar(false)}
-            ragReferences={ragReferences}
-            onCitationClick={(ref) => handleCitationClick(`${ref.file_name} - Page: ${ref.page_number}`)}
-            generatingChapterId={generatingChapterId}
-            onEditChapter={handleOpenEditChapter}
-            onDeleteChapter={handleDeleteChapter}
-          />
-
-        <AIProposalPanel
-            selectedChapter={selectedChapter}
-            activeWorkTab={activeWorkTab}
-            aiSlideProposal={aiSlideProposal}
-            aiActiveLearningProposal={aiActiveLearningProposal}
-            apiStatus={apiStatus}
-            genLog={genLog}
-            slideContent={slideContent}
-            setSlideContent={setSlideContent}
-            activeLearningScript={activeLearningScript}
-            setActiveLearningScript={setActiveLearningScript}
-            selectedTheme={selectedTheme}
-            slideProposalViewMode={slideProposalViewMode}
-            setSlideProposalViewMode={setSlideProposalViewMode}
-            handleCitationClick={handleCitationClick}
-            setShowConfigModal={setShowConfigModal}
-            currentStage={currentStage}
-            currentSlide={currentSlide}
-            totalSlides={totalSlides}
-            parseActiveLearningScript={parseActiveLearningScript}
-            storyboardDraft={storyboardDraft}
-            setStoryboardDraft={setStoryboardDraft}
-            isGeneratingStoryboard={isGeneratingStoryboard}
-            handleGenerateMaterialsFromStoryboard={handleGenerateMaterialsFromStoryboard}
-            handleCancelMaterialsGeneration={handleCancelMaterialsGeneration}
-            handleCancelStoryboardGeneration={handleCancelStoryboardGeneration}
-            onClose={() => setShowAIProposal(false)}
-            aiViewMode={aiViewMode}
-            setAiViewMode={setAiViewMode}
-            warnings={stream.warnings}
-            ragReferences={ragReferences}
-            activeAgent={stream.activeAgent}
-            agentStatus={stream.agentStatus}
-            selfCorrectionAttempt={stream.selfCorrectionAttempt}
-            tokenUsage={stream.tokenUsage}
-          />
-
-        <EditorPanel
-            selectedChapter={selectedChapter}
-            activeWorkTab={activeWorkTab}
-            slideContent={slideContent}
-            setSlideContent={setSlideContent}
-            savedSlideContent={savedSlideContent}
-            activeLearningScript={activeLearningScript}
-            setActiveLearningScript={setActiveLearningScript}
-            savedScript={savedScript}
-            slideEditMode={slideEditMode}
-            setSlideEditMode={setSlideEditMode}
-            scriptEditMode={scriptEditMode}
-            setScriptEditMode={setScriptEditMode}
-            selectedTheme={selectedTheme}
-            setSelectedTheme={setSelectedTheme}
-            isFullscreen={isFullscreen}
-            setIsFullscreen={setIsFullscreen}
-            handleCitationClick={handleCitationClick}
-            parseActiveLearningScript={parseActiveLearningScript}
-            editorFontSize={editorFontSize}
-            setEditorFontSize={setEditorFontSize}
-            onRecordAIUsage={onRecordAIUsage}
-            setAIProcessingStatus={setAIProcessingStatus}
-            saving={saving}
-            handleSaveMaterials={handleSaveMaterials}
-            handleResetMaterials={handleResetMaterials}
-            setShowRevisionModal={setShowRevisionModal}
-            loadRevisionsExternal={loadRevisions}
-            isAIGenerating={apiStatus === 'generating' && selectedChapter?.id === generatingChapterId}
-            handleUndo={handleUndo}
-            handleRedo={handleRedo}
-            canUndo={canUndo}
-            canRedo={canRedo}
-            materialCreatedBy={materialCreatedBy}
-          />
-      </ResizableLayout>
+      {layoutMode === 'split' ? (
+        <ResizableLayout
+          showSidebar={showSidebar}
+          showAIProposal={showAIProposal}
+          isStoryboardLocked={isStoryboardLocked}
+          isMaterialsLocked={isMaterialsLocked}
+          lockOwner={lockOwner}
+        >
+          {sidebarNode}
+          {aiNode}
+          {editorNode}
+        </ResizableLayout>
+      ) : (
+        <Carousel3DLayout
+          activeIndex={activeCarouselTab}
+          setActiveIndex={setActiveCarouselTab}
+          isStoryboardLocked={isStoryboardLocked}
+          isMaterialsLocked={isMaterialsLocked}
+          lockOwner={lockOwner}
+        >
+          {sidebarNode}
+          {aiNode}
+          {editorNode}
+        </Carousel3DLayout>
+      )}
 
       <PedagogicalConfigModal
         showConfigModal={showConfigModal}
@@ -878,7 +1081,7 @@ export default function LessonPlanner({
       )}
 
       {/* Floating side handles when collapsed */}
-      {!showSidebar && (
+      {layoutMode === 'split' && !showSidebar && (
         <button 
           onClick={() => setShowSidebar(true)} 
           className="planner-sidebar-toggle-floating"
@@ -888,7 +1091,7 @@ export default function LessonPlanner({
         </button>
       )}
 
-      {!showAIProposal && (
+      {layoutMode === 'split' && !showAIProposal && (
         <button 
           onClick={() => setShowAIProposal(true)} 
           className="planner-ai-toggle-floating"
@@ -1897,3 +2100,418 @@ function ResizableLayout({ showSidebar, showAIProposal, isStoryboardLocked, isMa
     </div>
   );
 }
+
+// ─── 3D Carousel Layout ──────────────────────────────────────────────────────
+
+interface Carousel3DLayoutProps {
+  activeIndex: number;
+  setActiveIndex: (index: number) => void;
+  isStoryboardLocked?: boolean;
+  isMaterialsLocked?: boolean;
+  lockOwner?: string | null;
+  children: React.ReactNode;
+}
+
+function Carousel3DLayout({
+  activeIndex,
+  setActiveIndex,
+  isStoryboardLocked,
+  isMaterialsLocked,
+  lockOwner,
+  children
+}: Carousel3DLayoutProps) {
+  const childrenArr = React.Children.toArray(children);
+  const totalTabs = childrenArr.length; // Expected: 3
+
+  const handlePrev = () => {
+    setActiveIndex((activeIndex - 1 + totalTabs) % totalTabs);
+  };
+
+  const handleNext = () => {
+    setActiveIndex((activeIndex + 1) % totalTabs);
+  };
+
+  // Real-time drag/swipe state & refs
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startX = React.useRef(0);
+  const viewportRef = React.useRef<HTMLDivElement>(null);
+  
+  // Track if drag occurred to avoid trigger click transition
+  const hasDragged = React.useRef(false);
+
+  // Toggle body class when dragging to disable text highlighting page-wide
+  useEffect(() => {
+    if (isDragging) {
+      document.body.classList.add('carousel-dragging');
+    } else {
+      document.body.classList.remove('carousel-dragging');
+    }
+    return () => {
+      document.body.classList.remove('carousel-dragging');
+    };
+  }, [isDragging]);
+
+  // Click handler for swipe guide zones (only acts as navigation if user did not drag)
+  const handleZoneClick = (dir: 'left' | 'right', e: React.MouseEvent) => {
+    if (hasDragged.current) return;
+    if (dir === 'left') handlePrev();
+    else handleNext();
+  };
+
+  // Mouse drag handlers (using window listeners for reliability when dragging outside)
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+
+    const target = e.target as HTMLElement;
+
+    // Enforce target check: only initiate drag inside the swipe docks or inactive card overlays
+    const isSwipeZone = target.closest('.planner-carousel-swipe-dock');
+    const isCardOverlay = target.closest('.planner-carousel-card-click-overlay');
+
+    if (!isSwipeZone && !isCardOverlay) {
+      return;
+    }
+
+    // Do not drag if clicking on standard interactive elements inside
+    const interactiveTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION', 'LABEL'];
+    if (
+      interactiveTags.includes(target.tagName) ||
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('[role="button"]')
+    ) {
+      return;
+    }
+
+    // Prevent default browser behavior (such as text selection/native drag triggers) to avoid conflicts
+    e.preventDefault();
+
+    setIsDragging(true);
+    hasDragged.current = false;
+    startX.current = e.clientX;
+    setDragOffset(0);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // If the left mouse button is no longer pressed (e.g. mouseup was missed outside window), cancel/terminate drag
+      if ((e.buttons & 1) === 0) {
+        handleMouseUp();
+        return;
+      }
+      const diff = e.clientX - startX.current;
+      setDragOffset(diff);
+      if (Math.abs(diff) > 5) {
+        hasDragged.current = true;
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      const viewportWidth = viewportRef.current?.clientWidth || 400;
+      const threshold = viewportWidth * 0.08; // 8% of viewport width (more sensitive)
+      if (dragOffset < -threshold) {
+        handleNext();
+      } else if (dragOffset > threshold) {
+        handlePrev();
+      }
+      // Reset drag tracker slightly after to allow click handler verification
+      setTimeout(() => {
+        hasDragged.current = false;
+      }, 50);
+      setDragOffset(0);
+    };
+
+    const handleBlur = () => {
+      setIsDragging(false);
+      setDragOffset(0);
+      hasDragged.current = false;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [isDragging, dragOffset, activeIndex]);
+
+  // Touch drag handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+
+    // Enforce target check: only initiate drag inside the swipe docks or inactive card overlays
+    const isSwipeZone = target.closest('.planner-carousel-swipe-dock');
+    const isCardOverlay = target.closest('.planner-carousel-card-click-overlay');
+
+    if (!isSwipeZone && !isCardOverlay) {
+      return;
+    }
+
+    // Do not drag if touching interactive elements
+    const interactiveTags = ['INPUT', 'TEXTAREA', 'BUTTON', 'A', 'SELECT', 'OPTION', 'LABEL'];
+    if (
+      interactiveTags.includes(target.tagName) ||
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('[role="button"]')
+    ) {
+      return;
+    }
+
+    setIsDragging(true);
+    hasDragged.current = false;
+    startX.current = e.targetTouches[0].clientX;
+    setDragOffset(0);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const diff = e.targetTouches[0].clientX - startX.current;
+    setDragOffset(diff);
+    if (Math.abs(diff) > 5) {
+      hasDragged.current = true;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const viewportWidth = viewportRef.current?.clientWidth || 400;
+    const threshold = viewportWidth * 0.08; // 8% of viewport width (more sensitive)
+    if (dragOffset < -threshold) {
+      handleNext();
+    } else if (dragOffset > threshold) {
+      handlePrev();
+    }
+    setTimeout(() => {
+      hasDragged.current = false;
+    }, 50);
+    setDragOffset(0);
+  };
+
+  // Header options matching indexes
+  const tabTitles = [
+    "Mục lục & RAG",
+    "Đề xuất AI",
+    "Biên tập bài học"
+  ];
+
+  const tabIcons = [
+    <BookOpen size={16} key="icon-0" />,
+    <Sparkles size={16} key="icon-1" />,
+    <Pencil size={16} key="icon-2" />
+  ];
+
+  const wrapperClasses = [
+    "planner-sidebar-wrapper",
+    "planner-ai-wrapper",
+    "planner-editor-wrapper"
+  ];
+
+  // Drag progress calculations (-1 to 1)
+  const viewportWidth = viewportRef.current?.clientWidth || 500;
+  // Drag threshold for full transition (e.g. 45% of viewport width)
+  const progressThreshold = Math.max(200, viewportWidth * 0.45);
+  const dragProgress = Math.max(-1, Math.min(1, dragOffset / progressThreshold));
+
+  return (
+    <div className="planner-carousel-3d-container">
+      {/* Main 3D Viewport wrapper */}
+      <div 
+        ref={viewportRef}
+        className={`planner-carousel-3d-viewport ${isDragging ? 'is-dragging' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onMouseDown={handleMouseDown}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+      >
+        {/* Interactive Swipe Dock Left */}
+        <div 
+          className="planner-carousel-swipe-dock dock-left"
+          onClick={(e) => handleZoneClick('left', e)}
+        >
+          <div className="swipe-dock-tooltip">
+            <ChevronsLeftRight className="tooltip-icon animating-left" />
+            <span>Kéo thả để vuốt</span>
+          </div>
+        </div>
+
+        {/* Interactive Swipe Dock Right */}
+        <div 
+          className="planner-carousel-swipe-dock dock-right"
+          onClick={(e) => handleZoneClick('right', e)}
+        >
+          <div className="swipe-dock-tooltip">
+            <ChevronsLeftRight className="tooltip-icon animating-right" />
+            <span>Kéo thả để vuốt</span>
+          </div>
+        </div>
+
+        {/* Outer 3D cards stack container */}
+        <div className="planner-carousel-3d-cards-wrapper">
+          {childrenArr.map((child, idx) => {
+            // Compute infinite wrap distance around index
+            let diff = idx - activeIndex;
+            if (diff === 2) diff = -1;
+            if (diff === -2) diff = 1;
+
+            // Compute dynamic virtual position based on drag progress
+            let pos = diff + dragProgress;
+            if (pos > 1.5) pos -= 3;
+            if (pos < -1.5) pos += 3;
+
+            const absPos = Math.abs(pos);
+
+            // Interpolate styles
+            let scale = 1;
+            let translateX = 0;
+            let translateZ = 0;
+            let rotateY = 0;
+            let opacity = 1;
+            let blurVal = 0;
+            let grayscaleVal = 0;
+            let brightnessVal = 100;
+            let zIndex = 1;
+
+            if (absPos <= 1) {
+              const t = absPos;
+              scale = 1 - t * 0.2;
+              translateX = pos * 20; // % (tighter horizontal overlap)
+              translateZ = -t * 160; // px
+              rotateY = 0; // Face forward parallelly
+              opacity = 1 - t * 0.65;
+              blurVal = t * 1.5;
+              grayscaleVal = t * 40;
+              brightnessVal = 100 - t * 40;
+              zIndex = Math.round(10 - t * 5);
+            } else {
+              const t = (absPos - 1) / 0.5; // 0 to 1
+              scale = 0.8 - t * 0.1;
+              translateX = Math.sign(pos) * (20 + t * 16); // % (tighter horizontal overlap)
+              translateZ = -160 - t * 140;
+              rotateY = 0; // Face forward parallelly
+              opacity = 0.35 - t * 0.35;
+              blurVal = 1.5 + t * 3.5;
+              grayscaleVal = 40 + t * 60;
+              brightnessVal = 60 - t * 60;
+              zIndex = 1;
+            }
+
+            const transformStyle = `translate3d(${translateX}%, 0, ${translateZ}px) scale(${scale}) rotateY(${rotateY}deg)`;
+            const filterStyle = blurVal > 0 || grayscaleVal > 0 
+              ? `blur(${blurVal}px) grayscale(${grayscaleVal}%) brightness(${brightnessVal}%)`
+              : 'none';
+            const transitionStyle = isDragging 
+              ? 'none' 
+              : 'transform 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.45s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.45s cubic-bezier(0.25, 0.8, 0.25, 1)';
+
+            // Locks validation
+            const isLockedCard = (idx === 1 && isStoryboardLocked) || (idx === 2 && isMaterialsLocked);
+
+            return (
+              <div 
+                key={idx} 
+                className={`planner-carousel-card-3d ${diff === 0 ? 'card-center' : diff === 1 ? 'card-right' : 'card-left'}`}
+                style={{
+                  transform: transformStyle,
+                  opacity: opacity,
+                  filter: filterStyle,
+                  transition: transitionStyle,
+                  zIndex: zIndex,
+                  pointerEvents: absPos > 0.15 ? 'none' : 'auto'
+                }}
+              >
+                {/* Visual click overlay for non-active side cards */}
+                {absPos > 0.15 && (
+                  <div 
+                    className="planner-carousel-card-click-overlay"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!hasDragged.current) {
+                        setActiveIndex(idx);
+                      }
+                    }}
+                  >
+                    <div className="card-click-overlay-content">
+                      <ChevronsLeftRight className="overlay-icon" />
+                      <span>Nhấp để mở</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="planner-carousel-card-inner">
+                  {/* Reuse standard container wrapper selectors so flex layouts look identical */}
+                  <div className={wrapperClasses[idx]} style={{ height: '100%', width: '100%' }}>
+                    {child}
+                  </div>
+
+                  {isLockedCard && (
+                    <div className="odin-lock-overlay">
+                      <div className="odin-lock-content">
+                        <Loader2 size={24} className="animate-spin" style={{ color: 'var(--vinuni-gold)' }} />
+                        <h4 className="odin-lock-title">Khu vực bị khóa</h4>
+                        <p className="odin-lock-desc">
+                          Trợ lý AI {lockOwner === 'odin_autopilot' ? 'Autopilot' : lockOwner} đang soạn thảo...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Tab Indicators Header Selector */}
+      <div className="planner-carousel-tabs-header">
+        <button
+          type="button"
+          onClick={handlePrev}
+          className="tab-nav-arrow arrow-left"
+          title="Xem tab bên trái"
+        >
+          <ChevronLeft size={26} />
+        </button>
+
+        {tabTitles.map((title, idx) => {
+          const isActive = idx === activeIndex;
+          return (
+            <button
+              key={idx}
+              onClick={() => setActiveIndex(idx)}
+              className={`planner-carousel-tab-indicator-btn ${isActive ? 'active' : ''}`}
+            >
+              {tabIcons[idx]}
+              <span>{title}</span>
+            </button>
+          );
+        })}
+
+        <button
+          type="button"
+          onClick={handleNext}
+          className="tab-nav-arrow arrow-right"
+          title="Xem tab bên phải"
+        >
+          <ChevronRight size={26} />
+        </button>
+      </div>
+
+      {/* Swipe guide instructions */}
+      <div className="planner-carousel-help">
+        <HelpCircle size={12} />
+        <span>Thầy/Cô có thể <strong>vuốt (swipe)</strong> trên thẻ hoặc <strong>nhấp vào thẻ phụ bên cạnh</strong> để đổi tiêu điểm thao tác.</span>
+      </div>
+    </div>
+  );
+}
+

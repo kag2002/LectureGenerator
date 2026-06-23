@@ -19,7 +19,8 @@ import {
   Activity,
   ArrowLeft,
   Shield,
-  Trash2
+  Trash2,
+  TrendingUp
 } from 'lucide-react';
 import { Course } from '@/types';
 import FlowSteps from './FlowSteps';
@@ -109,6 +110,7 @@ export default function AppShell({
     { view: 'lesson_planner', label: 'Soạn Bài giảng', icon: <BookOpen size={18} /> },
     { view: 'question_bank', label: 'Ngân hàng Đề thi', icon: <HelpCircle size={18} /> },
     { view: 'matrix_dashboard', label: 'Ma trận CLO-Bloom', icon: <BarChart2 size={18} /> },
+    { view: 'assessment_hub', label: 'Đánh giá & Cải tiến', icon: <TrendingUp size={18} /> },
     { view: 'knowledge_base', label: 'Thư viện RAG', icon: <Library size={18} /> },
     { view: 'ai_monitor', label: 'Giám sát AI', icon: <Activity size={18} /> },
     { view: 'trash', label: 'Thùng rác', icon: <Trash2 size={18} /> },

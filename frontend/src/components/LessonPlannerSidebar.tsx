@@ -10,8 +10,8 @@ export interface SearchResultType {
 export interface LessonPlannerSidebarProps {
   chapters: Chapter[];
   selectedChapter: Chapter | null;
-  activeLeftTab: 'outline' | 'documents' | 'compliance' | 'mcqs' | 'citations';
-  setActiveLeftTab: (tab: 'outline' | 'documents' | 'compliance' | 'mcqs' | 'citations') => void;
+  activeLeftTab: 'outline' | 'compliance' | 'mcqs' | 'citations';
+  setActiveLeftTab: (tab: 'outline' | 'compliance' | 'mcqs' | 'citations') => void;
   clos: CLO[];
   documents: string[];
   uploadFile: File | null;
@@ -91,12 +91,7 @@ export default function LessonPlannerSidebar({
         >
           <span className="sidebar-tab-btn-content"><BookOpen size={12} aria-hidden="true" /> Dàn ý</span>
         </button>
-        <button 
-          onClick={() => setActiveLeftTab('documents')}
-          className={`sidebar-tab-btn ${activeLeftTab === 'documents' ? 'active' : 'inactive'}`}
-        >
-          <span className="sidebar-tab-btn-content"><FileText size={12} aria-hidden="true" /> Tài liệu RAG</span>
-        </button>
+
         <button 
           onClick={() => setActiveLeftTab('compliance')}
           className={`sidebar-tab-btn ${activeLeftTab === 'compliance' ? 'active' : 'inactive'}`}
@@ -154,7 +149,7 @@ export default function LessonPlannerSidebar({
               <button 
                 onClick={handleGenerateOutline} 
                 id="lp-generate-outline-btn"
-                className="planner-ai-outline-btn"
+                className={`planner-ai-outline-btn ${chapters.length === 0 && !loading ? 'glow-bounce-hint' : ''}`}
                 disabled={loading}
               >
                 {loading ? (
@@ -240,116 +235,7 @@ export default function LessonPlannerSidebar({
         )}
 
 
-        {activeLeftTab === 'documents' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <div>
-              <h4 className="planner-sub-title sidebar-sub-header">
-                <Upload size={16} aria-hidden="true" /> Nạp giáo trình / tài liệu nguồn (RAG)
-              </h4>
-              <form onSubmit={handleUploadDocument} className="planner-upload-form">
-                <input 
-                  type="file" 
-                  onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)} 
-                  className="planner-file-input"
-                  accept=".pdf,.docx,.txt"
-                />
-                <button type="submit" className="planner-upload-btn" disabled={loading || !uploadFile}>
-                  {loading ? (
-                    <span className="sidebar-tab-btn-content">
-                      <RefreshCw size={12} aria-hidden="true" style={{ animation: 'spin 1.5s linear infinite' }} /> Đang tải lên…
-                    </span>
-                  ) : (
-                    <span className="sidebar-tab-btn-content">
-                      <Upload size={12} aria-hidden="true" /> Nạp tài liệu lên Vector DB
-                    </span>
-                  )}
-                </button>
-              </form>
-              <div className="planner-doc-list sidebar-doc-scroll">
-                {documents.length === 0 ? (
-                  <div className="planner-empty-state">
-                    Chưa có tài liệu nguồn.
-                    <div className="empty-suggestions-box">
-                      <div className="empty-suggestions-title">
-                        <span>💡 Hướng dẫn & Gợi ý:</span>
-                      </div>
-                      <ul className="empty-suggestions-list">
-                        <li className="empty-suggestions-item">Chọn file tài liệu học liệu (.pdf, .docx, .txt) và nhấn <strong>"Nạp tài liệu lên Vector DB"</strong>.</li>
-                        <li className="empty-suggestions-item">Hoặc sử dụng ô tìm kiếm ở dưới để tìm kiếm và nạp RAG trực tuyến từ các nguồn uy tín.</li>
-                      </ul>
-                    </div>
-                  </div>
-                ) : (
-                  documents.map((doc, idx) => (
-                    <div key={idx} className="planner-doc-item">
-                      <span className="planner-doc-name" title={doc}>
-                        <FileText size={12} aria-hidden="true" className="sidebar-doc-icon" /> {doc}
-                      </span>
-                      <button type="button" onClick={() => handleDeleteDocument(doc)} className="planner-delete-doc-btn" title="Xóa tài liệu" aria-label="Xóa tài liệu">
-                        <Trash2 size={12} aria-hidden="true" />
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
 
-            <div className="sidebar-search-container">
-              <h4 className="planner-sub-title sidebar-sub-header">
-                <Search size={16} aria-hidden="true" /> Tìm kiếm học thuật trực tuyến
-              </h4>
-              <form onSubmit={handleWebSearch} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <input 
-                  type="text" 
-                  placeholder="Ví dụ: Cây nhị phân AVL tự cân bằng…"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="sidebar-search-input"
-                  required
-                />
-                <button type="submit" className="planner-upload-btn" disabled={searching}>
-                  {searching ? (
-                    <span className="sidebar-tab-btn-content">
-                      <RefreshCw size={12} aria-hidden="true" style={{ animation: 'spin 1.5s linear infinite' }} /> Đang tìm & nạp RAG…
-                    </span>
-                  ) : (
-                    <span className="sidebar-tab-btn-content">
-                      <Search size={12} aria-hidden="true" /> Tìm & Nạp RAG
-                    </span>
-                  )}
-                </button>
-              </form>
-              
-              {searching && (
-                <div className="sidebar-search-status">
-                  <RefreshCw size={11} aria-hidden="true" style={{ animation: 'spin 1.5s linear infinite', marginRight: '4px', display: 'inline-block', verticalAlign: 'middle' }} /> Đang tìm kiếm, thu thập bài viết chất lượng cao và tự động nạp vào RAG…
-                </div>
-              )}
-              
-              {searchResult && (
-                <div style={{ marginTop: '12px' }}>
-                  <div className="sidebar-search-result-title">
-                    <Check size={12} aria-hidden="true" /> Kết quả tìm & nạp:
-                  </div>
-                  <div className="sidebar-search-result-list">
-                    {searchResult.accepted && searchResult.accepted.map((src, i) => (
-                      <div key={i} className="sidebar-search-result-card accepted">
-                        <div className="sidebar-search-result-card-title accepted">{src.title}</div>
-                        <a href={src.url} target="_blank" rel="noopener noreferrer" className="sidebar-search-result-link">Link bài viết</a>
-                      </div>
-                    ))}
-                    {searchResult.rejected && searchResult.rejected.map((src, i) => (
-                      <div key={i} className="sidebar-search-result-card rejected">
-                        <div className="sidebar-search-result-card-title rejected">{src.title}</div>
-                        <span className="sidebar-search-result-rejected-msg">Từ chối (Độ tin cậy thấp)</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {activeLeftTab === 'compliance' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>

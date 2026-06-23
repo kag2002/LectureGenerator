@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import './CourseRoadmap.css';
 import {
   CheckCircle2, Clock, Circle, BookOpen, FileText,
@@ -66,16 +67,15 @@ function getVerticalBezierPath(x1: number, y1: number, x2: number, y2: number) {
 // Helper: Convert Vietnamese accented characters to plain ASCII for filename preview
 const sanitizeFilename = (name: string): string => {
   if (!name) return "Chapter";
-  const from = "àáäâãåăæçèéëêìíïîñòóöôõøœùúüûýÿđñòóôõơàảãáạăằẳẵắặâầẩẫấậèẻẽéẹêềểễếệìỉĩíịòỏõóọôồổỗốộơờởỡớợùủũúụưừửữứựỳỷỹýỵ";
-  const to = "aaaaaaaaceeeeiiiinooooooouuuuyydnoooooaaaaaaaaaaaaaeeeeeeeeeeiiiiiooooooooooooooouuuuuuuuuuyyyyy";
-  let str = name.toLowerCase();
-  for (let i = 0, l = from.length; i < l; i++) {
-    str = str.replace(new RegExp(from[i], "g"), to[i]);
-  }
-  const filtered = str.replace(/[^a-z0-9_\-\s]/g, "");
-  const sanitized = filtered.trim().replace(/[\s_]+/g, "_");
+  // Use Unicode NFD normalization to decompose accented chars, then strip combining marks
+  let str = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // Remove combining diacritical marks
+    .replace(/[đĐ]/g, 'd');           // Special case for Vietnamese đ
+  const filtered = str.replace(/[^a-zA-Z0-9_\-\s]/g, '');
+  const sanitized = filtered.trim().replace(/[\s_]+/g, '_');
   return sanitized.split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join('_') || "Chapter";
 };
 
@@ -523,7 +523,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
           onClick={() => setViewMode('mindmap')}
           style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
-          <Network size={16} /> Sơ đồ Tư duy (Mạng lưới)
+          <Network size={16} /> Sơ đồ tiến trình
         </button>
       </div>
 
@@ -603,7 +603,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
                             Cách 1: Click nút <strong>"Thêm chương học mới"</strong> ở trên để tự tạo chương thủ công.
                           </li>
                           <li className="empty-suggestions-item">
-                            Cách 2: Click <strong>"Nạp Đề Cương (Syllabus)"</strong> bằng cách chọn Sơ đồ tư duy bên cạnh, hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để tải lên Syllabus của bạn.
+                            Cách 2: Click <strong>"Nạp Đề Cương (Syllabus)"</strong> bằng cách chọn Sơ đồ tiến trình bên cạnh, hoặc quay lại trang <strong>Bóc tách Syllabus (Cấu hình môn học)</strong> để tải lên Syllabus của bạn.
                           </li>
                           <li className="empty-suggestions-item">
                             Cách 3: Click vào mục <strong>Soạn bài giảng</strong> (hoặc hỏi Trợ lý ảo ODIN AI) và chọn <strong>"Gợi ý Dàn ý chương học"</strong> để AI tự động sinh cấu trúc các chương học.
@@ -835,7 +835,7 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
         {...roadmapData}
       />
 
-      {chapterModalOpen && (
+      {chapterModalOpen && ReactDOM.createPortal(
         <div className="chapter-modal-overlay" onClick={() => setChapterModalOpen(false)}>
           <div className="chapter-modal-card" onClick={(e) => e.stopPropagation()}>
             <h3 className="chapter-modal-title">
@@ -880,11 +880,12 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── ZIP Export Structure Preview Modal ── */}
-      {isZipPreviewOpen && (
+      {isZipPreviewOpen && ReactDOM.createPortal(
         <div className="chapter-modal-overlay" onClick={() => setIsZipPreviewOpen(false)}>
           <div className="chapter-modal-card zip-preview-card" onClick={(e) => e.stopPropagation()}>
             <div className="zip-preview-header">
@@ -1028,7 +1029,8 @@ export default function CourseRoadmap({ course, onBack, onLogout, onNavigate }: 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

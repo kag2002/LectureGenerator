@@ -4,6 +4,7 @@ import client from '../api/client';
 import { parseMarkdownToSlidesJS, optimizeSlideItemsJS, splitBulletText, THEMES, Slide, SlideItem } from '../utils/slideParser';
 import { renderBoldRuns, renderMarkdownInline } from '../utils/markdown';
 import { Loader2, BookOpen, BarChart2, Presentation, LayoutGrid, Plus, ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle, Maximize2, Minimize2 } from 'lucide-react';
+import MermaidDiagram from './MermaidDiagram';
 
 export interface SlideProposalPreviewProps {
   mdContent: string;
@@ -15,21 +16,36 @@ export interface SlideProposalPreviewProps {
   chapterId?: number;
   onSaveRevisedSlide?: (slideIndex: number, newSlideMarkdown: string) => void;
   created_by?: string | null;
+  activeSlideIndex?: number;
+  onActiveSlideIndexChange?: (index: number) => void;
 }
 
-export default function SlideProposalPreview({ 
-  mdContent, 
-  apiStatus, 
-  themeName = 'warm_academic', 
-  onCitationClick, 
-  isFullscreen = false, 
+export default function SlideProposalPreview({
+  mdContent,
+  apiStatus,
+  themeName = 'warm_academic',
+  onCitationClick,
+  isFullscreen = false,
   onInsertSlide,
   chapterId,
   onSaveRevisedSlide,
-  created_by
+  created_by,
+  activeSlideIndex,
+  onActiveSlideIndexChange
 }: SlideProposalPreviewProps) {
   const slides = parseMarkdownToSlidesJS(mdContent);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [localIndex, setLocalIndex] = useState(0);
+
+  const currentIndex = activeSlideIndex !== undefined ? activeSlideIndex : localIndex;
+
+  const setCurrentIndex = (index: number | ((prev: number) => number)) => {
+    const nextIndex = typeof index === 'function' ? index(currentIndex) : index;
+    if (onActiveSlideIndexChange) {
+      onActiveSlideIndexChange(nextIndex);
+    } else {
+      setLocalIndex(nextIndex);
+    }
+  };
   const [viewMode, setViewMode] = useState<'slideshow' | 'grid'>('slideshow');
   const [isSlideFullscreen, setIsSlideFullscreen] = useState(false);
 
@@ -37,18 +53,18 @@ export default function SlideProposalPreview({
   const isGenerating = apiStatus === 'generating';
   const displaySlides = isGenerating
     ? [
-        ...slides,
-        {
-          title: "Đang soạn thảo slide tiếp theo...",
-          layout: "standard_list",
-          items: [],
-          citations: [],
-          rawMarkdown: "",
-          isLoadingPlaceholder: true,
-        } as any,
-      ]
+      ...slides,
+      {
+        title: "Đang soạn thảo slide tiếp theo...",
+        layout: "standard_list",
+        items: [],
+        citations: [],
+        rawMarkdown: "",
+        isLoadingPlaceholder: true,
+      } as any,
+    ]
     : slides;
-  
+
   // States for single slide revision
   const [isReviseModalOpen, setIsReviseModalOpen] = useState(false);
   const [reviseSlideIndex, setReviseSlideIndex] = useState<number | null>(null);
@@ -80,18 +96,18 @@ export default function SlideProposalPreview({
       setIsRevising(false);
     }
   };
-  
+
   useEffect(() => {
-    // Không reset về slide 0 khi đang stream
-    if (apiStatus !== 'generating') {
+    // Không reset về slide 0 khi đang stream hoặc khi parent đang điều khiển chỉ mục slide
+    if (activeSlideIndex === undefined && apiStatus !== 'generating') {
       setCurrentIndex(0);
     }
-  }, [mdContent]);
-  
+  }, [mdContent, activeSlideIndex, apiStatus]);
+
   if (displaySlides.length === 0) {
     return <div className="planner-empty-state">Không có slide đề xuất.</div>;
   }
-  
+
   const safeIndex = currentIndex >= displaySlides.length ? 0 : currentIndex;
   const slide = displaySlides[safeIndex];
 
@@ -100,7 +116,7 @@ export default function SlideProposalPreview({
   const renderSlideContent = (s: Slide, idx: number, isThumbnail = false) => {
     if ((s as any).isLoadingPlaceholder) {
       return (
-        <div 
+        <div
           className={`slide-frame loading-placeholder ${isThumbnail ? 'thumbnail-view' : 'full-view'} ${!isThumbnail && isFullscreen ? 'fullscreen' : ''}`}
           style={{
             borderColor: isThumbnail ? 'rgba(255, 255, 255, 0.08)' : undefined
@@ -129,11 +145,11 @@ export default function SlideProposalPreview({
     const textItems = optimizedItems.filter(item => item.type === 'text');
     const nonImgItems = textItems.filter(item => !(item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')')));
     const hasNonBullet = nonImgItems.some(item => item.bullet === false);
-    
+
     let useCardLayout = false;
     if (slideLayout === 'card_grid') {
       useCardLayout = true;
-    } else if (['standard_list', 'two_column_comparison', 'visual_highlight', 'table', 'timeline_flow', 'three_column', 'quadrant_matrix', 'split_intro'].includes(slideLayout)) {
+    } else if (['standard_list', 'two_column_comparison', 'visual_highlight', 'table', 'timeline_flow', 'three_column', 'quadrant_matrix', 'split_intro', 'metric_callout', 'hero_image_split', 'pros_cons_comparison'].includes(slideLayout)) {
       useCardLayout = false;
     } else {
       useCardLayout = !tableItem && textItems.length >= 1 && textItems.length <= 4;
@@ -142,7 +158,127 @@ export default function SlideProposalPreview({
     const accentColors = theme.accents;
     let bodySection: React.ReactNode = null;
 
-    if (s.svgContent) {
+    if (slideLayout === 'metric_callout') {
+      const allText = textItems.map(it => it.rawText || '').join(' ').trim();
+      let numberText = '';
+      let labelText = allText;
+      const boldMatch = allText.match(/^\*\*(.*?)\*\*\s*[:\-—]?\s*(.*)$/);
+      const colonMatch = !boldMatch && allText.match(/^(.*?)\s*[:\-—]\s*(.*)$/);
+      if (boldMatch) {
+        numberText = boldMatch[1];
+        labelText = boldMatch[2];
+      } else if (colonMatch) {
+        numberText = colonMatch[1];
+        labelText = colonMatch[2];
+      } else {
+        const spaceIdx = allText.indexOf(' ');
+        if (spaceIdx !== -1) {
+          numberText = allText.substring(0, spaceIdx);
+          labelText = allText.substring(spaceIdx + 1);
+        }
+      }
+      bodySection = (
+        <div className="slide-metric-callout full-view" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '2cqw' }}>
+          <div className="slide-metric-number" style={{ color: theme.titleColor, fontSize: isThumbnail ? '20px' : '6cqw', fontWeight: '800', marginBottom: '1cqw' }}>
+            {numberText}
+          </div>
+          {labelText && (
+            <div className="slide-metric-label" style={{ color: theme.textColor, fontSize: isThumbnail ? '8px' : '1.8cqw', fontWeight: '600', textAlign: 'center' }}>
+              {isThumbnail ? labelText.replace(/\*\*/g, '') : renderMarkdownInline(labelText, theme.titleColor)}
+            </div>
+          )}
+        </div>
+      );
+    } else if (slideLayout === 'hero_image_split') {
+      let imgUrl = "https://images.unsplash.com/photo-placeholder";
+      const cleanTextItems: typeof textItems = [];
+      textItems.forEach(it => {
+        const raw = it.rawText || '';
+        const match = raw.match(/!\[.*?\]\((.*?)\)/);
+        if (match) {
+          imgUrl = match[1];
+        }
+        const cleanRaw = raw.replace(/!\[.*?\]\((.*?)\)/g, '').trim();
+        if (cleanRaw) {
+          cleanTextItems.push({
+            ...it,
+            rawText: cleanRaw
+          });
+        }
+      });
+      bodySection = (
+        <div className="slide-hero-image-split full-view" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2cqw', flex: 1, alignItems: 'stretch' }}>
+          <div className="slide-hero-image-col" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255,255,255,0.02)' }}>
+            <img src={imgUrl} alt="Hero illustration" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
+          </div>
+          <div className="slide-hero-text-col" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <ul className="slide-bullet-list full-view" style={{ color: theme.textColor }}>
+              {cleanTextItems.map((item, itemIdx) => {
+                const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                const hideBullet = isImgOnly || item.bullet === false;
+                return (
+                  <li
+                    key={itemIdx}
+                    style={{
+                      fontSize: isThumbnail ? '6px' : (cleanTextItems.length > 3 ? '1.5cqw' : '1.8cqw'),
+                      ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-5px' : '-2cqw' } : {})
+                    }}
+                  >
+                    {isThumbnail ? (item.rawText || '').replace(/\*\*/g, '') : renderMarkdownInline(item.rawText || '', theme.titleColor)}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
+      );
+    } else if (slideLayout === 'pros_cons_comparison') {
+      const pros: string[] = [];
+      const cons: string[] = [];
+      textItems.forEach(item => {
+        const raw = item.rawText || '';
+        const rawLower = raw.toLowerCase();
+        if (["ưu điểm", "pro", "lợi ích", "advantages", "thuận lợi", "tích cực"].some(k => rawLower.includes(k))) {
+          pros.push(raw);
+        } else if (["nhược điểm", "con", "hạn chế", "disadvantages", "khó khăn", "tiêu cực"].some(k => rawLower.includes(k))) {
+          cons.push(raw);
+        } else {
+          if (pros.length <= cons.length) {
+            pros.push(raw);
+          } else {
+            cons.push(raw);
+          }
+        }
+      });
+      bodySection = (
+        <div className="slide-pros-cons-comparison full-view" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5cqw', flex: 1, alignItems: 'stretch' }}>
+          <div className="pros-column" style={{ background: 'rgba(16, 185, 129, 0.03)', border: '1px solid rgba(16, 185, 129, 0.15)', borderLeft: `5px solid #10B981`, padding: isThumbnail ? '4px' : '1.5cqw', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ color: '#10B981', fontWeight: 'bold', fontSize: isThumbnail ? '6px' : '1.6cqw', marginBottom: '0.5cqw', display: 'flex', alignItems: 'center', gap: '0.5cqw' }}>
+              ▲ Ưu điểm & Lợi ích
+            </div>
+            <ul className="slide-bullet-list full-view" style={{ color: theme.textColor, margin: 0, paddingLeft: isThumbnail ? '4px' : '1.5cqw' }}>
+              {pros.map((p, idx) => (
+                <li key={idx} style={{ fontSize: isThumbnail ? '5px' : '1.3cqw', marginBottom: '0.3cqw' }}>
+                  {isThumbnail ? p.replace(/\*\*/g, '') : renderMarkdownInline(p, theme.titleColor)}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="cons-column" style={{ background: 'rgba(239, 68, 68, 0.03)', border: '1px solid rgba(239, 68, 68, 0.15)', borderLeft: `5px solid #EF4444`, padding: isThumbnail ? '4px' : '1.5cqw', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ color: '#EF4444', fontWeight: 'bold', fontSize: isThumbnail ? '6px' : '1.6cqw', marginBottom: '0.5cqw', display: 'flex', alignItems: 'center', gap: '0.5cqw' }}>
+              ▼ Nhược điểm & Hạn chế
+            </div>
+            <ul className="slide-bullet-list full-view" style={{ color: theme.textColor, margin: 0, paddingLeft: isThumbnail ? '4px' : '1.5cqw' }}>
+              {cons.map((c, idx) => (
+                <li key={idx} style={{ fontSize: isThumbnail ? '5px' : '1.3cqw', marginBottom: '0.3cqw' }}>
+                  {isThumbnail ? c.replace(/\*\*/g, '') : renderMarkdownInline(c, theme.titleColor)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    } else if (s.svgContent) {
       if (textItems.length > 0) {
         bodySection = isThumbnail ? (
           <div className="slide-split-svg-text thumbnail-view">
@@ -161,9 +297,9 @@ export default function SlideProposalPreview({
                   const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
                   const hideBullet = isImgOnly || item.bullet === false || textItems.length === 1 || hasNonBullet;
                   return (
-                    <li 
-                      key={itemIdx} 
-                      style={{ 
+                    <li
+                      key={itemIdx}
+                      style={{
                         fontSize: textItems.length > 3 ? '1.5cqw' : '1.8cqw',
                         ...(hideBullet ? { listStyleType: 'none', marginLeft: '-2.5cqw' } : {})
                       }}
@@ -175,7 +311,7 @@ export default function SlideProposalPreview({
               </ul>
             </div>
             <div className="slide-svg-graphic-col">
-              <div 
+              <div
                 className="svg-slide-container slide-body-svg full-view"
                 dangerouslySetInnerHTML={{ __html: s.svgContent }}
               />
@@ -188,10 +324,58 @@ export default function SlideProposalPreview({
             <BarChart2 size={12} aria-hidden="true" /> [Biểu đồ SVG]
           </div>
         ) : (
-          <div 
+          <div
             className="svg-slide-container slide-body-svg full-view"
             dangerouslySetInnerHTML={{ __html: s.svgContent }}
           />
+        );
+      }
+    } else if (s.mermaidContent) {
+      if (textItems.length > 0) {
+        bodySection = isThumbnail ? (
+          <div className="slide-split-svg-text thumbnail-view">
+            <div className="slide-svg-text-col" style={{ color: theme.textColor }}>
+              {textItems[0].rawText ? textItems[0].rawText.replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '').substring(0, 35) : ''}...
+            </div>
+            <div className="slide-body-svg thumbnail-view" style={{ color: theme.titleColor }}>
+              <Presentation size={10} aria-hidden="true" /> [Sơ đồ]
+            </div>
+          </div>
+        ) : (
+          <div className="slide-split-svg-text full-view">
+            <div className="slide-svg-text-col">
+              <ul className="slide-bullet-list full-view" style={{ color: theme.textColor }}>
+                {textItems.map((item, itemIdx) => {
+                  const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                  const hideBullet = isImgOnly || item.bullet === false || textItems.length === 1 || hasNonBullet;
+                  return (
+                    <li
+                      key={itemIdx}
+                      style={{
+                        fontSize: textItems.length > 3 ? '1.5cqw' : '1.8cqw',
+                        ...(hideBullet ? { listStyleType: 'none', marginLeft: '-2.5cqw' } : {})
+                      }}
+                    >
+                      {renderMarkdownInline(item.rawText || '', theme.titleColor)}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+            <div className="slide-svg-graphic-col">
+              <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+            </div>
+          </div>
+        );
+      } else {
+        bodySection = isThumbnail ? (
+          <div className="slide-body-svg thumbnail-view" style={{ color: theme.titleColor }}>
+            <Presentation size={12} aria-hidden="true" /> [Sơ đồ Mermaid]
+          </div>
+        ) : (
+          <div className="slide-body-svg full-view" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+          </div>
         );
       }
     } else if (tableItem) {
@@ -236,8 +420,8 @@ export default function SlideProposalPreview({
       }
 
       bodySection = (
-        <div 
-          className={`slide-card-grid-container ${isThumbnail ? 'thumbnail-view' : 'full-view'}`} 
+        <div
+          className={`slide-card-grid-container ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
           style={!isThumbnail ? gridStyle : undefined}
         >
           {textItems.slice(0, isThumbnail ? 2 : undefined).map((item, itemIdx) => {
@@ -245,8 +429,8 @@ export default function SlideProposalPreview({
             const { title, body } = splitBulletText(item.rawText || '');
 
             return (
-              <div 
-                key={itemIdx} 
+              <div
+                key={itemIdx}
                 className={`slide-card-item ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
                 style={{
                   background: theme.cardBg,
@@ -279,7 +463,7 @@ export default function SlideProposalPreview({
                     ➔
                   </div>
                 )}
-                <div 
+                <div
                   className={`slide-timeline-node ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
                   style={{
                     background: theme.cardBg,
@@ -310,8 +494,8 @@ export default function SlideProposalPreview({
             const borderAccent = accentColors[itemIdx % accentColors.length];
             const { title, body } = splitBulletText(item.rawText || '');
             return (
-              <div 
-                key={itemIdx} 
+              <div
+                key={itemIdx}
                 className={`slide-column-3 ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
                 style={{
                   background: theme.cardBg,
@@ -338,8 +522,8 @@ export default function SlideProposalPreview({
             const borderAccent = accentColors[itemIdx % accentColors.length];
             const { title, body } = splitBulletText(item.rawText || '');
             return (
-              <div 
-                key={itemIdx} 
+              <div
+                key={itemIdx}
                 className={`slide-quadrant-item ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
                 style={{
                   background: theme.cardBg,
@@ -367,7 +551,7 @@ export default function SlideProposalPreview({
       bodySection = (
         <div className={`slide-split-intro ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}>
           {introItem && (
-            <div 
+            <div
               className={`slide-split-left ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
               style={{
                 background: theme.cardBg,
@@ -390,7 +574,7 @@ export default function SlideProposalPreview({
                 const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
                 const hideBullet = isImgOnly || item.bullet === false || rightSideItems.length === 1 || hasNonBullet;
                 return (
-                  <li 
+                  <li
                     key={itemIdx}
                     style={hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-4px' : '-2cqw' } : undefined}
                   >
@@ -406,7 +590,7 @@ export default function SlideProposalPreview({
       const mid = Math.max(1, Math.floor(textItems.length / 2));
       const leftItems = textItems.slice(0, mid);
       const rightItems = textItems.slice(mid);
-      
+
       let textLength = 0;
       textItems.forEach(item => { textLength += (item.rawText || '').length; });
       let colFontSize = isThumbnail ? '6px' : '1.7cqw';
@@ -416,7 +600,7 @@ export default function SlideProposalPreview({
         else if (textLength > 150) colFontSize = '1.9cqw';
         else colFontSize = '2.2cqw';
       }
-      
+
       bodySection = (
         <div className={`slide-two-columns ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}>
           <div className={`slide-column left ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}>
@@ -425,8 +609,8 @@ export default function SlideProposalPreview({
                 const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
                 const hideBullet = isImgOnly || item.bullet === false || leftItems.length === 1 || hasNonBullet;
                 return (
-                  <li 
-                    key={itemIdx} 
+                  <li
+                    key={itemIdx}
                     style={{
                       ...(!isThumbnail ? { fontSize: colFontSize } : {}),
                       ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-5px' : '-1.5cqw' } : {})
@@ -444,8 +628,8 @@ export default function SlideProposalPreview({
                 const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
                 const hideBullet = isImgOnly || item.bullet === false || rightItems.length === 1 || hasNonBullet;
                 return (
-                  <li 
-                    key={itemIdx} 
+                  <li
+                    key={itemIdx}
                     style={{
                       ...(!isThumbnail ? { fontSize: colFontSize } : {}),
                       ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-5px' : '-1.5cqw' } : {})
@@ -463,9 +647,9 @@ export default function SlideProposalPreview({
       bodySection = (
         <div className={`slide-visual-highlight ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}>
           {textItems.map((item, itemIdx) => (
-            <div 
-              key={itemIdx} 
-              className={`slide-visual-highlight-text ${isThumbnail ? 'thumbnail-view' : 'full-view'}`} 
+            <div
+              key={itemIdx}
+              className={`slide-visual-highlight-text ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
               style={{ color: theme.titleColor }}
             >
               {isThumbnail ? (item.rawText || '').replace(/!\[.*?\]\(.*?\)/g, '[Hình ảnh]').replace(/\*\*/g, '') : renderMarkdownInline(item.rawText || '', theme.titleColor)}
@@ -496,8 +680,8 @@ export default function SlideProposalPreview({
               const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
               const hideBullet = isImgOnly || item.bullet === false || textItems.length === 1 || hasNonBullet;
               return (
-                <li 
-                  key={itemIdx} 
+                <li
+                  key={itemIdx}
                   style={{
                     ...(!isThumbnail ? { fontSize: fontSize } : {}),
                     ...(hideBullet ? { listStyleType: 'none', marginLeft: isThumbnail ? '-10px' : '-2.5cqw' } : {})
@@ -513,7 +697,7 @@ export default function SlideProposalPreview({
     }
 
     return (
-      <div 
+      <div
         className={`slide-frame ${isThumbnail ? 'thumbnail-view' : 'full-view'} ${!isThumbnail && isFullscreen ? 'fullscreen' : ''}`}
         style={{
           background: theme.bg,
@@ -525,14 +709,14 @@ export default function SlideProposalPreview({
           <h4 className={`slide-title ${isThumbnail ? 'thumbnail-view' : 'full-view'}`} style={{ color: theme.titleColor }}>
             {s.title}
           </h4>
-          <div 
-            className={`slide-divider ${isThumbnail ? 'thumbnail-view' : 'full-view'}`} 
-            style={{ background: theme.divider }} 
+          <div
+            className={`slide-divider ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}
+            style={{ background: theme.divider }}
           />
-          
+
           {bodySection}
         </div>
-        
+
         <div className="slide-footer">
           <div className={`slide-citations-list ${isThumbnail ? 'thumbnail-view' : 'full-view'}`}>
             {s.citations.length > 0 && <BookOpen size={isThumbnail ? 8 : 12} style={{ color: '#818cf8', flexShrink: 0 }} aria-hidden="true" />}
@@ -560,7 +744,7 @@ export default function SlideProposalPreview({
   };
 
   return (
-    <div 
+    <div
       className={`slide-proposal-wrapper ${viewMode === 'grid' ? 'grid-view' : ''}`}
       style={created_by === 'odin_autopilot' ? {
         border: '2px dashed var(--vinuni-gold)',
@@ -569,58 +753,86 @@ export default function SlideProposalPreview({
         margin: '2px',
       } : undefined}
     >
-      <div className="slide-proposal-toolbar">
-        <div className="slide-view-mode-group">
-          <button 
-            type="button"
-            onClick={() => setViewMode('slideshow')}
-            className={`slide-view-mode-btn ${viewMode === 'slideshow' ? 'active' : 'inactive'}`}
-          >
-            <Presentation size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Trình chiếu
-          </button>
-          <button 
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={`slide-view-mode-btn ${viewMode === 'grid' ? 'active' : 'inactive'}`}
-          >
-            <LayoutGrid size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Tổng quan ({slides.length})
-          </button>
-          {created_by === 'odin_autopilot' && (
-            <div style={{
-              background: 'var(--vinuni-gold)',
-              color: '#000',
-              fontSize: '9px',
-              fontWeight: '800',
-              padding: '2px 6px',
-              borderRadius: '3px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              pointerEvents: 'none',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px'
-            }}>
-              <Sparkles size={8} />
-              AI Autopilot
+      <div className="slide-proposal-toolbar" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px', alignItems: 'stretch' }}>
+        {/* Row 1: View Modes & Slide Navigation */}
+        <div className="slide-toolbar-main-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', width: '100%' }}>
+          <div className="slide-view-mode-group" style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setViewMode('slideshow')}
+              className={`slide-view-mode-btn ${viewMode === 'slideshow' ? 'active' : 'inactive'}`}
+            >
+              <Presentation size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Trình chiếu
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`slide-view-mode-btn ${viewMode === 'grid' ? 'active' : 'inactive'}`}
+            >
+              <LayoutGrid size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Tổng quan ({slides.length})
+            </button>
+            {created_by === 'odin_autopilot' && (
+              <div style={{
+                background: 'var(--vinuni-gold)',
+                color: '#000',
+                fontSize: '9px',
+                fontWeight: '800',
+                padding: '2px 6px',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                pointerEvents: 'none',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}>
+                <Sparkles size={8} />
+                Tạo bởi AI
+              </div>
+            )}
+          </div>
+
+          {viewMode === 'slideshow' && (
+            <div className="slide-toolbar-navigation-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <button
+                type="button"
+                disabled={safeIndex === 0}
+                onClick={() => setCurrentIndex(safeIndex - 1)}
+                className="slide-nav-btn"
+                style={{ padding: '4px 8px' }}
+              >
+                <ChevronLeft size={12} aria-hidden="true" /> Trước
+              </button>
+              <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)', minWidth: '45px', textAlign: 'center' }}>
+                {safeIndex + 1} / {displaySlides.length}
+              </span>
+              <button
+                type="button"
+                disabled={safeIndex === displaySlides.length - 1}
+                onClick={() => setCurrentIndex(safeIndex + 1)}
+                className="slide-nav-btn"
+                style={{ padding: '4px 8px' }}
+              >
+                Sau <ChevronRight size={12} aria-hidden="true" />
+              </button>
             </div>
           )}
         </div>
 
-        {viewMode === 'slideshow' && (
-          <div className="slide-toolbar-right">
-            {!(slide as any).isLoadingPlaceholder && (
-              <button
-                type="button"
-                onClick={() => setIsSlideFullscreen(true)}
-                className="slide-action-btn-zoom"
-                title="Phóng to slide toàn màn hình"
-                style={{ marginRight: '8px' }}
-              >
-                <Maximize2 size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Phóng to
-              </button>
-            )}
-            {chapterId && onSaveRevisedSlide && !(slide as any).isLoadingPlaceholder && (
+        {/* Row 2: Action Buttons */}
+        {viewMode === 'slideshow' && !(slide as any).isLoadingPlaceholder && (
+          <div className="slide-toolbar-actions-row" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setIsSlideFullscreen(true)}
+              className="slide-action-btn-zoom"
+              title="Phóng to slide toàn màn hình"
+            >
+              <Maximize2 size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Phóng to
+            </button>
+            
+            {chapterId && onSaveRevisedSlide && (
               <button
                 type="button"
                 onClick={() => {
@@ -633,12 +845,25 @@ export default function SlideProposalPreview({
                   setIsReviseModalOpen(true);
                 }}
                 className="slide-action-btn-revise"
-                style={{ marginRight: '8px' }}
+                style={{ 
+                  background: 'rgba(124, 77, 255, 0.1)',
+                  border: '1px solid rgba(124, 77, 255, 0.3)',
+                  color: '#b388ff',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  transition: 'all 0.2s ease',
+                  display: 'inline-flex',
+                  alignItems: 'center'
+                }}
               >
                 <Sparkles size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Tinh chỉnh Slide bằng AI
               </button>
             )}
-            {onInsertSlide && !(slide as any).isLoadingPlaceholder && (
+            
+            {onInsertSlide && (
               <button
                 type="button"
                 onClick={() => onInsertSlide(slide.rawMarkdown)}
@@ -647,29 +872,10 @@ export default function SlideProposalPreview({
                 <Plus size={12} style={{ marginRight: '4px' }} aria-hidden="true" /> Chèn slide này
               </button>
             )}
-            <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>{safeIndex + 1} / {displaySlides.length}</span>
-            <div className="slide-nav-group">
-              <button 
-                type="button"
-                disabled={safeIndex === 0} 
-                onClick={() => setCurrentIndex(safeIndex - 1)}
-                className="slide-nav-btn"
-              >
-                <ChevronLeft size={12} aria-hidden="true" /> Trước
-              </button>
-              <button 
-                type="button"
-                disabled={safeIndex === displaySlides.length - 1} 
-                onClick={() => setCurrentIndex(safeIndex + 1)}
-                className="slide-nav-btn"
-              >
-                Sau <ChevronRight size={12} aria-hidden="true" />
-              </button>
-            </div>
           </div>
         )}
       </div>
-      
+
       {viewMode === 'slideshow' ? (
         <div className="slide-slideshow-container">
           {renderSlideContent(slide, safeIndex, false)}
@@ -677,8 +883,8 @@ export default function SlideProposalPreview({
       ) : (
         <div className="slide-grid-container">
           {displaySlides.map((s, idx) => (
-            <div 
-              key={idx} 
+            <div
+              key={idx}
               className="slide-thumbnail-wrapper"
               onClick={() => {
                 if ((s as any).isLoadingPlaceholder) return;
@@ -733,8 +939,8 @@ export default function SlideProposalPreview({
               <h3 className="slide-revise-modal-title">
                 <Sparkles size={16} style={{ marginRight: '6px', color: '#818cf8' }} /> Không gian Hiệu chỉnh Slide {reviseSlideIndex + 1} bằng AI
               </h3>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setIsReviseModalOpen(false)}
                 className="slide-revise-modal-close-btn"
                 title="Đóng cửa sổ"
@@ -743,7 +949,7 @@ export default function SlideProposalPreview({
                 <X size={16} aria-hidden="true" />
               </button>
             </div>
-            
+
             <div className="slide-revise-modal-body">
               <div className="slide-revise-modal-left">
                 <div className="slide-revise-original-section">
@@ -752,7 +958,7 @@ export default function SlideProposalPreview({
                     {renderSlideContent(slides[reviseSlideIndex], reviseSlideIndex, false)}
                   </div>
                 </div>
-                
+
                 <div className="slide-revise-prompt-wrapper">
                   <div className="slide-revise-section-title">Nhập yêu cầu tinh chỉnh</div>
                   <textarea
@@ -780,7 +986,7 @@ export default function SlideProposalPreview({
                   </button>
                 </div>
               </div>
-              
+
               <div className="slide-revise-modal-right">
                 <div className="slide-revise-section-title">Bản xem trước slide đã tinh chỉnh</div>
                 <div className="slide-revise-preview-pane">
@@ -799,7 +1005,7 @@ export default function SlideProposalPreview({
                     </div>
                   )}
                 </div>
-                
+
                 {changesSummary && !isRevising && (
                   <div className="slide-revise-feedback-box" style={{ marginTop: '8px' }}>
                     <div className="slide-revise-feedback-title">
@@ -808,7 +1014,7 @@ export default function SlideProposalPreview({
                     <div>{changesSummary}</div>
                   </div>
                 )}
-                
+
                 {pedagogicalFeedback && !isRevising && (
                   <div className="slide-revise-feedback-box" style={{ marginTop: '8px' }}>
                     <div className="slide-revise-feedback-title">
@@ -819,7 +1025,7 @@ export default function SlideProposalPreview({
                 )}
               </div>
             </div>
-            
+
             <div className="slide-revise-modal-footer">
               <button
                 type="button"
@@ -851,9 +1057,9 @@ export default function SlideProposalPreview({
       {isSlideFullscreen && typeof document !== 'undefined' && createPortal(
         <div className="slide-fullscreen-overlay" onClick={() => setIsSlideFullscreen(false)}>
           <div className="slide-fullscreen-container" onClick={(e) => e.stopPropagation()}>
-            <button 
-              type="button" 
-              onClick={() => setIsSlideFullscreen(false)} 
+            <button
+              type="button"
+              onClick={() => setIsSlideFullscreen(false)}
               className="slide-fullscreen-close-btn"
               title="Thoát chế độ phóng to"
             >

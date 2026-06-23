@@ -3,12 +3,15 @@ import client from '../api/client';
 import SlideProposalPreview from './SlideProposalPreview';
 import { MarkdownPreview } from '../utils/markdown';
 import { trackAIFeedback, trackClick } from '../utils/telemetryHelper';
-import { THEMES, parseMarkdownToSlidesJS } from '../utils/slideParser';
+import { THEMES, parseMarkdownToSlidesJS, serializeSlidesToMarkdown, parseSlideForVisualEdit, serializeVisualSlide } from '../utils/slideParser';
 import { Chapter } from '@/types';
+import ReactFlowEditorModal from './ReactFlowEditorModal';
 import { 
   Sparkles, AlertTriangle, Lightbulb, CheckCircle2, 
   Loader2, Download, FileText, History, Save, Trash2, 
-  Maximize2, Minimize2, Check, Palette, Cpu, Minus, Plus, Undo2, Redo2 
+  Maximize2, Minimize2, Check, Palette, Cpu, Minus, Plus, Undo2, Redo2, ChevronDown, ChevronUp, MapPin,
+  ArrowUp, ArrowDown, RefreshCw, Play, X,
+  Columns, Layers, Presentation, Activity
 } from 'lucide-react';
 
 export interface RevisionType {
@@ -56,7 +59,7 @@ export interface EditorPanelProps {
   }) => void;
   setAIProcessingStatus: (isProcessing: boolean, message?: string) => void;
   saving?: boolean;
-  handleSaveMaterials?: () => void;
+  handleSaveMaterials?: (updatedLayouts?: string | null) => Promise<boolean> | void;
   handleResetMaterials?: () => void;
   setShowRevisionModal?: (show: boolean) => void;
   loadRevisionsExternal?: (chapterId: number) => void;
@@ -66,7 +69,39 @@ export interface EditorPanelProps {
   canUndo?: boolean;
   canRedo?: boolean;
   materialCreatedBy?: string | null;
+  slideTextareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  scriptTextareaRef?: React.RefObject<HTMLTextAreaElement | null>;
+  diagramLayouts?: string | null;
+  setDiagramLayouts?: (layouts: string | null) => void;
+  savedDiagramLayouts?: string | null;
+  setActiveWorkTab?: (tab: 'slides' | 'active_learning') => void;
+  layoutMode?: 'split' | 'carousel_3d';
+  setLayoutMode?: (mode: 'split' | 'carousel_3d') => void;
+  handleExportPPTX?: () => void;
+  handleExportLessonPlan?: () => void;
+  exporting?: boolean;
 }
+
+const getSlideIndexFromCursor = (text: string, cursorPos: number): number => {
+  const substring = text.substring(0, cursorPos);
+  const matches = substring.match(/(^|\n)##?\s+/g);
+  return matches ? matches.length - 1 : 0;
+};
+
+const getFriendlyLayoutName = (layout: string) => {
+  const map: Record<string, string> = {
+    standard_list: "Danh sách chuẩn (Standard List)",
+    two_column_comparison: "So sánh hai cột (Two Column)",
+    card_grid: "Lưới thẻ trực quan (Card Grid)",
+    timeline_flow: "Luồng thời gian (Timeline Flow)",
+    three_column: "Ba cột (Three Column)",
+    quadrant_matrix: "Ma trận 4 ô (Quadrant Matrix)",
+    split_intro: "Mở đầu chia tách (Split Intro)",
+    table: "Bảng số liệu (Table)",
+    visual_highlight: "Làm nổi bật (Visual Highlight)"
+  };
+  return map[layout] || layout;
+};
 
 export default function EditorPanel({
   selectedChapter,
@@ -101,7 +136,18 @@ export default function EditorPanel({
   handleRedo = () => {},
   canUndo = false,
   canRedo = false,
-  materialCreatedBy = null
+  materialCreatedBy = null,
+  slideTextareaRef,
+  scriptTextareaRef,
+  diagramLayouts = null,
+  setDiagramLayouts = () => {},
+  savedDiagramLayouts = null,
+  setActiveWorkTab,
+  layoutMode,
+  setLayoutMode,
+  handleExportPPTX,
+  handleExportLessonPlan,
+  exporting = false
 }: EditorPanelProps) {
   const [revPrompt, setRevPrompt] = useState('');
   const [revisions, setRevisions] = useState<RevisionType[]>([]);
@@ -109,8 +155,154 @@ export default function EditorPanel({
   const [revError, setRevError] = useState('');
   const [revSuccess, setRevSuccess] = useState('');
   const [showRevisions, setShowRevisions] = useState(false);
+  const [isEditorRationaleExpanded, setIsEditorRationaleExpanded] = useState(false);
+  
+  const [visualEditMode, setVisualEditMode] = useState<'visual' | 'markdown'>('visual');
+  const [activeVisualSlideIdx, setActiveVisualSlideIdx] = useState(0);
+
+  const [isMermaidModalOpen, setIsMermaidModalOpen] = useState(false);
+  const [editingMermaidSlideIdx, setEditingMermaidSlideIdx] = useState<number | null>(null);
+  const [editingMermaidCode, setEditingMermaidCode] = useState('');
+  const [editingSlideMarkdown, setEditingSlideMarkdown] = useState('');
+
+  const getSavedLayoutForSlide = (slideIdx: number): string | null => {
+    if (!diagramLayouts) return null;
+    try {
+      const parsed = JSON.parse(diagramLayouts);
+      return parsed[`slide_${slideIdx}`] ? JSON.stringify(parsed[`slide_${slideIdx}`]) : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleSaveFlowLayout = (slideIdx: number, layoutJson: string) => {
+    let currentLayouts: Record<string, any> = {};
+    if (diagramLayouts) {
+      try {
+        currentLayouts = JSON.parse(diagramLayouts);
+      } catch (e) {
+        console.error("Error parsing current layouts:", e);
+      }
+    }
+    
+    try {
+      currentLayouts[`slide_${slideIdx}`] = JSON.parse(layoutJson);
+      const updatedLayoutsStr = JSON.stringify(currentLayouts);
+      setDiagramLayouts(updatedLayoutsStr);
+      
+      // Auto save to backend database immediately to prevent losing edits when user clicks "Lưu bố cục"
+      if (handleSaveMaterials) {
+        handleSaveMaterials(updatedLayoutsStr);
+      }
+    } catch (e) {
+      console.error("Error updating layout:", e);
+    }
+  };
+
+  const handleTextareaSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const textarea = e.currentTarget;
+    const cursorPos = textarea.selectionStart;
+    const text = textarea.value;
+    const slideIdx = getSlideIndexFromCursor(text, cursorPos);
+    if (slideIdx !== activeVisualSlideIdx && slideIdx >= 0) {
+      setActiveVisualSlideIdx(slideIdx);
+    }
+  };
+
+  const parsedSlides = parseMarkdownToSlidesJS(slideContent);
+
+  const handleUpdateVisualSlide = (idx: number, updatedFields: Partial<{ title: string; layout: string; body: string }>) => {
+    const parsed = parseMarkdownToSlidesJS(slideContent);
+    if (idx < 0 || idx >= parsed.length) return;
+    
+    const vs = parseSlideForVisualEdit(parsed[idx]);
+    if (updatedFields.title !== undefined) vs.title = updatedFields.title;
+    if (updatedFields.layout !== undefined) {
+      vs.layoutTag = updatedFields.layout ? ` [Layout: ${updatedFields.layout}]` : '';
+    }
+    if (updatedFields.body !== undefined) vs.body = updatedFields.body;
+    
+    parsed[idx].rawMarkdown = serializeVisualSlide(vs);
+    const updatedMD = parsed.map(s => s.rawMarkdown).join('\n\n');
+    setSlideContent(updatedMD);
+    setLocalSlideContent(updatedMD);
+  };
+
+  const handleMoveSlideUp = (idx: number) => {
+    const parsed = parseMarkdownToSlidesJS(slideContent);
+    if (idx <= 0 || idx >= parsed.length) return;
+    const temp = parsed[idx];
+    parsed[idx] = parsed[idx - 1];
+    parsed[idx - 1] = temp;
+    
+    const updatedMD = parsed.map(s => s.rawMarkdown).join('\n\n');
+    setSlideContent(updatedMD);
+    setLocalSlideContent(updatedMD);
+    setActiveVisualSlideIdx(idx - 1);
+    
+    setTimeout(() => {
+      const card = document.getElementById(`visual-slide-card-${idx - 1}`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const handleMoveSlideDown = (idx: number) => {
+    const parsed = parseMarkdownToSlidesJS(slideContent);
+    if (idx < 0 || idx >= parsed.length - 1) return;
+    const temp = parsed[idx];
+    parsed[idx] = parsed[idx + 1];
+    parsed[idx + 1] = temp;
+    
+    const updatedMD = parsed.map(s => s.rawMarkdown).join('\n\n');
+    setSlideContent(updatedMD);
+    setLocalSlideContent(updatedMD);
+    setActiveVisualSlideIdx(idx + 1);
+    
+    setTimeout(() => {
+      const card = document.getElementById(`visual-slide-card-${idx + 1}`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const handleDeleteVisualSlide = (idx: number) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa Slide ${idx + 1}?`)) return;
+    const parsed = parseMarkdownToSlidesJS(slideContent);
+    if (idx < 0 || idx >= parsed.length) return;
+    parsed.splice(idx, 1);
+    
+    const updatedMD = parsed.map(s => s.rawMarkdown).join('\n\n');
+    setSlideContent(updatedMD);
+    setLocalSlideContent(updatedMD);
+    setActiveVisualSlideIdx(Math.max(0, idx - 1));
+  };
+
+  const handleAddVisualSlide = (idx: number) => {
+    const parsed = parseMarkdownToSlidesJS(slideContent);
+    const newSlideMD = `## Slide Mới\n* Nội dung slide`;
+    
+    parsed.splice(idx + 1, 0, {
+      title: 'Slide Mới',
+      items: [],
+      citations: [],
+      layout: null,
+      svgContent: null,
+      mermaidContent: null,
+      rawMarkdown: newSlideMD
+    });
+    
+    const updatedMD = parsed.map(s => s.rawMarkdown).join('\n\n');
+    setSlideContent(updatedMD);
+    setLocalSlideContent(updatedMD);
+    setActiveVisualSlideIdx(idx + 1);
+    
+    setTimeout(() => {
+      const card = document.getElementById(`visual-slide-card-${idx + 1}`);
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
   
   const [aiProposal, setAiProposal] = useState<{
+
     prompt: string;
     proposed_content: string;
     type: 'slides' | 'script';
@@ -161,6 +353,7 @@ export default function EditorPanel({
       setRevPrompt('');
       setRevSuccess('');
       setRevError('');
+      setActiveVisualSlideIdx(0);
     }
   }, [selectedChapter?.id]);
 
@@ -331,6 +524,193 @@ export default function EditorPanel({
       setRating(null);
       setFeedbackText('');
     }
+  };
+
+
+  const renderVisualSlideEditor = () => {
+    if (isAIGenerating) {
+      return (
+        <div className="visual-slide-editor-generating-overlay">
+          <div className="generating-overlay-content">
+            <Loader2 className="animate-spin" size={28} />
+            <p>AI đang sinh slide bài giảng... Vui lòng đợi trong giây lát.</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (parsedSlides.length === 0) {
+      return (
+        <div className="visual-slide-editor-empty">
+          <p>Chưa có slide nào. Hãy tạo bài giảng bằng AI ở cột bên phải để bắt đầu.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="visual-slide-editor-deck">
+        {parsedSlides.map((s, idx) => {
+          const vs = parseSlideForVisualEdit(s);
+          const currentLayout = s.layout || 'standard_list';
+          
+          return (
+            <div 
+              key={idx} 
+              id={`visual-slide-card-${idx}`}
+              className={`visual-slide-card ${activeVisualSlideIdx === idx ? 'active-highlight' : ''}`}
+              onClick={() => setActiveVisualSlideIdx(idx)}
+            >
+              <div className="visual-slide-card-header">
+                <span className="visual-slide-card-number">Slide {idx + 1}</span>
+                <div className="visual-slide-card-actions">
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={(e) => { e.stopPropagation(); handleMoveSlideUp(idx); }}
+                    className="visual-slide-action-btn"
+                    title="Di chuyển slide lên"
+                  >
+                    <ArrowUp size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === parsedSlides.length - 1}
+                    onClick={(e) => { e.stopPropagation(); handleMoveSlideDown(idx); }}
+                    className="visual-slide-action-btn"
+                    title="Di chuyển slide xuống"
+                  >
+                    <ArrowDown size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteVisualSlide(idx); }}
+                    className="visual-slide-action-btn btn-delete"
+                    title="Xóa slide này"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="visual-slide-card-body">
+                <div className="visual-slide-field-group">
+                  <label className="visual-slide-label">Tiêu đề Slide</label>
+                  <input
+                    type="text"
+                    value={vs.title}
+                    onChange={(e) => handleUpdateVisualSlide(idx, { title: e.target.value })}
+                    placeholder="Nhập tiêu đề slide..."
+                    className="visual-slide-input"
+                    onFocus={() => setActiveVisualSlideIdx(idx)}
+                  />
+                </div>
+                
+                <div className="visual-slide-field-group">
+                  <label className="visual-slide-label">Bố cục Slide (Cố định)</label>
+                  <div className="visual-slide-static-value" style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                    {getFriendlyLayoutName(currentLayout)}
+                  </div>
+                </div>
+                
+                <div className="visual-slide-field-group">
+                  <label className="visual-slide-label">Nội dung Slide (Markdown)</label>
+                  <textarea
+                    value={vs.body}
+                    onChange={(e) => handleUpdateVisualSlide(idx, { body: e.target.value })}
+                    placeholder="Nhập nội dung slide (Sử dụng * để gạch đầu dòng, các thẻ [nguồn: ...] để trích dẫn)..."
+                    className="visual-slide-textarea"
+                    rows={4}
+                    onFocus={() => setActiveVisualSlideIdx(idx)}
+                  />
+                  {s.mermaidContent && (
+                    <div style={{ marginTop: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingMermaidSlideIdx(idx);
+                          setEditingMermaidCode(s.mermaidContent || '');
+                          setEditingSlideMarkdown(s.rawMarkdown || '');
+                          setIsMermaidModalOpen(true);
+                        }}
+                        style={{
+                          background: '#8C6239',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          marginTop: '4px'
+                        }}
+                        title="Biên tập sơ đồ trực quan (React Flow)"
+                      >
+                        <Cpu size={13} /> Biên tập sơ đồ trực quan (React Flow)
+                      </button>
+                    </div>
+                  )}
+                  {(() => {
+                    const imgMatch = vs.body.match(/!\[(.*?)\]\((.*?)\)/);
+                    if (imgMatch) {
+                      const keyword = imgMatch[1];
+                      return (
+                        <div style={{ marginTop: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!keyword || !selectedChapter?.id) return;
+                              setAIProcessingStatus(true, `AI đang vẽ ảnh minh họa cho "${keyword}"…`);
+                              try {
+                                const res = await client.post(`/api/courses/chapters/${selectedChapter.id}/generate-ai-image`, {
+                                  keyword: keyword,
+                                  theme: selectedTheme
+                                });
+                                const newUrl = res.data.image_url;
+                                const newBody = vs.body.replace(/!\[(.*?)\]\((.*?)\)/, `![${keyword}](${newUrl})`);
+                                handleUpdateVisualSlide(idx, { body: newBody });
+                                alert("Sinh ảnh AI thành công!");
+                              } catch (err: any) {
+                                console.error(err);
+                                alert(err.response?.data?.detail || "Lỗi khi sinh ảnh AI.");
+                              } finally {
+                                setAIProcessingStatus(false);
+                              }
+                            }}
+                            style={{
+                              background: 'linear-gradient(135deg, #FF4081 0%, #FF9100 100%)',
+                              color: '#fff',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '6px 12px',
+                              fontSize: '12px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              marginTop: '4px'
+                            }}
+                            title="Sinh ảnh minh họa bằng AI DALL-E 3"
+                          >
+                            <Sparkles size={13} /> Sinh ảnh minh họa AI
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   const renderRevisionUI = () => {
@@ -519,6 +899,87 @@ export default function EditorPanel({
           </button>
         </div>
 
+        {isFullscreen && (
+          <div className="editor-header-middle" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Cột vs. 3D Carousel Layout mode switcher */}
+            {layoutMode && setLayoutMode && (
+              <div className="planner-layout-mode-selector" style={{ margin: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('split')}
+                  className={`planner-layout-mode-btn ${layoutMode === 'split' ? 'active' : ''}`}
+                  title="Chế độ phân cột (mặc định)"
+                >
+                  <Columns size={13} />
+                  <span>Cột</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLayoutMode('carousel_3d')}
+                  className={`planner-layout-mode-btn ${layoutMode === 'carousel_3d' ? 'active' : ''}`}
+                  title="Chế độ 3D Băng chuyền"
+                >
+                  <Layers size={13} />
+                  <span>3D Carousel</span>
+                </button>
+              </div>
+            )}
+
+            {/* Slide vs. Kịch bản tab switcher */}
+            {setActiveWorkTab && (
+              <div className="planner-work-tab-container-new" style={{ margin: 0 }}>
+                <button 
+                  type="button"
+                  onClick={() => setActiveWorkTab('slides')} 
+                  className={`planner-work-tab-btn ${activeWorkTab === 'slides' ? 'planner-work-tab-btn-active' : 'planner-work-tab-btn-inactive'}`}
+                >
+                  <Presentation size={14} aria-hidden="true" /> Slide
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setActiveWorkTab('active_learning')} 
+                  className={`planner-work-tab-btn ${activeWorkTab === 'active_learning' ? 'planner-work-tab-btn-active' : 'planner-work-tab-btn-inactive'}`}
+                >
+                  <Activity size={14} aria-hidden="true" /> Kịch bản
+                </button>
+              </div>
+            )}
+
+            {/* Download PPTX button */}
+            {selectedChapter && slideContent && handleExportPPTX && (
+              <button 
+                type="button"
+                onClick={handleExportPPTX} 
+                disabled={exporting || isAIGenerating} 
+                className="planner-export-btn" 
+                title={isAIGenerating ? "Đang sinh slide tự động, vui lòng đợi..." : "Xuất bài giảng sang định dạng PowerPoint (.pptx)"}
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Đang Xuất…
+                  </>
+                ) : (
+                  <>
+                    <Download size={12} aria-hidden="true" /> Tải Slide (PPTX)
+                  </>
+                )}
+              </button>
+            )}
+
+            {/* Print lesson plan button */}
+            {selectedChapter && activeLearningScript && handleExportLessonPlan && (
+              <button 
+                type="button"
+                onClick={handleExportLessonPlan} 
+                className="editor-header-btn-green-outline" 
+                title="In giáo án bài giảng lớp học"
+              >
+                <FileText size={12} aria-hidden="true" /> In Giáo án
+              </button>
+            )}
+          </div>
+        )}
+
         {selectedChapter && (
           <div className="editor-header-right" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {/* Undo / Redo Buttons */}
@@ -556,15 +1017,15 @@ export default function EditorPanel({
             {handleSaveMaterials && (
               <button 
                 onClick={handleSaveWithTelemetry} 
-                disabled={saving || isAIGenerating || (slideContent === savedSlideContent && activeLearningScript === savedScript)} 
+                disabled={saving || isAIGenerating || (slideContent === savedSlideContent && activeLearningScript === savedScript && diagramLayouts === savedDiagramLayouts)} 
                 className="planner-save-btn" 
-                title={isAIGenerating ? "Không thể lưu khi AI đang sinh slide" : saving ? "Đang lưu thay đổi…" : (slideContent === savedSlideContent && activeLearningScript === savedScript) ? "Tất cả thay đổi đã được tự động lưu" : "Lưu thay đổi bài soạn thảo hiện tại lên đám mây"}
+                title={isAIGenerating ? "Không thể lưu khi AI đang sinh slide" : saving ? "Đang lưu thay đổi…" : (slideContent === savedSlideContent && activeLearningScript === savedScript && diagramLayouts === savedDiagramLayouts) ? "Tất cả thay đổi đã được tự động lưu" : "Lưu thay đổi bài soạn thảo hiện tại lên đám mây"}
               >
                 {saving ? (
                   <>
                     <Loader2 size={12} className="animate-spin" aria-hidden="true" /> Đang lưu…
                   </>
-                ) : (slideContent === savedSlideContent && activeLearningScript === savedScript) ? (
+                ) : (slideContent === savedSlideContent && activeLearningScript === savedScript && diagramLayouts === savedDiagramLayouts) ? (
                   <>
                     <Check size={12} aria-hidden="true" /> Đã lưu
                   </>
@@ -595,7 +1056,25 @@ export default function EditorPanel({
           {activeWorkTab === 'slides' ? (
             <div className="planner-editor-field">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px', marginBottom: '8px' }}>
-                <label className="planner-field-label">Slide bài giảng (Markdown)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <label className="planner-field-label" style={{ margin: 0 }}>Slide bài giảng</label>
+                  <div className="planner-tab-toggle-container visual-editor-toggle-container">
+                    <button 
+                      type="button"
+                      onClick={() => setVisualEditMode('visual')} 
+                      className={visualEditMode === 'visual' ? 'planner-tab-toggle-active' : 'planner-tab-toggle-inactive'}
+                    >
+                      Trực quan
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setVisualEditMode('markdown')} 
+                      className={visualEditMode === 'markdown' ? 'planner-tab-toggle-active' : 'planner-tab-toggle-inactive'}
+                    >
+                      Mã nguồn
+                    </button>
+                  </div>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px 12px' }}>
                   {/* Theme select inline inside editor toolbar */}
                   {selectedChapter && slideContent && (
@@ -667,17 +1146,23 @@ export default function EditorPanel({
               {slideEditMode === 'split' ? (
                 <div className="editor-split-grid">
                   <div className="editor-split-left-pane">
-                    <textarea
-                      value={localSlideContent}
-                      onChange={handleSlideTextChange}
-                      placeholder={isAIGenerating ? "Đang tải đề xuất slide từ AI, vui lòng đợi..." : "Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"}
-                      className={`textarea-editor editor-font-${editorFontSize}`}
-                      disabled={isAIGenerating}
-                      style={{
-                        resize: 'none',
-                        flex: 1,
-                      }}
-                    />
+                    {visualEditMode === 'visual' ? (
+                      renderVisualSlideEditor()
+                    ) : (
+                      <textarea
+                        ref={slideTextareaRef}
+                        value={localSlideContent}
+                        onChange={handleSlideTextChange}
+                        onSelect={handleTextareaSelect}
+                        placeholder={isAIGenerating ? "Đang tải đề xuất slide từ AI, vui lòng đợi..." : "Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"}
+                        className={`textarea-editor editor-font-${editorFontSize}`}
+                        disabled={isAIGenerating}
+                        style={{
+                          resize: 'none',
+                          flex: 1,
+                        }}
+                      />
+                    )}
                     {renderRevisionUI()}
                   </div>
                   <div className="editor-split-right-pane">
@@ -690,23 +1175,31 @@ export default function EditorPanel({
                       chapterId={selectedChapter?.id}
                       onSaveRevisedSlide={handleSaveRevisedSlide}
                       created_by={materialCreatedBy}
+                      activeSlideIndex={activeVisualSlideIdx}
+                      onActiveSlideIndexChange={setActiveVisualSlideIdx}
                     />
                   </div>
                 </div>
               ) : slideEditMode === 'edit' ? (
                 <>
-                  <textarea
-                    value={slideContent}
-                    onChange={(e) => setSlideContent(e.target.value)}
-                    placeholder={isAIGenerating ? "Đang tải đề xuất slide từ AI, vui lòng đợi..." : "Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"}
-                    className={`textarea-editor editor-font-${editorFontSize}`}
-                    disabled={isAIGenerating}
-                    style={{
-                      resize: 'none',
-                      flex: 1,
-                      minHeight: '300px',
-                    }}
-                  />
+                  {visualEditMode === 'visual' ? (
+                    renderVisualSlideEditor()
+                  ) : (
+                    <textarea
+                      ref={slideTextareaRef}
+                      value={slideContent}
+                      onChange={(e) => setSlideContent(e.target.value)}
+                      onSelect={handleTextareaSelect}
+                      placeholder={isAIGenerating ? "Đang tải đề xuất slide từ AI, vui lòng đợi..." : "Viết slide của bạn ở đây… (Hoặc chèn đề xuất từ AI bên trái sang)"}
+                      className={`textarea-editor editor-font-${editorFontSize}`}
+                      disabled={isAIGenerating}
+                      style={{
+                        resize: 'none',
+                        flex: 1,
+                        minHeight: '300px',
+                      }}
+                    />
+                  )}
                   {renderRevisionUI()}
                 </>
               ) : (
@@ -720,6 +1213,8 @@ export default function EditorPanel({
                     chapterId={selectedChapter?.id}
                     onSaveRevisedSlide={handleSaveRevisedSlide}
                     created_by={materialCreatedBy}
+                    activeSlideIndex={activeVisualSlideIdx}
+                    onActiveSlideIndexChange={setActiveVisualSlideIdx}
                   />
                 </>
               )}
@@ -777,6 +1272,7 @@ export default function EditorPanel({
               {scriptEditMode === 'edit' ? (
                 <>
                   <textarea
+                    ref={scriptTextareaRef}
                     value={activeLearningScript}
                     onChange={(e) => setActiveLearningScript(e.target.value)}
                     placeholder={isAIGenerating ? "Đang sinh kịch bản giáo án tương tác, vui lòng đợi..." : "Lịch trình giảng dạy, câu hỏi tương tác trên lớp…"}
@@ -797,13 +1293,28 @@ export default function EditorPanel({
                     style={{ flex: 1, minHeight: '300px', overflowY: 'auto' }} 
                   />
                   {parseActiveLearningScript(activeLearningScript).rationale && (
-                    <div className="editor-pedagogical-rationale">
-                      <div className="editor-pedagogical-rationale-title">
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Lightbulb size={13} /> Giải trình Sư phạm (Pedagogical Rationale):</span>
-                      </div>
-                      <div className="editor-pedagogical-rationale-content">
-                        {parseActiveLearningScript(activeLearningScript).rationale}
-                      </div>
+                    <div className={`editor-pedagogical-rationale ${isEditorRationaleExpanded ? 'expanded' : 'collapsed'}`}>
+                      <button 
+                        type="button"
+                        className="editor-pedagogical-rationale-header-toggle"
+                        onClick={() => setIsEditorRationaleExpanded(!isEditorRationaleExpanded)}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
+                          <Lightbulb size={14} className="rationale-bulb-icon" /> 
+                          Giải trình Sư phạm (Pedagogical Rationale)
+                        </span>
+                        <span className="rationale-chevron-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {isEditorRationaleExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        </span>
+                      </button>
+                      
+                      {isEditorRationaleExpanded && (
+                        <div className="editor-pedagogical-rationale-content-wrapper">
+                          <div className="editor-pedagogical-rationale-content">
+                            {parseActiveLearningScript(activeLearningScript).rationale}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -815,6 +1326,18 @@ export default function EditorPanel({
         <div className="planner-empty-state">Chọn chương để soạn giáo án.</div>
       )}
 
+      <ReactFlowEditorModal
+        isOpen={isMermaidModalOpen}
+        onClose={() => setIsMermaidModalOpen(false)}
+        mermaidCode={editingMermaidCode}
+        slideMarkdown={editingSlideMarkdown}
+        savedLayout={getSavedLayoutForSlide(editingMermaidSlideIdx ?? 0)}
+        onSave={(layoutJson) => {
+          if (editingMermaidSlideIdx !== null) {
+            handleSaveFlowLayout(editingMermaidSlideIdx, layoutJson);
+          }
+        }}
+      />
     </section>
   );
 }

@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
-  output: 'export',
+  output: process.env.NODE_ENV === 'production' ? 'export' : undefined,
   // Ẩn Next.js dev indicator (chữ "N" góc dưới màn hình) khi chạy dev server
   devIndicators: false,
   // Cho phép cross-origin request từ Cloudflare tunnel (*.trycloudflare.com)

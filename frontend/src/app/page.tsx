@@ -3,6 +3,8 @@
 import dynamic from 'next/dynamic';
 import React from 'react';
 import { UILockProvider } from '../context/UILockContext';
+import { AIProvider } from '../context/AIContext';
+import { QueueProvider } from '../context/QueueContext';
  
 const DynamicApp = dynamic(() => import('@/App'), {
   ssr: false,
@@ -25,7 +27,11 @@ const DynamicApp = dynamic(() => import('@/App'), {
 export default function Home() {
   return (
     <UILockProvider>
-      <DynamicApp />
+      <AIProvider>
+        <QueueProvider>
+          <DynamicApp />
+        </QueueProvider>
+      </AIProvider>
     </UILockProvider>
   );
 }

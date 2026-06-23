@@ -41,7 +41,7 @@ export function useLessonPlannerState({
   // Navigation & States
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
-  const [activeLeftTab, setActiveLeftTab] = useState<'outline' | 'documents' | 'compliance' | 'mcqs' | 'citations'>('outline');
+  const [activeLeftTab, setActiveLeftTab] = useState<'outline' | 'compliance' | 'mcqs' | 'citations'>('outline');
   const [clos, setClos] = useState<CLO[]>([]);
   const [ragReferences, setRagReferences] = useState<any[]>([]);
   const [selectedCitation, setSelectedCitation] = useState<any | null>(null);
@@ -103,6 +103,13 @@ export function useLessonPlannerState({
   const [savedSlideContent, setSavedSlideContent] = useState('');
   const [savedScript, setSavedScript] = useState('');
   const [materialCreatedBy, setMaterialCreatedBy] = useState<string | null>(null);
+  const [diagramLayouts, setDiagramLayouts] = useState<string | null>(null);
+  const diagramLayoutsRef = useRef<string | null>(null);
+  const savedDiagramLayoutsRef = useRef<string | null>(null);
+  const [savedDiagramLayouts, setSavedDiagramLayouts] = useState<string | null>(null);
+  useEffect(() => {
+    diagramLayoutsRef.current = diagramLayouts;
+  }, [diagramLayouts]);
 
   // History stacks for Undo / Redo
   const [slideHistory, setSlideHistory] = useState<{ past: string[]; future: string[] }>({ past: [], future: [] });
@@ -361,9 +368,11 @@ export function useLessonPlannerState({
       const savedSCont = savedSlideContentRef.current;
       const aScript = activeLearningScriptRef.current;
       const savedSc = savedScriptRef.current;
+      const diagLayouts = diagramLayoutsRef.current;
+      const savedDiagLayouts = savedDiagramLayoutsRef.current;
 
       if (ch) {
-        const hasChanges = sCont !== savedSCont || aScript !== savedSc;
+        const hasChanges = sCont !== savedSCont || aScript !== savedSc || diagLayouts !== savedDiagLayouts;
         if (hasChanges) {
           const token = localStorage.getItem('token');
           fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/courses/chapters/${ch.id}/materials`, {
@@ -374,7 +383,8 @@ export function useLessonPlannerState({
             },
             body: JSON.stringify({
               slide_content: sCont,
-              active_learning_script: aScript
+              active_learning_script: aScript,
+              diagram_layouts: diagLayouts
             })
           }).catch(err => console.error("Auto-save on unmount failed:", err));
         }
@@ -494,18 +504,17 @@ export function useLessonPlannerState({
 
   // Chọn chương học và load nội dung hiện có
   const handleSelectChapter = async (chapter: Chapter) => {
-    // Tự động lưu chương cũ nếu có thay đổi chưa đồng bộ
+    // Tự động lưu chương cũ nếu có thay đổi chưa đồng bộ (không await để tránh gây trễ giao diện lật tab)
     if (selectedChapter) {
-      const hasChanges = slideContent !== savedSlideContent || activeLearningScript !== savedScript;
+      const hasChanges = slideContent !== savedSlideContent || activeLearningScript !== savedScript || diagramLayouts !== savedDiagramLayoutsRef.current;
       if (hasChanges) {
-        try {
-          await client.put(`/api/courses/chapters/${selectedChapter.id}/materials`, {
-            slide_content: slideContent,
-            active_learning_script: activeLearningScript
-          });
-        } catch (saveErr) {
+        client.put(`/api/courses/chapters/${selectedChapter.id}/materials`, {
+          slide_content: slideContent,
+          active_learning_script: activeLearningScript,
+          diagram_layouts: diagramLayouts
+        }).catch(saveErr => {
           console.error("Auto-save failed on chapter switch:", saveErr);
-        }
+        });
       }
     }
 
@@ -515,9 +524,22 @@ export function useLessonPlannerState({
     setMessage('');
     
     try {
-      const response = await client.get(`/api/courses/chapters/${chapter.id}/materials`);
-      const sCont = response.data.slide_content || '';
-      const aScript = response.data.active_learning_script || '';
+      // Gọi song song các API độc lập để tải dữ liệu chương mới cực nhanh
+      const [materialsRes, ragRes, suggestRes] = await Promise.all([
+        client.get(`/api/courses/chapters/${chapter.id}/materials`),
+        client.get(`/api/courses/chapters/${chapter.id}/rag-references`).catch(ragErr => {
+          console.error("Error loading RAG references:", ragErr);
+          return { data: { references: [] } };
+        }),
+        client.get(`/api/courses/chapters/${chapter.id}/suggest-queries`).catch(suggestErr => {
+          console.error("Error loading suggested queries:", suggestErr);
+          return { data: { suggestions: [] } };
+        })
+      ]);
+
+      const sCont = materialsRes.data.slide_content || '';
+      const aScript = materialsRes.data.active_learning_script || '';
+      const diagLayouts = materialsRes.data.diagram_layouts || null;
       
       // Reset history stacks on chapter switch
       setSlideHistory({ past: [], future: [] });
@@ -527,35 +549,31 @@ export function useLessonPlannerState({
 
       setSlideContentInternal(sCont);
       setActiveLearningScriptInternal(aScript);
+      setDiagramLayouts(diagLayouts);
       setSavedSlideContent(sCont);
       setSavedScript(aScript);
-      setMaterialCreatedBy(response.data.created_by || null);
+      savedDiagramLayoutsRef.current = diagLayouts;
+      setSavedDiagramLayouts(diagLayouts);
+      setMaterialCreatedBy(materialsRes.data.created_by || null);
 
-      // Fetch RAG references for citation matching
-      try {
-        const ragRes = await client.get(`/api/courses/chapters/${chapter.id}/rag-references`);
-        setRagReferences(ragRes.data.references || []);
-      } catch (ragErr) {
-        console.error("Error loading RAG references:", ragErr);
-        setRagReferences([]);
-      }
+      // Set RAG references
+      setRagReferences(ragRes.data.references || []);
 
-      // Clear academic search result & suggest queries
+      // Clear academic search result & set suggest queries
       search.setSearchResult(null);
-      search.setSuggestedQueries([]);
-      try {
-        const suggestRes = await client.get(`/api/courses/chapters/${chapter.id}/suggest-queries`);
-        search.setSuggestedQueries(suggestRes.data.suggestions || []);
-      } catch (suggestErr) {
-        console.error("Error loading suggested queries:", suggestErr);
-      }
+      search.setSuggestedQueries(suggestRes.data.suggestions || []);
 
-      // Tải bổ sung lịch sử và MCQs
+      // Tải bổ sung lịch sử và MCQs (chạy ngầm)
       loadRevisions(chapter.id);
       loadChapterMcqs(chapter.id);
+
+      return {
+        hasContent: sCont.trim().length > 0 || aScript.trim().length > 0
+      };
     } catch (err) {
       console.error(err);
       setError('Không thể load nội dung chương học.');
+      return null;
     }
   };
 
@@ -651,19 +669,24 @@ export function useLessonPlannerState({
   };
 
   // Lưu bản soạn thảo chính của giảng viên xuống DB
-  const handleSaveMaterials = async () => {
+  const handleSaveMaterials = async (updatedLayouts?: string | null) => {
     if (!selectedChapter) return false;
     setError('');
     setMessage('');
     setSaving(true);
 
+    const layoutsToSave = updatedLayouts !== undefined ? updatedLayouts : diagramLayouts;
+
     try {
       await client.put(`/api/courses/chapters/${selectedChapter.id}/materials`, {
         slide_content: slideContent,
-        active_learning_script: activeLearningScript
+        active_learning_script: activeLearningScript,
+        diagram_layouts: layoutsToSave
       });
       setSavedSlideContent(slideContent);
       setSavedScript(activeLearningScript);
+      savedDiagramLayoutsRef.current = layoutsToSave;
+      setSavedDiagramLayouts(layoutsToSave);
       setMessage('Đã lưu học liệu thành công lên hệ thống Cloud!');
       return true;
     } catch (err) {
@@ -1017,38 +1040,16 @@ export function useLessonPlannerState({
           handleGenerateOutline(true);
         }
       } else if (action === 'generate_storyboard') {
-        // Only highlight the button visually — do NOT auto-click or auto-generate.
-        // The user should review and click "Generate Storyboard" themselves.
-        const btn = document.getElementById('lp-generate-materials-btn');
-        if (btn) {
-          btn.classList.add('programmatic-click');
-          setTimeout(() => {
-            btn.classList.remove('programmatic-click');
-            // Do NOT click — let the user manually trigger
-          }, 2500);
-        }
-      } else if (action === 'generate_materials') {
-        const confirmBtn = document.getElementById('ai-generate-materials-confirm-btn');
-        if (confirmBtn) {
-          confirmBtn.classList.add('programmatic-click');
-          setTimeout(() => {
-            confirmBtn.classList.remove('programmatic-click');
-            confirmBtn.click();
-          }, 1000);
-        } else if (stream.storyboardDraft && stream.storyboardDraft.length > 0) {
-          stream.handleGenerateMaterialsFromStoryboard(stream.storyboardDraft);
-        } else if (params?.storyboard) {
-          const btn = document.getElementById('ai-generate-materials-confirm-btn');
-          if (btn) {
-            btn.classList.add('programmatic-click');
-            setTimeout(() => {
-              btn.classList.remove('programmatic-click');
-              stream.handleGenerateMaterialsFromStoryboard(params.storyboard);
-            }, 1000);
-          } else {
-            stream.handleGenerateMaterialsFromStoryboard(params.storyboard);
-          }
-        } else {
+        setShowAIProposal(true);
+        if (params?.class_size) setClassSize(Number(params.class_size));
+        if (params?.has_wifi !== undefined) setHasWifi(Boolean(params.has_wifi));
+        if (params?.furniture_type) setFurnitureType(params.furniture_type);
+        if (params?.session_duration) setSessionDuration(Number(params.session_duration));
+        if (params?.pedagogical_style) setPedagogicalStyle(params.pedagogical_style);
+        if (params?.learner_level) setLearnerLevel(params.learner_level);
+
+        // Wait for React to render and mount the AI Proposal panel in the DOM
+        setTimeout(() => {
           const btn = document.getElementById('lp-generate-materials-btn');
           if (btn) {
             btn.classList.add('programmatic-click');
@@ -1056,6 +1057,7 @@ export function useLessonPlannerState({
               btn.classList.remove('programmatic-click');
               btn.click();
               
+              // Wait for PedagogicalConfigModal to mount in the DOM
               setTimeout(() => {
                 const modalBtn = document.getElementById('lp-pedagogical-confirm-btn');
                 if (modalBtn) {
@@ -1072,12 +1074,66 @@ export function useLessonPlannerState({
           } else {
             stream.handleGenerateStoryboard();
           }
+        }, 500);
+      } else if (action === 'generate_materials') {
+        setShowAIProposal(true);
+        if (params?.class_size) setClassSize(Number(params.class_size));
+        if (params?.has_wifi !== undefined) setHasWifi(Boolean(params.has_wifi));
+        if (params?.furniture_type) setFurnitureType(params.furniture_type);
+        if (params?.session_duration) setSessionDuration(Number(params.session_duration));
+        if (params?.pedagogical_style) setPedagogicalStyle(params.pedagogical_style);
+        if (params?.learner_level) setLearnerLevel(params.learner_level);
+
+        if (params?.storyboard) {
+          stream.setStoryboardDraft(params.storyboard);
         }
+
+        // Wait for React to render and mount the AI Proposal panel & storyboard draft
+        setTimeout(() => {
+          const confirmBtn = document.getElementById('ai-generate-materials-confirm-btn');
+          if (confirmBtn) {
+            confirmBtn.classList.add('programmatic-click');
+            setTimeout(() => {
+              confirmBtn.classList.remove('programmatic-click');
+              confirmBtn.click();
+            }, 1000);
+          } else if (stream.storyboardDraft && stream.storyboardDraft.length > 0) {
+            stream.handleGenerateMaterialsFromStoryboard(stream.storyboardDraft);
+          } else if (params?.storyboard) {
+            // If the confirm button is somehow not rendered yet, fallback to calling the stream handler directly
+            stream.handleGenerateMaterialsFromStoryboard(params.storyboard);
+          } else {
+            // No storyboard generated yet, generate storyboard first
+            const btn = document.getElementById('lp-generate-materials-btn');
+            if (btn) {
+              btn.classList.add('programmatic-click');
+              setTimeout(() => {
+                btn.classList.remove('programmatic-click');
+                btn.click();
+                
+                setTimeout(() => {
+                  const modalBtn = document.getElementById('lp-pedagogical-confirm-btn');
+                  if (modalBtn) {
+                    modalBtn.classList.add('programmatic-click');
+                    setTimeout(() => {
+                      modalBtn.classList.remove('programmatic-click');
+                      modalBtn.click();
+                    }, 1000);
+                  } else {
+                    stream.handleGenerateStoryboard();
+                  }
+                }, 500);
+              }, 1000);
+            } else {
+              stream.handleGenerateStoryboard();
+            }
+          }
+        }, 500);
       }
     };
     window.addEventListener('lesson-planner-programmatic-trigger', handleProgrammaticTrigger);
     return () => window.removeEventListener('lesson-planner-programmatic-trigger', handleProgrammaticTrigger);
-  }, [selectedChapter, stream, clos]);
+  }, [selectedChapter, stream, clos, setShowAIProposal, setClassSize, setHasWifi, setFurnitureType, setSessionDuration, setPedagogicalStyle, setLearnerLevel, handleGenerateOutline]);
 
   useEffect(() => {
     const handleMascotStart = (e: Event) => {
@@ -1167,6 +1223,9 @@ export function useLessonPlannerState({
     loading,
     saving,
     exporting,
+    diagramLayouts,
+    setDiagramLayouts,
+    savedDiagramLayouts,
     revisions,
     loadRevisions,
     chapterMcqs,

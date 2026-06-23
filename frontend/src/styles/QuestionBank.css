@@ -423,6 +423,36 @@
   gap: 20px;
 }
 
+.qb-questions-scroll-container {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.qb-questions-scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.qb-questions-scroll-container::-webkit-scrollbar-track {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.qb-questions-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.qb-questions-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-color);
+}
+
+.qb-questions-cards-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .qb-list-header {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);

@@ -25,15 +25,15 @@ export default function QuestionCard({
   if (q.options_json) {
     try {
       opts = JSON.parse(q.options_json);
-    } catch(e) {
+    } catch (e) {
       opts = [];
     }
   }
   const linkedClo = clos.find(c => c.id === q.clo_id);
   const isAutopilot = q.created_by === 'odin_autopilot';
-  
+
   return (
-    <div 
+    <div
       className="qb-question-card"
       style={isAutopilot ? {
         border: '2px dashed var(--vinuni-gold)',
@@ -62,7 +62,7 @@ export default function QuestionCard({
           letterSpacing: '0.5px'
         }}>
           <Sparkles size={8} />
-          AI Autopilot
+          Tạo bởi AI
         </div>
       )}
       <div className="qb-question-card-header">
@@ -76,20 +76,20 @@ export default function QuestionCard({
           )}
         </div>
         <div className="qb-action-buttons">
-          <button 
+          <button
             onClick={() => q.id && handleGenerateIsomorphic(q.id)}
             className="qb-action-btn-iso"
             title="Sinh câu hỏi tương tự đồng cấu"
           >
             <Copy size={13} aria-hidden="true" /> Clone
           </button>
-          <button 
+          <button
             onClick={() => handleEditClick(q)}
             className="qb-action-btn-edit"
           >
             <Edit3 size={13} aria-hidden="true" /> Sửa
           </button>
-          <button 
+          <button
             onClick={() => q.id && handleDeleteQuestion(q.id)}
             className="qb-action-btn-del"
           >
@@ -106,8 +106,8 @@ export default function QuestionCard({
         {opts.map((opt, oIdx) => {
           const isCorrect = opt === q.correct_answer;
           return (
-            <div 
-              key={oIdx} 
+            <div
+              key={oIdx}
               className={isCorrect ? "qb-option-item-correct" : "qb-option-item"}
             >
               <span className={isCorrect ? "qb-option-label-correct" : "qb-option-label"}>

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import html2canvas from 'html2canvas';
 import { parseMarkdownToSlidesJS, optimizeSlideItemsJS, splitBulletText, THEMES, Slide, ThemeColors } from './slideParser';
 import { renderMarkdownInline } from './markdown';
+import MermaidDiagram from '../components/MermaidDiagram';
 
 // Declare module to satisfy TypeScript compiler
 declare global {
@@ -24,7 +25,7 @@ interface ExportSlidePayload {
 /**
  * Render slide JSX for export inside the hidden container.
  */
-function RenderSlideForExport({ s, idx, theme }: { s: Slide; idx: number; theme: ThemeColors }) {
+function RenderSlideForExport({ s, idx, theme, themeName }: { s: Slide; idx: number; theme: ThemeColors; themeName: string }) {
   const slideLayout = s.layout || 'standard_list';
   const optimizedItems = optimizeSlideItemsJS(s.items);
   const tableItem = optimizedItems.find(item => item.type === 'table');
@@ -33,7 +34,7 @@ function RenderSlideForExport({ s, idx, theme }: { s: Slide; idx: number; theme:
   let useCardLayout = false;
   if (slideLayout === 'card_grid') {
     useCardLayout = true;
-  } else if (['standard_list', 'two_column_comparison', 'visual_highlight', 'table', 'timeline_flow', 'three_column', 'quadrant_matrix', 'split_intro'].includes(slideLayout)) {
+  } else if (['standard_list', 'two_column_comparison', 'visual_highlight', 'table', 'timeline_flow', 'three_column', 'quadrant_matrix', 'split_intro', 'metric_callout', 'hero_image_split', 'pros_cons_comparison'].includes(slideLayout)) {
     useCardLayout = false;
   } else {
     useCardLayout = !tableItem && textItems.length >= 1 && textItems.length <= 4;
@@ -42,7 +43,127 @@ function RenderSlideForExport({ s, idx, theme }: { s: Slide; idx: number; theme:
   const accentColors = theme.accents;
   let bodySection: React.ReactNode = null;
 
-  if (s.svgContent) {
+  if (slideLayout === 'metric_callout') {
+    const allText = textItems.map(it => it.rawText || '').join(' ').trim();
+    let numberText = '';
+    let labelText = allText;
+    const boldMatch = allText.match(/^\*\*(.*?)\*\*\s*[:\-—]?\s*(.*)$/);
+    const colonMatch = !boldMatch && allText.match(/^(.*?)\s*[:\-—]\s*(.*)$/);
+    if (boldMatch) {
+      numberText = boldMatch[1];
+      labelText = boldMatch[2];
+    } else if (colonMatch) {
+      numberText = colonMatch[1];
+      labelText = colonMatch[2];
+    } else {
+      const spaceIdx = allText.indexOf(' ');
+      if (spaceIdx !== -1) {
+        numberText = allText.substring(0, spaceIdx);
+        labelText = allText.substring(spaceIdx + 1);
+      }
+    }
+    bodySection = (
+      <div className="slide-metric-callout full-view" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '2cqw' }}>
+        <div className="slide-metric-number" style={{ color: theme.titleColor, fontSize: '6cqw', fontWeight: '800', marginBottom: '1cqw' }}>
+          {numberText}
+        </div>
+        {labelText && (
+          <div className="slide-metric-label" style={{ color: theme.textColor, fontSize: '1.8cqw', fontWeight: '600', textAlign: 'center' }}>
+            {renderMarkdownInline(labelText, theme.titleColor)}
+          </div>
+        )}
+      </div>
+    );
+  } else if (slideLayout === 'hero_image_split') {
+    let imgUrl = "https://images.unsplash.com/photo-placeholder";
+    const cleanTextItems: typeof textItems = [];
+    textItems.forEach(it => {
+      const raw = it.rawText || '';
+      const match = raw.match(/!\[.*?\]\((.*?)\)/);
+      if (match) {
+        imgUrl = match[1];
+      }
+      const cleanRaw = raw.replace(/!\[.*?\]\((.*?)\)/g, '').trim();
+      if (cleanRaw) {
+        cleanTextItems.push({
+          ...it,
+          rawText: cleanRaw
+        });
+      }
+    });
+    bodySection = (
+      <div className="slide-hero-image-split full-view" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2cqw', flex: 1, alignItems: 'stretch' }}>
+        <div className="slide-hero-image-col" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255,255,255,0.02)' }}>
+          <img src={imgUrl} alt="Hero illustration" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
+        </div>
+        <div className="slide-hero-text-col" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <ul className="slide-bullet-list full-view" style={{ color: theme.textColor }}>
+            {cleanTextItems.map((item, itemIdx) => {
+              const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+              const hideBullet = isImgOnly || item.bullet === false;
+              return (
+                <li
+                  key={itemIdx}
+                  style={{
+                    fontSize: cleanTextItems.length > 3 ? '1.5cqw' : '1.8cqw',
+                    ...(hideBullet ? { listStyleType: 'none', marginLeft: '-2cqw' } : {})
+                  }}
+                >
+                  {renderMarkdownInline(item.rawText || '', theme.titleColor)}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+    );
+  } else if (slideLayout === 'pros_cons_comparison') {
+    const pros: string[] = [];
+    const cons: string[] = [];
+    textItems.forEach(item => {
+      const raw = item.rawText || '';
+      const rawLower = raw.toLowerCase();
+      if (["ưu điểm", "pro", "lợi ích", "advantages", "thuận lợi", "tích cực"].some(k => rawLower.includes(k))) {
+        pros.push(raw);
+      } else if (["nhược điểm", "con", "hạn chế", "disadvantages", "khó khăn", "tiêu cực"].some(k => rawLower.includes(k))) {
+        cons.push(raw);
+      } else {
+        if (pros.length <= cons.length) {
+          pros.push(raw);
+        } else {
+          cons.push(raw);
+        }
+      }
+    });
+    bodySection = (
+      <div className="slide-pros-cons-comparison full-view" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5cqw', flex: 1, alignItems: 'stretch' }}>
+        <div className="pros-column" style={{ background: 'rgba(16, 185, 129, 0.03)', border: '1px solid rgba(16, 185, 129, 0.15)', borderLeft: `5px solid #10B981`, padding: '1.5cqw', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ color: '#10B981', fontWeight: 'bold', fontSize: '1.6cqw', marginBottom: '1cqw', display: 'flex', alignItems: 'center', gap: '0.5cqw' }}>
+            ▲ Ưu điểm & Lợi ích
+          </div>
+          <ul className="slide-bullet-list full-view" style={{ color: theme.textColor, margin: 0, paddingLeft: '1.5cqw' }}>
+            {pros.map((p, idx) => (
+              <li key={idx} style={{ fontSize: '1.3cqw', marginBottom: '0.3cqw' }}>
+                {renderMarkdownInline(p, theme.titleColor)}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="cons-column" style={{ background: 'rgba(239, 68, 68, 0.03)', border: '1px solid rgba(239, 68, 68, 0.15)', borderLeft: `5px solid #EF4444`, padding: '1.5cqw', borderRadius: '8px', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ color: '#EF4444', fontWeight: 'bold', fontSize: '1.6cqw', marginBottom: '0.5cqw', display: 'flex', alignItems: 'center', gap: '0.5cqw' }}>
+            ▼ Nhược điểm & Hạn chế
+          </div>
+          <ul className="slide-bullet-list full-view" style={{ color: theme.textColor, margin: 0, paddingLeft: '1.5cqw' }}>
+            {cons.map((c, idx) => (
+              <li key={idx} style={{ fontSize: '1.3cqw', marginBottom: '0.3cqw' }}>
+                {renderMarkdownInline(c, theme.titleColor)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    );
+  } else if (s.svgContent) {
     if (textItems.length > 0) {
       bodySection = (
         <div className="slide-split-svg-text full-view">
@@ -80,6 +201,41 @@ function RenderSlideForExport({ s, idx, theme }: { s: Slide; idx: number; theme:
           style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           dangerouslySetInnerHTML={{ __html: s.svgContent }}
         />
+      );
+    }
+  } else if (s.mermaidContent) {
+    if (textItems.length > 0) {
+      bodySection = (
+        <div className="slide-split-svg-text full-view">
+          <div className="slide-svg-text-col">
+            <ul className="slide-bullet-list full-view" style={{ color: theme.textColor }}>
+              {textItems.map((item, itemIdx) => {
+                const isImgOnly = item.rawText?.trim().startsWith('![') && item.rawText?.trim().endsWith(')');
+                return (
+                  <li 
+                    key={itemIdx} 
+                    style={{ 
+                      fontSize: textItems.length > 3 ? '18px' : '22px',
+                      listStyleType: isImgOnly ? 'none' : 'disc',
+                      marginLeft: isImgOnly ? '-20px' : '0px'
+                    }}
+                  >
+                    {renderMarkdownInline(item.rawText || '', theme.titleColor)}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="slide-svg-graphic-col">
+            <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+          </div>
+        </div>
+      );
+    } else {
+      bodySection = (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <MermaidDiagram code={s.mermaidContent} themeName={themeName} />
+        </div>
       );
     }
   } else if (tableItem) {
@@ -474,7 +630,7 @@ export async function captureSlidesCanvas(
     await new Promise<void>((resolve) => {
       root.render(
         <div className="slide-proposal-wrapper" style={{ width: '1280px', height: '720px', padding: 0 }}>
-          <RenderSlideForExport s={slide} idx={i} theme={theme} />
+          <RenderSlideForExport s={slide} idx={i} theme={theme} themeName={themeName} />
         </div>
       );
       // Wait for Mermaid or Recharts charts to render (Critique 47)

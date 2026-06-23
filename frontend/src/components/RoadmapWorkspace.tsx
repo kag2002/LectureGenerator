@@ -230,7 +230,7 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
                 </h3>
                 <div className="workspace-header-actions">
                   <button
-                    className="workspace-ai-questions-btn"
+                    className={`workspace-ai-questions-btn ${localQuestions.length === 0 ? 'glow-bounce-hint' : ''}`}
                     onClick={handleAiGenerateQuestions}
                     disabled={workspaceSaving}
                   >
@@ -471,7 +471,7 @@ export default function RoadmapWorkspace(props: RoadmapWorkspaceProps) {
               </h3>
               <div className="workspace-header-actions">
                 <button
-                  className="workspace-ai-clos-btn"
+                  className={`workspace-ai-clos-btn ${localClos.length === 0 ? 'glow-bounce-hint' : ''}`}
                   onClick={handleAiSuggestClos}
                   disabled={workspaceSaving}
                 >

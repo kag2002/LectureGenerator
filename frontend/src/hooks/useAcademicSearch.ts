@@ -121,7 +121,7 @@ export function useAcademicSearch({
     }
   };
 
-  const handleForceIngest = async () => {
+  const handleForceIngest = async (chapterId?: number | '') => {
     const selectedUrls = Object.keys(selectedRejected).filter(url => selectedRejected[url]);
     if (selectedUrls.length === 0) return;
     
@@ -140,7 +140,8 @@ export function useAcademicSearch({
         await client.post(`/api/courses/${courseId}/force-ingest-url`, {
           url: item.url,
           title: item.title,
-          content: item.content
+          content: item.content,
+          chapter_id: chapterId || undefined
         });
         
         successCount++;

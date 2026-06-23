@@ -11,6 +11,7 @@ export interface Slide {
   citations: string[];
   layout: string | null;
   svgContent: string | null;
+  mermaidContent: string | null;
   rawMarkdown: string;
   notes?: string;
 }
@@ -287,10 +288,27 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
     let inSvg = false;
     let svgLines: string[] = [];
     
+    let inMermaid = false;
+    let mermaidLines: string[] = [];
+    
     for (const line of slide.lines) {
       if (!line) continue;
       
       const lineStripped = line.trim();
+      
+      // Mermaid code block parsing
+      if (lineStripped.startsWith('```mermaid') || lineStripped.startsWith('``` mermaid')) {
+        inMermaid = true;
+        continue;
+      } else if (inMermaid) {
+        if (lineStripped.startsWith('```')) {
+          inMermaid = false;
+          continue;
+        }
+        mermaidLines.push(line);
+        continue;
+      }
+      
       // Skip markdown code block markers
       if (lineStripped === '```' || lineStripped.startsWith('```') || /^[-*+•]\s*```/.test(lineStripped)) {
         continue;
@@ -454,6 +472,8 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
         rawSvg = rawSvg.replace('<svg', `<svg viewBox="0 0 ${w} ${h}"`);
       }
     }
+    
+    let rawMermaid = mermaidLines.length > 0 ? mermaidLines.join('\n') : null;
 
     processedSlides.push({
       title,
@@ -461,6 +481,7 @@ export function parseMarkdownToSlidesJS(mdContent: string): Slide[] {
       citations,
       layout: slideLayout,
       svgContent: rawSvg,
+      mermaidContent: rawMermaid,
       rawMarkdown: slide.rawLines ? slide.rawLines.join('\n') : ''
     });
   }
@@ -484,3 +505,56 @@ export function capitalizeFirstLetter(str: string): string {
   }
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
+
+export interface VisualSlide {
+  title: string;
+  layoutTag: string;
+  body: string;
+}
+
+/**
+ * Tách một Slide thành các trường phục vụ giao diện sửa trực quan.
+ */
+export function parseSlideForVisualEdit(s: Slide): VisualSlide {
+  const lines = s.rawMarkdown.split('\n');
+  let titleIndex = lines.findIndex(l => l.trim().startsWith('#'));
+  if (titleIndex === -1) {
+    return {
+      title: s.title || '',
+      layoutTag: s.layout ? ` [Layout: ${s.layout}]` : '',
+      body: s.rawMarkdown || ''
+    };
+  }
+
+  const titleLine = lines[titleIndex];
+  let layoutTag = '';
+  const layoutMatch = titleLine.match(/\[Layout\s*:\s*[^\]]+\]/i);
+  if (layoutMatch) {
+    layoutTag = ` ${layoutMatch[0]}`;
+  }
+
+  const title = titleLine.replace(/^#+\s*/, '').replace(/\[Layout\s*:\s*[^\]]+\]/i, '').trim();
+  const body = lines.slice(titleIndex + 1).join('\n');
+  return { title, layoutTag, body };
+}
+
+/**
+ * Tuần tự hóa một VisualSlide thành chuỗi markdown thô cho slide đó.
+ */
+export function serializeVisualSlide(vs: VisualSlide): string {
+  const titlePart = `## ${vs.title.trim()}${vs.layoutTag}`;
+  return `${titlePart}\n${vs.body}`;
+}
+
+/**
+ * Tuần tự hóa danh sách các slide thành một chuỗi markdown duy nhất.
+ */
+export function serializeSlidesToMarkdown(slides: Slide[]): string {
+  return slides.map(s => {
+    // Nếu slide có rawMarkdown và không bị chỉnh sửa tiêu đề/nội dung qua visual form trực tiếp, ta có thể dùng rawMarkdown.
+    // Nhưng để đồng bộ hoàn toàn, ta serialize từ cấu trúc của nó.
+    const vs = parseSlideForVisualEdit(s);
+    return serializeVisualSlide(vs);
+  }).join('\n\n');
+}
+
