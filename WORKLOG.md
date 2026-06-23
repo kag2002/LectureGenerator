@@ -94,11 +94,15 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| Lê Thiên Khang | Giải quyết Code Smells: Khử các inline imports trùng lặp, tách helper function `extract_layout` ra cấp module | ✅ Done | Code sạch hơn, giảm trùng lặp imports | 2h |
-| Lê Thiên Khang | Tối ưu hóa cấu trúc thư mục backend và modular hóa tích hợp LLM | ✅ Done | `models` -> `schemas`, nhóm LLM vào `src/utils/llm`, bổ sung `__init__.py` | 3h |
+| Lê Thiên Khang | Tái cấu trúc frontend: phân tách monolithic views (KnowledgeBase, CourseConfig), tách MarkdownChatRenderer từ ChatBot, trích xuất global contexts, modals, drawers | ✅ Done | Frontend modular, dễ bảo trì hơn | 4h |
+| Lê Thiên Khang | Tái cấu trúc backend: modular hóa main app, trích xuất core services, tích hợp assessments API | ✅ Done | Tổ chức backend code khoa học, sạch sẽ | 3h |
+| Lê Thiên Khang | Cập nhật tài liệu: bổ sung pedagogical analytics specs và visual editor UX review | ✅ Done | Specs và docs hoàn thiện | 1h |
+| Phạm Thành Nam | Bổ sung unit tests cho `material_orchestrator`, `slide_renderer`, và `syllabus_service` | ✅ Done | Tăng độ bao phủ kiểm thử (tests từ 241 -> 307) | 2h |
+| Lê Thiên Khang | Giải quyết Code Smells: Khử các inline imports trùng lặp, tách helper function `extract_layout` ra cấp module | ✅ Done | Loại bỏ 27+ inline imports trùng lặp | 2h |
+| Lê Thiên Khang | Tối ưu hóa cấu trúc thư mục backend và modular hóa tích hợp LLM | ✅ Done | `models` -> `schemas`, đóng gói LLM vào `src/utils/llm`, thêm package initializers | 3h |
 | Lê Thiên Khang | Chạy kiểm thử toàn diện & cập nhật đánh giá | ✅ Done | 308/308 tests pass thành công, cập nhật `walkthrough.md` | 1h |
 
-**Tổng kết:** Refactoring & Optimization day — chuẩn hóa cấu trúc thư mục, đóng gói module LLM và loại bỏ các code smells.
+**Tổng kết:** Refactoring & Optimization Day — Đại tu cấu trúc thư mục backend/frontend, loại bỏ code smells, mở rộng kiểm thử toàn diện đạt 308 tests pass.
 
 ---
 
