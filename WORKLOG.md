@@ -36,13 +36,14 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| Phạm Thành Nam | Tích hợp Mascot Companion AI (retro style) vào AppShell | ✅ Done | Component ChatBot retro, tích hợp SSE streaming | 3h |
-| Phạm Thành Nam | Admin Dashboard: telemetry, SRE percentiles, SVG timelines, alerting | ✅ Done | `AdminDashboard.tsx` + `MonitorDashboard.tsx` | 4h |
-| Phạm Thành Nam | Fix empty state guides, align syllabus terminology, Python linting | ✅ Done | Linting clean, tests pass | 2h |
-| Phạm Thành Nam | Thêm sample syllabus, download & quick load buttons | ✅ Done | `sample_syllabus.txt`, `CourseConfig.tsx` updated | 1h |
+| Lê Thiên Khang | Tích hợp Mascot Companion AI (retro style) vào AppShell | ✅ Done | Component ChatBot retro, tích hợp SSE streaming | 3h |
+| Lê Thiên Khang | Admin Dashboard: nâng cấp với telemetry, SRE percentiles, SVG timelines, và alerting engine | ✅ Done | `AdminDashboard.tsx` + `MonitorDashboard.tsx` | 4h |
+| Lê Thiên Khang | Xây dựng Canvas Slide Export (Option 1): tích hợp xuất Slide chất lượng cao sử dụng html2canvas & python-pptx | ✅ Done | Xuất slide PowerPoint chất lượng cao | 4h |
+| Lê Thiên Khang | Tích hợp Slide Proposal Preview Modal hỗ trợ hiển thị ảnh markdown và căn chỉnh layout | ✅ Done | Preview slide đẹp mắt trước khi export | 2h |
+| Lê Thiên Khang | Đồng bộ hóa đa ngôn ngữ (Tiếng Việt) cho các trạng thái của AI Agent và panel chatbot | ✅ Done | Giao diện tiếng Việt trực quan | 1h |
 | Team 023 | Cập nhật docs: plans, architecture, configs | ✅ Done | 7 implementation plans trong `docs/plans/` | 2h |
 
-**Tổng kết:** Hoàn thiện giao diện admin monitoring, mascot AI assistant, và documentation. ARCHITECTURE.md cập nhật lần cuối.
+**Tổng kết:** Hoàn thiện giao diện admin monitoring, mascot AI assistant, xuất PowerPoint chất lượng cao và tài liệu thiết kế.
 
 ---
 
@@ -50,13 +51,13 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| Phạm Thành Nam | Fix chatbot agent infinite loop bug | ✅ Done | Thêm max_iterations guard, 18+ agent workflow tests | 3h |
-| Phạm Thành Nam | Fix isDirty state guard cho CLO deletions | ✅ Done | Custom `useDirtyState` hook | 1.5h |
-| Phạm Thành Nam | Autopilot: sync mascot execution status, cancellation control | ✅ Done | SSE real-time sync với main UI panels | 2h |
-| Phạm Thành Nam | Fix runtime TypeError cho course-specific sub-views | ✅ Done | Conditional guards trong App.tsx | 1h |
-| Phạm Thành Nam | Admin direct access, agent memory monitoring tab | ✅ Done | Dashboard redirect, memory tab UI | 1.5h |
+| Lê Thiên Khang | Xây dựng UI chỉnh sửa Storyboard và tích hợp drawer xác minh tài liệu trích dẫn | ✅ Done | Trực quan hóa storyboard, kiểm tra nguồn gốc tri thức | 3h |
+| Lê Thiên Khang | Quản lý active learning sync states và luồng tạo slide 2 bước | ✅ Done | Đồng bộ hóa dữ liệu tạo đề cương và slide | 2h |
+| Lê Thiên Khang | Triển khai Reconciliation tiến trình học chủ động và hệ thống hóa structured logs | ✅ Done | Loại bỏ emojis thừa khỏi prompt và chuẩn hóa log | 2h |
+| Lê Thiên Khang | Triển khai LLM mock mode, disk prompt caching, và evaluation harness kiểm thử chất lượng LLM | ✅ Done | Giảm chi phí token và tăng tốc kiểm thử chất lượng sinh | 4h |
+| Lê Thiên Khang | Tích hợp materials stream và nâng cấp giao diện LessonPlanner, AIProposalPanel | ✅ Done | Stream kết quả tạo tài liệu học tập theo thời gian thực | 3h |
 
-**Tổng kết:** Focus vào bug fixes và stability. Agent không còn infinite loop, isDirty state bảo vệ dữ liệu chưa lưu.
+**Tổng kết:** Hoàn thiện các tính năng cốt lõi về Storyboard editor, active learning sync, xuất PowerPoint, mock mode, và test harness đánh giá LLM.
 
 ---
 
@@ -64,15 +65,30 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| Phạm Thành Nam | Refactor: modularize agent architecture, tách nodes thành modules | ✅ Done | Tách `graph.py` monolithic → node modules riêng biệt | 3h |
-| Phạm Thành Nam | Database migrations: Alembic setup, initial schema snapshot | ✅ Done | `alembic/` directory, migration scripts | 2h |
-| Phạm Thành Nam | Dockerize setup: Dockerfile, docker-compose.yml | ✅ Done | Multi-stage build, full stack orchestration | 1.5h |
-| Phạm Thành Nam | Expand test coverage: agent tests, API tests, integration tests | ✅ Done | 241 tests passing | 3h |
-| Phạm Thành Nam | Structured logging: purge print statements | ✅ Done | Standardized Python logging | 1h |
-| Phạm Thành Nam | Database pagination: offset + limit cho list endpoints | ✅ Done | Tất cả list routes hỗ trợ pagination | 1h |
-| Phạm Thành Nam | Fix soft-delete columns missing trong auto-migrations | ✅ Done | `deleted_at`, `is_deleted` đồng bộ | 1h |
+| Phạm Thành Nam | Refactor: modularize agent architecture, tách nodes thành modules riêng biệt | ✅ Done | Tách `graph.py` monolithic → node modules độc lập | 3h |
+| Phạm Thành Nam | Database migrations: thiết lập Alembic setup, ghi nhận initial schema snapshot | ✅ Done | Thư mục `alembic/`, tự động hóa schema migrations | 2h |
+| Phạm Thành Nam | Dockerize setup: viết Dockerfile, docker-compose.yml | ✅ Done | Đóng gói multi-stage build, vận hành toàn bộ stack bằng 1 lệnh | 1.5h |
+| Phạm Thành Nam | Mở rộng kiểm thử: viết unit tests, API tests và tích hợp kiểm thử agent | ✅ Done | 241 tests passing | 3h |
+| Phạm Thành Nam | Chuẩn hóa logging: dọn dẹp các câu lệnh print thô, thay bằng structured Python logging | ✅ Done | Hệ thống logging đồng bộ | 1h |
+| Phạm Thành Nam | Database pagination: hỗ trợ offset + limit cho toàn bộ các endpoints trả về danh sách | ✅ Done | Tránh nghẽn băng thông với tập dữ liệu lớn | 1h |
+| Lê Thiên Khang | Tích hợp lối tắt Admin direct access và tab giám sát bộ nhớ Agent memory tab | ✅ Done | Quản lý session admin, theo dõi bộ nhớ agent | 2h |
 
-**Tổng kết:** Major refactoring sprint. Kiến trúc enterprise-grade với Alembic migrations, Docker, modular agents, và 241 tests.
+**Tổng kết:** Refactoring kỹ thuật sâu rộng. Thiết lập migration pipeline, Docker hóa, nâng độ phủ test đạt 241 test cases sạch.
+
+---
+
+## 2026-06-18
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Lê Thiên Khang | Khắc phục bug infinite loop của chatbot agent và bổ sung 18+ agent workflow scenario & edge case tests | ✅ Done | Agent tự kết thúc đúng điều kiện biên | 3h |
+| Lê Thiên Khang | Giải quyết xung đột kiểm thử: sửa lỗi chia sẻ DB, rate limit (slowapi) trong môi trường test | ✅ Done | Tách biệt cơ sở dữ liệu test, mock middleware rate limit | 2h |
+| Lê Thiên Khang | Sửa lỗi build frontend: sửa đường dẫn path alias `useDirtyState` gây lỗi Next.js build | ✅ Done | Dự án build ổn định | 1h |
+| Lê Thiên Khang | Đồng bộ hóa trạng thái Mascot Autopilot: đồng bộ tiến độ và hỗ trợ hủy tác vụ từ giao diện chính | ✅ Done | Hủy tiến trình AI trực tiếp từ màn hình | 2.5h |
+| Lê Thiên Khang | Bổ sung cột soft-delete `deleted_at`, `is_deleted` còn thiếu trong migrations tự động của Alembic | ✅ Done | Đồng bộ database schema trọn vẹn | 1h |
+| Lê Thiên Khang | Thiết lập isDirty state guard bảo vệ CLO deletions khỏi bị ghi đè khi DB tự động làm mới | ✅ Done | Tránh mất mát dữ liệu CLO chưa lưu của người dùng | 2h |
+
+**Tổng kết:** Khắc phục lỗi nghiệm trọng liên quan đến vòng lặp AI, bảo vệ dữ liệu CLO, sửa lỗi build Next.js, và chuẩn hóa test suite.
 
 ---
 
@@ -80,13 +96,13 @@
 
 | Member | Task | Status | Output | Time |
 |--------|------|--------|--------|------|
-| Phạm Thành Nam | Fix venv: restore pip, install psutil dependency | ✅ Done | Test suite chạy lại: 241 passed | 0.5h |
+| Phạm Thành Nam | Fix venv: restore pip, install psutil dependency | ✅ Done | Test suite chạy lại bình thường | 0.5h |
 | Phạm Thành Nam | Cập nhật JOURNAL.md: ghi lại Week 1-2 chi tiết | ✅ Done | Mục tiêu, thành quả, khó khăn, bài học | 0.5h |
-| Phạm Thành Nam | Cập nhật WORKLOG.md: bổ sung công việc 10/06 → 22/06 | ✅ Done | Worklog đầy đủ theo ngày | 0.5h |
-| Phạm Thành Nam | Customize README.md cho Demo Day | ✅ Done | README mô tả dự án thực tế | 0.5h |
-| Phạm Thành Nam | Cập nhật eval report với test results | ✅ Done | 241 tests, 51% coverage, metrics updated | 0.5h |
+| Phạm Thành Nam | Cập nhật WORKLOG.md: bổ sung công việc từ 10/06 → 22/06 | ✅ Done | Khớp nối nhật ký tiến độ | 0.5h |
+| Phạm Thành Nam | Customize README.md cho Demo Day | ✅ Done | README mô tả dự án thực tế sinh động | 0.5h |
+| Phạm Thành Nam | Cập nhật eval report với test kết quả kiểm thử | ✅ Done | 241 tests, 51% coverage, metrics updated | 0.5h |
 
-**Tổng kết:** Documentation day — cập nhật toàn bộ deliverables trước Demo Day.
+**Tổng kết:** Tài liệu hóa chuẩn bị cho Demo Day — cập nhật toàn bộ báo cáo, hướng dẫn chạy và tổng kết tuần.
 
 ---
 
