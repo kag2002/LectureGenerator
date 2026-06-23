@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from src.database.models import CLO, ChapterMaterial
+from src.database.models import CLO, ChapterMaterial, OdinActionLog
 from src.database.session import SessionLocal
 from src.database.vector_db import search_rag_isolated
 from src.prompts.materials import (
@@ -13,6 +13,7 @@ from src.prompts.materials import (
 from src.services.image_service import process_markdown_images
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import call_llm_json, call_llm_stream, get_token_usage, init_token_tracker, langfuse
+from src.utils.sse import format_sse
 from src.utils.task_manager import task_manager
 
 
@@ -34,15 +35,7 @@ async def generate_chapter_materials_stream_generator(
     init_token_tracker()
 
     def send(event: str, data: dict):
-        usage = get_token_usage()
-        if usage:
-            data["usage"] = {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-                "total_cost": usage.get("total_cost", 0.0),
-                "model_name": usage.get("model_name"),
-            }
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        return format_sse(event, data, include_usage=True)
 
     current_task = asyncio.current_task()
     if current_task:
@@ -310,7 +303,6 @@ async def generate_chapter_materials_stream_generator(
 
             # Thêm log hành động để hoàn tác
             try:
-                from src.database.models import OdinActionLog
                 action_log = OdinActionLog(
                     course_id=course_id,
                     action_type="generate_materials",
@@ -371,15 +363,7 @@ async def generate_materials_from_storyboard_stream_generator(
     init_token_tracker()
 
     def send(event: str, data: dict):
-        usage = get_token_usage()
-        if usage:
-            data["usage"] = {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-                "total_cost": usage.get("total_cost", 0.0),
-                "model_name": usage.get("model_name"),
-            }
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        return format_sse(event, data, include_usage=True)
 
     current_task = asyncio.current_task()
     if current_task:
@@ -684,15 +668,7 @@ async def append_slide_for_clo_stream_generator(
     init_token_tracker()
 
     def send(event: str, data: dict):
-        usage = get_token_usage()
-        if usage:
-            data["usage"] = {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-                "total_cost": usage.get("total_cost", 0.0),
-                "model_name": usage.get("model_name"),
-            }
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        return format_sse(event, data, include_usage=True)
 
     try:
         yield send("stage", {"stage": 1, "message": "Đang tra cứu tài liệu tham khảo..."})
@@ -772,15 +748,7 @@ async def generate_slides_stream_generator(
     init_token_tracker()
 
     def send(event: str, data: dict):
-        usage = get_token_usage()
-        if usage:
-            data["usage"] = {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-                "total_cost": usage.get("total_cost", 0.0),
-                "model_name": usage.get("model_name"),
-            }
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        return format_sse(event, data, include_usage=True)
 
     yield send("stage", {"stage": 1, "message": "Đang tìm kiếm học liệu tham chiếu phù hợp..."})
     query = f"{chapter_title} {chapter_description}"
@@ -883,15 +851,7 @@ async def generate_active_learning_stream_generator(
     init_token_tracker()
 
     def send(event: str, data: dict):
-        usage = get_token_usage()
-        if usage:
-            data["usage"] = {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-                "total_cost": usage.get("total_cost", 0.0),
-                "model_name": usage.get("model_name"),
-            }
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        return format_sse(event, data, include_usage=True)
 
     yield send("stage", {"stage": 1, "message": "Đang chuẩn bị dữ liệu bài học..."})
 

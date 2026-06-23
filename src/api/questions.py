@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, User
+from src.database.models import CLO, Chapter, ChapterMaterial, Course, OdinActionLog, Question, User
 from src.database.session import get_db
 from src.database.vector_db import search_rag_isolated
 from src.models.schemas import (
@@ -24,6 +24,7 @@ from src.prompts.questions import (
 )
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
 from src.utils.parser import safe_parse_bloom_level
+from src.services.lock_service import check_context_lock
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,6 @@ def create_question(
         if not chapter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Chương học không thuộc môn học này.")
 
-        from src.api.autopilot import check_context_lock
         check_context_lock(db, course_id, f"chapter_{req.chapter_id}", current_user.email)
 
     # 3. Xác thực CLO nếu có truyền vào
@@ -120,7 +120,6 @@ def update_question(
         )
 
     if question.chapter_id is not None:
-        from src.api.autopilot import check_context_lock
         check_context_lock(db, question.course_id, f"chapter_{question.chapter_id}", current_user.email)
 
     question.question_text = req.question_text
@@ -147,7 +146,6 @@ def delete_question(question_id: int, current_user: User = Depends(get_current_u
         )
 
     if question.chapter_id is not None:
-        from src.api.autopilot import check_context_lock
         check_context_lock(db, question.course_id, f"chapter_{question.chapter_id}", current_user.email)
 
     db.delete(question)
@@ -188,7 +186,6 @@ def generate_questions(
         )
 
     if req.chapter_id is not None:
-        from src.api.autopilot import check_context_lock
         check_context_lock(db, course_id, f"chapter_{req.chapter_id}", current_user.email)
 
     # --- Langfuse: Khởi tạo Parent Trace cho toàn bộ luồng sinh MCQ ---
@@ -405,7 +402,6 @@ def generate_questions(
     # Thêm log hành động để hoàn tác
     if saved_questions:
         try:
-            from src.database.models import OdinActionLog
             action_log = OdinActionLog(
                 course_id=course_id,
                 action_type="generate_questions",
@@ -469,7 +465,6 @@ def generate_questions_stream(
         raise HTTPException(status_code=404, detail="Môn học không tồn tại.")
 
     if req.chapter_id is not None:
-        from src.api.autopilot import check_context_lock
         check_context_lock(db, course_id, f"chapter_{req.chapter_id}", current_user.email)
 
     # 2. Thu thập ngữ cảnh
@@ -530,7 +525,6 @@ def generate_isomorphic_question(
         )
 
     if orig_q.chapter_id is not None:
-        from src.api.autopilot import check_context_lock
         check_context_lock(db, orig_q.course_id, f"chapter_{orig_q.chapter_id}", current_user.email)
 
     # 2. Gọi LLM sinh câu hỏi đồng cấu

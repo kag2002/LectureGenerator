@@ -1,6 +1,6 @@
 import json
 
-from src.database.models import Question
+from src.database.models import OdinActionLog, Question
 from src.database.session import SessionLocal
 from src.database.vector_db import search_rag_isolated
 from src.prompts.questions import (
@@ -10,6 +10,7 @@ from src.prompts.questions import (
 )
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
 from src.utils.parser import safe_parse_bloom_level
+from src.utils.sse import format_sse
 
 
 def generate_questions_stream_generator(
@@ -44,17 +45,8 @@ def generate_questions_stream_generator(
         )
 
     def send(event: str, data: dict):
-        if stream_trace:
-            data["trace_id"] = stream_trace.id
-        usage = get_token_usage()
-        if usage:
-            data["usage"] = {
-                "prompt_tokens": usage.get("input_tokens", 0),
-                "completion_tokens": usage.get("output_tokens", 0),
-                "total_cost": usage.get("total_cost", 0.0),
-                "model_name": usage.get("model_name"),
-            }
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        trace_id = stream_trace.id if stream_trace else None
+        return format_sse(event, data, trace_id=trace_id, include_usage=True)
 
     yield send("stage", {"stage": 1, "message": "Đang truy xuất Vector DB (RAG) và các chuẩn đầu ra CLO..."})
 
@@ -275,7 +267,6 @@ def generate_questions_stream_generator(
     if saved_questions:
         log_db = SessionLocal()
         try:
-            from src.database.models import OdinActionLog
             action_log = OdinActionLog(
                 course_id=course_id,
                 action_type="generate_questions",

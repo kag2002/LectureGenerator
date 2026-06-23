@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import CLO, Chapter, ChapterMaterial, Course, MaterialRevision, User
+from src.database.models import CLO, Chapter, ChapterMaterial, Course, MaterialRevision, OdinActionLog, User
 from src.database.session import get_db
 from src.database.vector_db import search_rag_isolated
 from src.models.schemas import (
@@ -29,9 +29,23 @@ from src.prompts.materials import (
 from src.services.image_service import process_markdown_images
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
+from src.services.lock_service import check_context_lock
 from src.utils.task_manager import task_manager
 
 router = APIRouter(prefix="/api/courses", tags=["materials"])
+
+
+# --- HELPER ---
+
+
+def _extract_layout(text: str) -> str:
+    """Detect slide layout type from content text."""
+    if not text:
+        return "standard_list"
+    for lay in ["card_grid", "two_column_comparison", "standard_list", "table", "visual_highlight"]:
+        if lay in text.lower():
+            return lay
+    return "standard_list"
 
 
 # --- API CHAPTER MATERIALS ---
@@ -68,7 +82,6 @@ def save_chapter_materials(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -110,7 +123,6 @@ def generate_chapter_materials(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     # 2. Truy vấn RAG cô lập từ ChromaDB
@@ -197,7 +209,6 @@ def generate_chapter_materials(
 
         # Thêm log hành động để hoàn tác
         try:
-            from src.database.models import OdinActionLog
             action_log = OdinActionLog(
                 course_id=chapter.course_id,
                 action_type="generate_materials",
@@ -236,7 +247,6 @@ async def generate_chapter_materials_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     chapter_title = chapter.title
@@ -352,7 +362,6 @@ async def generate_materials_from_storyboard_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     chapter_title = chapter.title
@@ -421,7 +430,6 @@ def delete_chapter_materials(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     # 2. Tìm bản ghi học liệu và xóa
@@ -446,7 +454,6 @@ def append_slide_for_clo(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     # 2. Xác thực CLO
@@ -537,7 +544,6 @@ def append_slide_for_clo_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     # 2. Xác thực CLO
@@ -589,7 +595,6 @@ def generate_slides_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     course_id = chapter.course_id
@@ -627,7 +632,6 @@ def generate_active_learning_stream(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -672,7 +676,6 @@ def revise_slides(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -731,14 +734,6 @@ def revise_slides(
         try:
             from src.services.memory_service import store_episodic_revision
 
-            def extract_layout(text: str) -> str:
-                if not text:
-                    return "standard_list"
-                for lay in ["card_grid", "two_column_comparison", "standard_list", "table", "visual_highlight"]:
-                    if lay in text.lower():
-                        return lay
-                return "standard_list"
-
             store_episodic_revision(
                 user_id=current_user.id,
                 course_id=chapter.course_id,
@@ -746,8 +741,8 @@ def revise_slides(
                 prompt=req.prompt,
                 content_before=new_rev.content_before,
                 content_after=new_rev.content_after,
-                layout_before=extract_layout(new_rev.content_before),
-                layout_after=extract_layout(new_rev.content_after),
+                layout_before=_extract_layout(new_rev.content_before),
+                layout_after=_extract_layout(new_rev.content_after),
             )
         except Exception as mem_err:
             print(f"[WARNING] Episodic memory store failed in revise_slides: {mem_err}")
@@ -842,7 +837,6 @@ def revise_active_learning(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -952,7 +946,6 @@ def reconcile_active_learning(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
@@ -1068,7 +1061,6 @@ def revert_chapter_revision(
             status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
         )
 
-    from src.api.autopilot import check_context_lock
     check_context_lock(db, chapter.course_id, f"chapter_{chapter_id}", current_user.email)
 
     revision = (

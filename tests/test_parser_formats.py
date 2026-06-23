@@ -7,6 +7,18 @@ import os
 import sys
 import tempfile
 
+# Ensure console encoding is UTF-8 to prevent crashes on Windows with Vietnamese/emoji logs
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # Ensure project root is on path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -151,7 +163,7 @@ def test_pdf_parsing():
             print("  ✅ PASS — Trích xuất text từ PDF thành công")
         else:
             print("  ❌ FAIL — Không trích xuất được text từ PDF")
-        return bool(result.strip())
+        assert bool(result.strip())
     finally:
         os.unlink(path)
 
@@ -179,7 +191,7 @@ def test_docx_parsing():
             print("  ⚠️ PARTIAL — Chỉ trích xuất paragraph, thiếu table")
         else:
             print("  ❌ FAIL — Không trích xuất được text từ DOCX")
-        return has_paragraph
+        assert has_paragraph
     finally:
         os.unlink(path)
 
@@ -201,7 +213,7 @@ def test_txt_utf8_parsing():
             print("  ✅ PASS — Đọc file TXT UTF-8 thành công")
         else:
             print("  ❌ FAIL — Không đọc được file TXT UTF-8")
-        return "CLO1" in result
+        assert "CLO1" in result
     finally:
         os.unlink(path)
 
@@ -223,7 +235,7 @@ def test_txt_latin1_parsing():
             print("  ✅ PASS — Fallback Latin-1 hoạt động")
         else:
             print("  ❌ FAIL — Fallback Latin-1 không hoạt động")
-        return "CLO1" in result
+        assert "CLO1" in result
     finally:
         os.unlink(path)
 
@@ -246,7 +258,7 @@ def test_doc_old_format():
         else:
             print("  ✅ CONFIRMED — .doc cũ KHÔNG được hỗ trợ (trả về empty)")
             print("  → python-docx chỉ hỗ trợ .docx, KHÔNG hỗ trợ .doc cũ (OLE format)")
-        return False  # Expected fail
+        assert not result.strip()
     finally:
         os.unlink(path)
 
@@ -278,7 +290,7 @@ def test_unsupported_extension():
         print("  ✅ PASS — Tất cả extension không hỗ trợ đều bị reject")
     else:
         print("  ❌ FAIL — Một số extension không hỗ trợ vẫn được parse")
-    return all_rejected
+    assert all_rejected
 
 
 def test_empty_file():
@@ -317,7 +329,7 @@ def test_nonexistent_file():
         print("  ✅ PASS — Trả về empty string cho file không tồn tại")
     else:
         print("  ❌ FAIL — Không handle file không tồn tại")
-    return not result
+    assert not result
 
 
 # ──────────────────────────────────────────────────────────────
@@ -331,16 +343,24 @@ if __name__ == "__main__":
     print("Supported formats theo code: .pdf, .docx, .doc, .txt")
     print()
 
-    results = {
-        "PDF (.pdf)": test_pdf_parsing(),
-        "DOCX (.docx)": test_docx_parsing(),
-        "TXT UTF-8 (.txt)": test_txt_utf8_parsing(),
-        "TXT Latin-1 (.txt)": test_txt_latin1_parsing(),
-        "DOC cũ (.doc)": test_doc_old_format(),
-        "Unsupported exts": test_unsupported_extension(),
+    tests = {
+        "PDF (.pdf)": test_pdf_parsing,
+        "DOCX (.docx)": test_docx_parsing,
+        "TXT UTF-8 (.txt)": test_txt_utf8_parsing,
+        "TXT Latin-1 (.txt)": test_txt_latin1_parsing,
+        "DOC cũ (.doc)": test_doc_old_format,
+        "Unsupported exts": test_unsupported_extension,
+        "Non-existent file": test_nonexistent_file,
     }
+    results = {}
+    for name, test_func in tests.items():
+        try:
+            test_func()
+            results[name] = True
+        except AssertionError:
+            results[name] = False
+
     test_empty_file()
-    results["Non-existent file"] = test_nonexistent_file()
 
     print(f"\n{'=' * 60}")
     print("📊 TỔNG KẾT")

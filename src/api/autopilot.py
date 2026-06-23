@@ -10,64 +10,17 @@ from sqlalchemy.orm import Session
 from src.auth import get_current_user
 from src.database.models import ChapterMaterial, Course, OdinActionLog, OdinLock, Question, User
 from src.database.session import get_db
+from src.services.lock_service import (
+    NotificationManager,
+    acquire_lock as service_acquire_lock,
+    check_context_lock,
+    get_active_locks_list,
+    notification_manager,
+    publish_autopilot_event,
+    release_lock as service_release_lock,
+)
 
 router = APIRouter(prefix="/api/autopilot", tags=["autopilot"])
-
-# --- IN-MEMORY SSE BROADCASTER ---
-class NotificationManager:
-    def __init__(self):
-        self._listeners: list[asyncio.Queue] = []
-
-    def subscribe(self) -> asyncio.Queue:
-        q = asyncio.Queue()
-        self._listeners.append(q)
-        return q
-
-    def unsubscribe(self, q: asyncio.Queue):
-        if q in self._listeners:
-            self._listeners.remove(q)
-
-    async def broadcast(self, event_data: dict):
-        for q in self._listeners:
-            await q.put(event_data)
-
-notification_manager = NotificationManager()
-
-async def publish_autopilot_event(course_id: int, event_data: dict):
-    event_data["course_id"] = course_id
-    await notification_manager.broadcast(event_data)
-
-
-def check_context_lock(db: Session, course_id: int, context_key: str, current_user_email: str):
-    """Kiểm tra xem context_key có đang bị khóa bởi người khác hoặc odin_autopilot không (hỗ trợ kiểm tra phân cấp/tiền tố)."""
-    now = datetime.now()
-    active_locks = db.query(OdinLock).filter(
-        OdinLock.course_id == course_id,
-        OdinLock.expires_at > now
-    ).all()
-
-    for lock in active_locks:
-        # Điều kiện khóa chặn context_key:
-        # 1. Khớp chính xác (exact match)
-        # 2. Khóa chi tiết trong DB chặn yêu cầu thô (ví dụ: DB có chapter_1_materials, yêu cầu chapter_1)
-        # 3. Khóa thô trong DB chặn yêu cầu chi tiết (ví dụ: DB có chapter_1, yêu cầu chapter_1_materials)
-        is_blocked = (
-            lock.context_key == context_key
-            or lock.context_key.startswith(context_key + "_")
-            or context_key.startswith(lock.context_key + "_")
-        )
-
-        if is_blocked:
-            if lock.locked_by == "odin_autopilot":
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Đối tượng này đang được chỉnh sửa tự động bởi Trợ lý Mascot (Autopilot). Giao diện tạm thời bị khóa."
-                )
-            elif lock.locked_by != current_user_email:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Đối tượng này đang được chỉnh sửa bởi {lock.locked_by}. Vui lòng thử lại sau."
-                )
 
 
 # --- SCHEMAS ---
@@ -116,14 +69,7 @@ def get_active_locks(
     if not course:
         raise HTTPException(status_code=404, detail="Môn học không tồn tại hoặc bạn không sở hữu.")
 
-    # Tự động dọn dẹp các khóa đã hết hạn
-    db.query(OdinLock).filter(
-        OdinLock.course_id == course_id,
-        OdinLock.expires_at < datetime.now()
-    ).delete()
-    db.commit()
-
-    locks = db.query(OdinLock).filter(OdinLock.course_id == course_id).all()
+    locks = get_active_locks_list(db, course_id)
     return [
         {
             "id": lock.id,
@@ -149,64 +95,13 @@ async def acquire_lock(
     if not course:
         raise HTTPException(status_code=404, detail="Môn học không tồn tại hoặc bạn không sở hữu.")
 
-    now = datetime.now()
-    # 1. Dọn dẹp khóa cũ của ngữ cảnh này nếu đã hết hạn
-    db.query(OdinLock).filter(
-        OdinLock.course_id == course_id,
-        OdinLock.context_key == req.context_key,
-        OdinLock.expires_at < now
-    ).delete()
-    db.commit()
-
-    # 2. Kiểm tra xem ngữ cảnh có đang bị khóa bởi ai khác không
-    existing_lock = db.query(OdinLock).filter(
-        OdinLock.course_id == course_id,
-        OdinLock.context_key == req.context_key
-    ).first()
-
-    expires_at = now + timedelta(seconds=req.duration_seconds)
-
-    if existing_lock:
-        # Nếu đã bị khóa bởi người khác -> Báo xung đột
-        if existing_lock.locked_by != req.locked_by:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Ngữ cảnh đang bị chỉnh sửa tự động bởi {existing_lock.locked_by}."
-            )
-        else:
-            # Cập nhật thời gian hết hạn (Heartbeat gia hạn khóa)
-            existing_lock.expires_at = expires_at
-            db.commit()
-            db.refresh(existing_lock)
-
-            await publish_autopilot_event(course_id, {
-                "event": "lock_renewed",
-                "context_key": req.context_key,
-                "locked_by": req.locked_by,
-                "expires_at": expires_at.isoformat()
-            })
-            return {"status": "renewed", "lock_id": existing_lock.id}
-
-    # 3. Tạo khóa mới
-    new_lock = OdinLock(
+    return await service_acquire_lock(
+        db=db,
         course_id=course_id,
         context_key=req.context_key,
         locked_by=req.locked_by,
-        expires_at=expires_at
+        duration_seconds=req.duration_seconds
     )
-    db.add(new_lock)
-    db.commit()
-    db.refresh(new_lock)
-
-    # Phát sự kiện SSE thông báo khóa mới
-    await publish_autopilot_event(course_id, {
-        "event": "lock_acquired",
-        "context_key": req.context_key,
-        "locked_by": req.locked_by,
-        "expires_at": expires_at.isoformat()
-    })
-
-    return {"status": "acquired", "lock_id": new_lock.id}
 
 
 @router.post("/courses/{course_id}/locks/release")
@@ -221,21 +116,8 @@ async def release_lock(
     if not course:
         raise HTTPException(status_code=404, detail="Môn học không tồn tại hoặc bạn không sở hữu.")
 
-    lock = db.query(OdinLock).filter(
-        OdinLock.course_id == course_id,
-        OdinLock.context_key == req.context_key
-    ).first()
-
-    if lock:
-        db.delete(lock)
-        db.commit()
-
-        # Phát sự kiện SSE giải phóng khóa
-        await publish_autopilot_event(course_id, {
-            "event": "lock_released",
-            "context_key": req.context_key,
-            "released_by": current_user.email
-        })
+    released = await service_release_lock(db, course_id, req.context_key, current_user.email)
+    if released:
         return {"status": "released", "context_key": req.context_key}
 
     return {"status": "not_found", "message": "Không tìm thấy khóa hoạt động cho ngữ cảnh này."}

@@ -6,6 +6,7 @@ from src.database.models import CLO, Course
 from src.database.session import SessionLocal
 from src.services.syllabus_analyser import analyse_syllabus
 from src.utils.parser import parse_document, safe_parse_bloom_level
+from src.utils.sse import format_sse
 
 
 def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Generator[str, None, None]:
@@ -14,8 +15,7 @@ def generate_syllabus_parse_events(temp_file_path: str, course_id: int) -> Gener
     extracted CLOs to the database, and yields SSE event strings.
     """
 
-    def send(event: str, data: dict) -> str:
-        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    send = format_sse
 
     new_db = SessionLocal()
     try:

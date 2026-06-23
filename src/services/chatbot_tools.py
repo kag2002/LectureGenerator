@@ -73,6 +73,35 @@ async def _resolve_chapter(chapter_id, course_id: int, user_id: int, db: Session
     return None
 
 
+async def _check_clos_exist(course_id: int, db: Session) -> tuple[list[CLO] | None, dict | None]:
+    clos = await asyncio.to_thread(lambda: db.query(CLO).filter(CLO.course_id == course_id).all())
+    if not clos:
+        return None, {
+            "status": "proposed",
+            "view": "course_config",
+            "action": "navigate_to_upload",
+            "params": {"course_id": course_id},
+            "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
+        }
+    return clos, None
+
+
+async def _check_chapters_exist(course_id: int, db: Session, message: str = None) -> tuple[list[Chapter] | None, dict | None]:
+    chapters = await asyncio.to_thread(
+        lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
+    )
+    if not chapters:
+        msg = message or "Môn học chưa có cấu trúc chương học (Outline). Em đề xuất chuyển sang trang Soạn bài giảng để sinh đề cương."
+        return None, {
+            "status": "proposed",
+            "view": "lesson_planner",
+            "action": "generate_outline",
+            "params": {"course_id": course_id},
+            "message": msg,
+        }
+    return chapters, None
+
+
 async def execute_chatbot_tool(
     name: str, args: dict, course_id: int, user_id: int, db: Session, chat_message_id: int | None = None
 ) -> dict:
@@ -193,29 +222,12 @@ async def execute_chatbot_tool(
         }
 
     elif name == "generate_chapter_storyboard_action":
-        # Check if CLOs exist
-        clos = await asyncio.to_thread(lambda: db.query(CLO).filter(CLO.course_id == course_id).all())
-        if not clos:
-            return {
-                "status": "proposed",
-                "view": "course_config",
-                "action": "navigate_to_upload",
-                "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
-            }
-
-        # Check if Chapters outline exists
-        chapters = await asyncio.to_thread(
-            lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
-        )
-        if not chapters:
-            return {
-                "status": "proposed",
-                "view": "lesson_planner",
-                "action": "generate_outline",
-                "params": {"course_id": course_id},
-                "message": "Môn học chưa có cấu trúc chương học (Outline). Em đề xuất chuyển sang trang Soạn bài giảng để sinh đề cương.",
-            }
+        clos, err = await _check_clos_exist(course_id, db)
+        if err:
+            return err
+        chapters, err = await _check_chapters_exist(course_id, db)
+        if err:
+            return err
 
         chapter_id = args.get("chapter_id")
         chapter = await _resolve_chapter(chapter_id, course_id, user_id, db)
@@ -242,29 +254,16 @@ async def execute_chatbot_tool(
         }
 
     elif name == "generate_chapter_materials_action":
-        # Check if CLOs exist
-        clos = await asyncio.to_thread(lambda: db.query(CLO).filter(CLO.course_id == course_id).all())
-        if not clos:
-            return {
-                "status": "proposed",
-                "view": "course_config",
-                "action": "navigate_to_upload",
-                "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
-            }
-
-        # Check if Chapters outline exists
-        chapters = await asyncio.to_thread(
-            lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
+        clos, err = await _check_clos_exist(course_id, db)
+        if err:
+            return err
+        chapters, err = await _check_chapters_exist(
+            course_id,
+            db,
+            message="Môn học đã có CLOs nhưng chưa có cấu trúc chương học (Outline). Em đề xuất chuyển sang trang Soạn bài giảng để sinh đề cương."
         )
-        if not chapters:
-            return {
-                "status": "proposed",
-                "view": "lesson_planner",
-                "action": "generate_outline",
-                "params": {"course_id": course_id},
-                "message": "Môn học đã có CLOs nhưng chưa có cấu trúc chương học (Outline). Em đề xuất chuyển sang trang Soạn bài giảng để sinh đề cương.",
-            }
+        if err:
+            return err
 
         chapter_id = args.get("chapter_id")
         chapter = await _resolve_chapter(chapter_id, course_id, user_id, db)
@@ -295,29 +294,12 @@ async def execute_chatbot_tool(
         }
 
     elif name == "generate_chapter_questions_action":
-        # Check if CLOs exist
-        clos = await asyncio.to_thread(lambda: db.query(CLO).filter(CLO.course_id == course_id).all())
-        if not clos:
-            return {
-                "status": "proposed",
-                "view": "course_config",
-                "action": "navigate_to_upload",
-                "params": {"course_id": course_id},
-                "message": "Môn học chưa cấu hình CLO. Em đề xuất chuyển sang trang Bóc tách Syllabus (Cấu hình môn học) để Thầy/Cô nạp Syllabus.",
-            }
-
-        # Check if Chapters outline exists
-        chapters = await asyncio.to_thread(
-            lambda: db.query(Chapter).filter(Chapter.course_id == course_id, Chapter.is_active).all()
-        )
-        if not chapters:
-            return {
-                "status": "proposed",
-                "view": "lesson_planner",
-                "action": "generate_outline",
-                "params": {"course_id": course_id},
-                "message": "Môn học chưa có cấu trúc chương học (Outline). Em đề xuất chuyển sang trang Soạn bài giảng để sinh đề cương.",
-            }
+        clos, err = await _check_clos_exist(course_id, db)
+        if err:
+            return err
+        chapters, err = await _check_chapters_exist(course_id, db)
+        if err:
+            return err
 
         chapter_id = args.get("chapter_id")
         clo_id = args.get("clo_id")

@@ -11,6 +11,11 @@ from src.database.models import Chapter, ChapterMaterial, ChatEvalRun, ChatMessa
 from src.database.session import SessionLocal, get_db
 from src.services.chatbot_agent import run_chatbot_agent_loop
 from src.services.chatbot_eval import run_chatbot_evaluation
+from src.services.lock_service import (
+    LockHeartbeat,
+    acquire_lock as lock_service_acquire_lock,
+    release_lock as lock_service_release_lock,
+)
 from src.utils.task_manager import task_manager
 
 router = APIRouter(prefix="/api/chatbot", tags=["chatbot"])
@@ -312,8 +317,8 @@ def chat_stream(req: ChatRequest, current_user: User = Depends(get_current_user)
     user_message_id = db_user.id
 
     async def event_stream():
-        def send(event: str, data: dict):
-            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        from src.utils.sse import format_sse
+        send = format_sse
 
         current_task = asyncio.current_task()
         if current_task:
@@ -724,116 +729,13 @@ def direct_action_stream(
     user_id = current_user.id
 
     async def event_stream():
-        def send(event: str, data: dict) -> str:
-            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        from src.utils.sse import format_sse
+        send = format_sse
 
-        from datetime import datetime, timedelta
+        from datetime import datetime
+        from src.database.models import CLO, Chapter, ChapterMaterial, OdinActionLog, Question
 
-        from src.api.autopilot import publish_autopilot_event
-        from src.database.models import CLO, Chapter, ChapterMaterial, OdinActionLog, OdinLock, Question
-
-        async def acquire_lock(context_key: str, seconds: int = 30) -> bool:
-            now = datetime.now()
-            expires_at = now + timedelta(seconds=seconds)
-
-            db.query(OdinLock).filter(
-                OdinLock.course_id == course_id,
-                OdinLock.context_key == context_key,
-                OdinLock.expires_at < now
-            ).delete()
-            db.commit()
-
-            existing = db.query(OdinLock).filter(
-                OdinLock.course_id == course_id,
-                OdinLock.context_key == context_key
-            ).first()
-
-            if existing:
-                return False
-
-            new_lock = OdinLock(
-                course_id=course_id,
-                context_key=context_key,
-                locked_by="odin_autopilot",
-                expires_at=expires_at
-            )
-            db.add(new_lock)
-            db.commit()
-
-            await publish_autopilot_event(course_id, {
-                "event": "lock_acquired",
-                "context_key": context_key,
-                "locked_by": "odin_autopilot",
-                "expires_at": expires_at.isoformat()
-            })
-            return True
-
-        async def renew_lock_safe(context_key: str, seconds: int = 30):
-            db_session = SessionLocal()
-            try:
-                lock = db_session.query(OdinLock).filter(
-                    OdinLock.course_id == course_id,
-                    OdinLock.context_key == context_key
-                ).first()
-                if lock:
-                    expires_at = datetime.now() + timedelta(seconds=seconds)
-                    lock.expires_at = expires_at
-                    db_session.commit()
-                    await publish_autopilot_event(course_id, {
-                        "event": "lock_renewed",
-                        "context_key": context_key,
-                        "locked_by": "odin_autopilot",
-                        "expires_at": expires_at.isoformat()
-                    })
-            except Exception:
-                db_session.rollback()
-            finally:
-                db_session.close()
-
-        async def release_lock(context_key: str):
-            try:
-                db.query(OdinLock).filter(
-                    OdinLock.course_id == course_id,
-                    OdinLock.context_key == context_key
-                ).delete()
-                db.commit()
-            except Exception:
-                db.rollback()
-
-            try:
-                await publish_autopilot_event(course_id, {
-                    "event": "lock_released",
-                    "context_key": context_key,
-                    "released_by": "odin_autopilot"
-                })
-            except Exception:
-                pass
-
-        heartbeat_task = None
-
-        async def start_heartbeat(context_key: str, interval: int = 10, duration: int = 30):
-            nonlocal heartbeat_task
-            async def loop():
-                try:
-                    while True:
-                        await asyncio.sleep(interval)
-                        await renew_lock_safe(context_key, duration)
-                except asyncio.CancelledError:
-                    pass
-                except Exception:
-                    pass
-            heartbeat_task = asyncio.create_task(loop())
-
-        async def stop_heartbeat():
-            nonlocal heartbeat_task
-            if heartbeat_task:
-                heartbeat_task.cancel()
-                try:
-                    await heartbeat_task
-                except Exception:
-                    pass
-                heartbeat_task = None
-
+        heartbeat = None
         active_lock_key = None
         done_successfully = False
         run_start_time = datetime.now()
@@ -854,10 +756,15 @@ def direct_action_stream(
                     return
 
                 active_lock_key = f"chapter_{chapter_id}_storyboard"
-                if not await acquire_lock(active_lock_key, 30):
-                    yield send("error", {"message": "Không thể bắt đầu. Phân vùng này đang bị khóa."})
-                    return
-                await start_heartbeat(active_lock_key)
+                await lock_service_acquire_lock(
+                    db=db,
+                    course_id=course_id,
+                    context_key=active_lock_key,
+                    locked_by="odin_autopilot",
+                    duration_seconds=30
+                )
+                heartbeat = LockHeartbeat(course_id, active_lock_key, "odin_autopilot")
+                await heartbeat.start()
 
                 yield send("stage", {"message": "Đang soạn storyboard slide..."})
 
@@ -900,10 +807,15 @@ def direct_action_stream(
                     return
 
                 active_lock_key = f"chapter_{chapter_id}_materials"
-                if not await acquire_lock(active_lock_key, 30):
-                    yield send("error", {"message": "Không thể bắt đầu. Phân vùng này đang bị khóa."})
-                    return
-                await start_heartbeat(active_lock_key)
+                await lock_service_acquire_lock(
+                    db=db,
+                    course_id=course_id,
+                    context_key=active_lock_key,
+                    locked_by="odin_autopilot",
+                    duration_seconds=30
+                )
+                heartbeat = LockHeartbeat(course_id, active_lock_key, "odin_autopilot")
+                await heartbeat.start()
 
                 yield send("stage", {"message": "Đang khởi tạo trình sinh tài liệu..."})
 
@@ -957,10 +869,15 @@ def direct_action_stream(
                     return
 
                 active_lock_key = f"chapter_{chapter_id}_questions"
-                if not await acquire_lock(active_lock_key, 30):
-                    yield send("error", {"message": "Không thể bắt đầu. Phân vùng này đang bị khóa."})
-                    return
-                await start_heartbeat(active_lock_key)
+                await lock_service_acquire_lock(
+                    db=db,
+                    course_id=course_id,
+                    context_key=active_lock_key,
+                    locked_by="odin_autopilot",
+                    duration_seconds=30
+                )
+                heartbeat = LockHeartbeat(course_id, active_lock_key, "odin_autopilot")
+                await heartbeat.start()
 
                 clo_ids = params.get("clo_ids", [])
                 bloom_level = params.get("bloom_level") or 3
@@ -1000,10 +917,15 @@ def direct_action_stream(
                     return
 
                 active_lock_key = f"chapter_{chapter_id}"
-                if not await acquire_lock(active_lock_key, 30):
-                    yield send("error", {"message": "Không thể kích hoạt Autopilot. Chương học đang bị khóa."})
-                    return
-                await start_heartbeat(active_lock_key)
+                await lock_service_acquire_lock(
+                    db=db,
+                    course_id=course_id,
+                    context_key=active_lock_key,
+                    locked_by="odin_autopilot",
+                    duration_seconds=30
+                )
+                heartbeat = LockHeartbeat(course_id, active_lock_key, "odin_autopilot")
+                await heartbeat.start()
 
                 chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
                 if not chapter:
@@ -1131,14 +1053,17 @@ def direct_action_stream(
             else:
                 yield send("error", {"message": f"Loại action không được hỗ trợ: {action_type}"})
 
+        except HTTPException as he:
+            yield send("error", {"message": he.detail})
         except Exception as e:
             yield send("error", {"message": f"Lỗi khi thực thi: {str(e)}"})
         finally:
             if cleanup_chapter_id:
                 task_manager.unregister_task(f"direct_action_{course_id}_{cleanup_chapter_id}")
-            await stop_heartbeat()
+            if heartbeat:
+                await heartbeat.stop()
             if active_lock_key:
-                await release_lock(active_lock_key)
+                await lock_service_release_lock(db, course_id, active_lock_key, "odin_autopilot")
 
             if not done_successfully:
                 try:
