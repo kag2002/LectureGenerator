@@ -26,49 +26,51 @@ import '@xyflow/react/dist/style.css';
 // --- Read-Only Custom Modern Node Design for Preview ---
 const ReadOnlyCustomNode = ({ data }: any) => {
   const type = data.type || 'process';
+  const theme = data.theme || {
+    bg: '#FAF6EE',
+    textColor: '#2D3748',
+    titleColor: '#1A365D',
+    cardBg: 'rgba(255, 255, 255, 0.9)',
+    accents: ["#8C6239", "#1A365D", "#9A3412", "#D97706"]
+  };
   
-  // Theme styling configurations based on node type
-  let borderStyle = '1px solid rgba(255,255,255,0.15)';
-  let bgStyle = 'rgba(15, 23, 42, 0.9)'; // Slate 900 Glassmorphic
-  let accentColor = '#8C6239'; // Default gold accent
+  // Determine accent color for this node type
+  let accentColor = theme.accents[0] || '#8C6239'; // Default gold accent
   let IconComponent = Settings;
   let labelType = 'Tiến trình';
 
   if (type === 'input') {
     accentColor = '#10B981'; // Green
-    bgStyle = 'rgba(16, 185, 129, 0.08)';
-    borderStyle = `1px solid ${accentColor}`;
     IconComponent = Play;
     labelType = 'Đầu vào';
   } else if (type === 'decision') {
     accentColor = '#FF9100'; // Amber
-    bgStyle = 'rgba(255, 145, 0, 0.08)';
-    borderStyle = `1px solid ${accentColor}`;
     IconComponent = GitFork;
     labelType = 'Quyết định';
   } else if (type === 'output') {
     accentColor = '#3b82f6'; // Blue
-    bgStyle = 'rgba(59, 130, 246, 0.08)';
-    borderStyle = `1px solid ${accentColor}`;
     IconComponent = CheckCircle2;
     labelType = 'Kết quả';
   } else {
     IconComponent = Layers;
   }
 
-  // Base layout styles
+  // Base layout styles aligning with the theme card styles
   const baseNodeStyle: React.CSSProperties = {
     padding: '12px 18px',
-    background: bgStyle,
-    color: '#f8fafc',
+    background: theme.cardBg,
+    color: theme.textColor,
     fontSize: '13px',
     fontWeight: 'bold',
     minWidth: '160px',
     maxWidth: '220px',
     textAlign: 'center',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
     position: 'relative',
-    backdropFilter: 'blur(12px)',
+    border: '1px solid rgba(128, 128, 128, 0.15)',
+    borderRadius: (type === 'input' || type === 'output') ? '24px' : '8px',
+    borderLeft: `5px solid ${accentColor}`,
+    backdropFilter: 'blur(8px)',
   };
 
   // Render Decision Node as a beautiful diamond shape
@@ -81,7 +83,7 @@ const ReadOnlyCustomNode = ({ data }: any) => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#f8fafc',
+        color: theme.textColor,
         fontSize: '12px',
         fontWeight: 'bold',
       }}>
@@ -92,11 +94,11 @@ const ReadOnlyCustomNode = ({ data }: any) => {
           left: 0,
           right: 0,
           bottom: 0,
-          background: bgStyle,
-          border: borderStyle,
+          background: theme.cardBg,
+          border: `2px solid ${accentColor}`,
           borderRadius: '8px',
           transform: 'rotate(45deg)',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
           zIndex: 1,
         }} />
         
@@ -119,7 +121,7 @@ const ReadOnlyCustomNode = ({ data }: any) => {
           justifyContent: 'center',
           gap: '2px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px', fontWeight: 'bold' }}>
             <IconComponent size={10} />
             <span>{labelType}</span>
           </div>
@@ -132,23 +134,15 @@ const ReadOnlyCustomNode = ({ data }: any) => {
     );
   }
 
-  // Oval shape for Input/Output Nodes, Rounded Rectangle for Process Node
-  const nodeStyle: React.CSSProperties = {
-    ...baseNodeStyle,
-    borderRadius: (type === 'input' || type === 'output') ? '24px' : '8px',
-    border: borderStyle,
-    borderLeft: `5px solid ${accentColor}`,
-  };
-
   return (
-    <div style={nodeStyle}>
+    <div style={baseNodeStyle}>
       <Handle type="target" position={Position.Top} id="t-top" style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="target" position={Position.Left} id="t-left" style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="source" position={Position.Bottom} id="s-bottom" style={{ opacity: 0, pointerEvents: 'none' }} />
       <Handle type="source" position={Position.Right} id="s-right" style={{ opacity: 0, pointerEvents: 'none' }} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px', fontWeight: 'bold' }}>
           <IconComponent size={10} />
           <span>{labelType}</span>
         </div>
@@ -172,7 +166,8 @@ const ReadOnlyEditableEdge = ({
   targetPosition,
   style = {},
   markerEnd,
-  label
+  label,
+  data
 }: EdgeProps) => {
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
@@ -182,6 +177,11 @@ const ReadOnlyEditableEdge = ({
     targetY,
     targetPosition,
   });
+
+  const theme = (data as any)?.theme;
+  const labelBg = theme ? theme.cardBg : '#0B132B';
+  const labelColor = theme ? theme.textColor : '#f8fafc';
+  const labelBorder = theme ? '1px solid rgba(128, 128, 128, 0.15)' : '1px solid rgba(255, 255, 255, 0.15)';
 
   return (
     <>
@@ -206,15 +206,15 @@ const ReadOnlyEditableEdge = ({
           >
             <div
               style={{
-                background: '#0B132B',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
+                background: labelBg,
+                border: labelBorder,
                 borderRadius: '4px',
                 padding: '2px 8px',
-                color: '#f8fafc',
+                color: labelColor,
                 fontSize: '11px',
                 fontWeight: 'bold',
                 userSelect: 'none',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
               }}
             >
               <span>{label}</span>
@@ -232,9 +232,10 @@ interface ReadOnlyFlowCanvasProps {
   edges: any[];
   nodeTypes: any;
   edgeTypes: any;
+  theme: any;
 }
 
-const ReadOnlyFlowCanvas = ({ nodes, edges, nodeTypes, edgeTypes }: ReadOnlyFlowCanvasProps) => {
+const ReadOnlyFlowCanvas = ({ nodes, edges, nodeTypes, edgeTypes, theme }: ReadOnlyFlowCanvasProps) => {
   const { fitView } = useReactFlow();
 
   useEffect(() => {
@@ -244,6 +245,8 @@ const ReadOnlyFlowCanvas = ({ nodes, edges, nodeTypes, edgeTypes }: ReadOnlyFlow
     }, 150);
     return () => clearTimeout(timer);
   }, [nodes, edges, fitView]);
+
+  const gridColor = theme?.bg === '#FAF6EE' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
 
   return (
     <ReactFlow
@@ -260,7 +263,7 @@ const ReadOnlyFlowCanvas = ({ nodes, edges, nodeTypes, edgeTypes }: ReadOnlyFlow
       zoomOnDoubleClick={false}
       fitView
     >
-      <Background color="rgba(255,255,255,0.05)" gap={12} size={1} />
+      <Background color={gridColor} gap={12} size={1} />
     </ReactFlow>
   );
 };
@@ -615,6 +618,25 @@ export default function SlideProposalPreview({
       }
     } else if (s.mermaidContent) {
       const customLayout = getCustomLayoutForSlide(idx);
+      const nodesWithTheme = customLayout
+        ? customLayout.nodes.map((node: any) => ({
+            ...node,
+            data: {
+              ...node.data,
+              theme: theme
+            }
+          }))
+        : [];
+      const edgesWithTheme = customLayout
+        ? customLayout.edges.map((edge: any) => ({
+            ...edge,
+            data: {
+              ...edge.data,
+              theme: theme
+            }
+          }))
+        : [];
+
       if (textItems.length > 0) {
         bodySection = isThumbnail ? (
           <div className="slide-split-svg-text thumbnail-view">
@@ -651,10 +673,11 @@ export default function SlideProposalPreview({
                 <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                   <ReactFlowProvider>
                     <ReadOnlyFlowCanvas
-                      nodes={customLayout.nodes}
-                      edges={customLayout.edges}
+                      nodes={nodesWithTheme}
+                      edges={edgesWithTheme}
                       nodeTypes={nodeTypes}
                       edgeTypes={edgeTypes}
+                      theme={theme}
                     />
                   </ReactFlowProvider>
                   <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: 'var(--vinuni-gold)', zIndex: 10, backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -678,10 +701,11 @@ export default function SlideProposalPreview({
               <div style={{ width: '100%', height: '100%', position: 'relative' }}>
                 <ReactFlowProvider>
                   <ReadOnlyFlowCanvas
-                    nodes={customLayout.nodes}
-                    edges={customLayout.edges}
+                    nodes={nodesWithTheme}
+                    edges={edgesWithTheme}
                     nodeTypes={nodeTypes}
                     edgeTypes={edgeTypes}
+                    theme={theme}
                   />
                 </ReactFlowProvider>
                 <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: 'var(--vinuni-gold)', zIndex: 10, backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' }}>
