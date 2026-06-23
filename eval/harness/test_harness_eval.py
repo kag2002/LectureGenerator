@@ -18,7 +18,7 @@ def test_evaluation_harness():
 
     assert DATASET_FILE.exists(), f"Dataset file not found at {DATASET_FILE}"
 
-    with open(DATASET_FILE, "r", encoding="utf-8") as f:
+    with open(DATASET_FILE, encoding="utf-8") as f:
         cases = json.load(f)
 
     results = []
@@ -86,7 +86,7 @@ def update_report(accuracy: float, avg_latency: float):
         print(f"[WARNING] Report file not found at {REPORT_FILE}")
         return
 
-    with open(REPORT_FILE, "r", encoding="utf-8") as f:
+    with open(REPORT_FILE, encoding="utf-8") as f:
         content = f.read()
 
     accuracy_status = "✅" if accuracy >= 80 else "⏳"

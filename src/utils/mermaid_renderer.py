@@ -1,6 +1,6 @@
 import base64
 import logging
-import urllib.parse
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ def render_via_mermaid_ink(mermaid_code: str) -> str:
         code_bytes = mermaid_code.encode("utf-8")
         b64_encoded = base64.b64encode(code_bytes).decode("utf-8")
         url = f"https://mermaid.ink/svg/{b64_encoded}"
-        
+
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             logger.info("Successfully rendered Mermaid diagram via mermaid.ink.")
@@ -52,7 +52,7 @@ def render_via_playwright(mermaid_code: str, theme: str = "default") -> str:
         browser = p.chromium.launch(headless=True)
         try:
             page = browser.new_page()
-            
+
             # Simple wrapper page loading Mermaid from CDN
             html_content = f"""<!DOCTYPE html>
 <html>
@@ -79,8 +79,8 @@ def render_via_playwright(mermaid_code: str, theme: str = "default") -> str:
 {mermaid_code}
   </div>
   <script>
-    mermaid.initialize({{ 
-      startOnLoad: true, 
+    mermaid.initialize({{
+      startOnLoad: true,
       theme: '{mermaid_theme}',
       securityLevel: 'loose'
     }});
@@ -88,10 +88,10 @@ def render_via_playwright(mermaid_code: str, theme: str = "default") -> str:
 </body>
 </html>"""
             page.set_content(html_content)
-            
+
             # Wait for Mermaid to compile and render the SVG element
             page.wait_for_selector("div.mermaid svg", timeout=8000)
-            
+
             # Extract outer HTML of SVG
             svg_content = page.eval_on_selector("div.mermaid svg", "el => el.outerHTML")
             return svg_content

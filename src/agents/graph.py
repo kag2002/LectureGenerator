@@ -5,10 +5,10 @@ from src.agents.nodes.guardrail_input import guardrail_input_node
 from src.agents.nodes.guardrail_output import guardrail_output_node
 from src.agents.nodes.llm_router import llm_router_node
 from src.agents.nodes.summarize_history import summarize_history_node
-from src.agents.nodes.helpers import get_candidate_models
 from src.agents.state import AgentState
 
 # Expose constants and functions for backward compatibility
+from src.agents.nodes.helpers import get_candidate_models
 
 # --- ROUTING CONDITION ---
 

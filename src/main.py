@@ -20,18 +20,17 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 
 import asyncio
-import json
 import re
 
 from fastapi import FastAPI, Request, status
 from fastapi import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-from sqlalchemy import inspect, text
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api import (
@@ -50,17 +49,15 @@ from src.api import (
     trash,
 )
 from src.config import get_settings
-from src.database.session import Base, engine, run_db_migrations
+from src.core.logging import setup_production_logging
+from src.core.monitoring import system_alert_monitoring_loop, system_snapshot_loop
+from src.database.session import run_db_migrations
 from src.services import web_search_agent
 
 # Initialize database with migrations
 run_db_migrations()
 
 logger = logging.getLogger(__name__)
-
-from src.core.logging import setup_production_logging
-from src.core.monitoring import system_alert_monitoring_loop, system_snapshot_loop
-
 
 
 @asynccontextmanager
@@ -227,7 +224,7 @@ async def log_traffic_middleware(request: Request, call_next):
     return response
 
 # Register all Routers
-from fastapi.staticfiles import StaticFiles
+
 # Ensure static directory exists
 os.makedirs("static/uploads/ai_images", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")

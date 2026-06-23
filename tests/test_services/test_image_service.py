@@ -1,5 +1,5 @@
-import pytest
 from src.services.image_service import fetch_stock_image_url, process_markdown_images
+
 
 def test_image_pipeline_fallback():
     # Calling the stock image search pipeline

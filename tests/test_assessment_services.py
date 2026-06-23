@@ -1,7 +1,7 @@
-import pytest
 import io
 import json
-from src.database.models import QuizSession, QuizAggregate, Question, CLO
+
+import pytest
 
 
 @pytest.mark.asyncio
@@ -31,7 +31,7 @@ async def test_get_quiz_sessions(client, auth_headers, test_course):
         json={"session_name": "Session A", "chapter_id": None},
         headers=auth_headers
     )
-    
+
     resp = await client.get(f"/api/courses/{test_course.id}/quiz-sessions", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -106,7 +106,7 @@ async def test_import_kahoot_results_csv(client, auth_headers, test_course):
     """Test importing Kahoot results via CSV upload and fuzzy-matching questions."""
     # 1. Create a question
     q_text = "Which BST traversal returns values in sorted order?"
-    question_resp = await client.post(
+    await client.post(
         f"/api/courses/{test_course.id}/questions",
         json={
             "question_text": q_text,
@@ -118,16 +118,16 @@ async def test_import_kahoot_results_csv(client, auth_headers, test_course):
         },
         headers=auth_headers
     )
-    
+
     # 2. Mock a CSV report containing this question (Fuzzy matched)
     # columns: Question text (Fuzzy), Correct count, Incorrect count
     csv_data = (
         "Question,Correct Answers,Incorrect Answers,Players\n"
-        f"\"Which BST traversal returns in sorted order?\",15,5,20\n"
+        "\"Which BST traversal returns in sorted order?\",15,5,20\n"
     )
-    
+
     file_payload = {"file": ("kahoot_report.csv", io.BytesIO(csv_data.encode("utf-8")), "text/csv")}
-    
+
     import_resp = await client.post(
         f"/api/courses/{test_course.id}/quiz-sessions/import-kahoot",
         files=file_payload,
@@ -195,7 +195,7 @@ async def test_get_assessment_analytics(client, auth_headers, test_course):
     data = resp.json()
     assert "clos" in data
     assert "improvements" in data
-    
+
     # Verify CLO score: 1 correct out of 2 total = 50% CAS
     target_clo = next(c for c in data["clos"] if c["clo_id"] == clo_id)
     assert target_clo["cas_score"] == 50.0

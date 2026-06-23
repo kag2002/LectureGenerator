@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import urllib.parse
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -127,10 +128,10 @@ def generate_ai_illustration(keyword: str, theme: str = "default") -> str:
     prompt = f"isometric vector academic illustration of {keyword}, {theme} color scheme, clean educational graphic, professional school style"
     prompt_hash = hashlib.md5(prompt.encode("utf-8")).hexdigest()
     filename = f"{prompt_hash}.png"
-    
+
     relative_path = f"/static/uploads/ai_images/{filename}"
     filepath = os.path.join("static", "uploads", "ai_images", filename)
-    
+
     if os.path.exists(filepath):
         logger.info(f"Using cached AI image for prompt: '{prompt}'")
         return relative_path
@@ -138,7 +139,7 @@ def generate_ai_illustration(keyword: str, theme: str = "default") -> str:
     try:
         from openai import OpenAI
         client = OpenAI() # automatically reads OPENAI_API_KEY
-        
+
         logger.info(f"Generating AI image via DALL-E 3 for prompt: '{prompt}'")
         response = client.images.generate(
             model="dall-e-3",
@@ -148,7 +149,7 @@ def generate_ai_illustration(keyword: str, theme: str = "default") -> str:
             n=1,
         )
         image_url = response.data[0].url
-        
+
         # Download generated image content
         img_response = requests.get(image_url, timeout=15)
         if img_response.status_code == 200:

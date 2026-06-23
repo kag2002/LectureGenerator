@@ -1,6 +1,8 @@
-import logging
 import json
+import logging
+
 from src.config import get_settings
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):

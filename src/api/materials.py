@@ -2,6 +2,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
@@ -1109,7 +1110,8 @@ def revert_chapter_revision(
     }
 
 
-from pydantic import BaseModel
+
+
 
 class GenerateAIImageRequest(BaseModel):
     keyword: str
@@ -1130,7 +1132,7 @@ def generate_ai_image(
         )
 
     from src.services.image_service import generate_ai_illustration
-    
+
     try:
         image_url = generate_ai_illustration(keyword=req.keyword, theme=req.theme)
         return {"image_url": image_url}

@@ -9,8 +9,6 @@ import os
 import tempfile
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.services.syllabus_service import generate_syllabus_parse_events
 
 

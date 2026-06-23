@@ -41,7 +41,7 @@ def parse_kahoot_file(contents: bytes, filename: str, db_questions: list) -> lis
                 if not text_cells:
                     continue
                 numbers = [cell for cell in row if isinstance(cell, (int, float))]
-                
+
                 best_match = None
                 best_ratio = 0.0
                 for text_val in text_cells:
@@ -103,7 +103,7 @@ def parse_kahoot_file(contents: bytes, filename: str, db_questions: list) -> lis
                                 nums.append(int(clean_num))
                         except Exception:
                             pass
-                    
+
                     correct_val = nums[0] if len(nums) > 0 else 0
                     incorrect_val = nums[1] if len(nums) > 1 else 0
 
@@ -132,9 +132,9 @@ def distribute_incorrect_choices(options_json: str, correct_answer: str, correct
             if opt.strip().lower() == correct_answer.strip().lower():
                 correct_letter = chr(65 + idx)
                 break
-        
+
         dist[correct_letter] = correct_count
-        
+
         wrong_letters = [chr(65 + i) for i in range(len(options)) if chr(65 + i) != correct_letter]
         if wrong_letters and incorrect_count > 0:
             each_wrong = incorrect_count // len(wrong_letters)
@@ -144,7 +144,7 @@ def distribute_incorrect_choices(options_json: str, correct_answer: str, correct
             dist[wrong_letters[0]] += rem
     except Exception as e:
         logger.error(f"Error distributing choices: {e}")
-        
+
     return dist
 
 def generate_kahoot_export(questions: list) -> tuple[bytes, str, str]:
@@ -153,7 +153,7 @@ def generate_kahoot_export(questions: list) -> tuple[bytes, str, str]:
     Trả về (file_data, file_extension, media_type).
     """
     import io
-    
+
     headers = [
         "Question",
         "Answer 1",

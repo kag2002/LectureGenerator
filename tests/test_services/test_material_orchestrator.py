@@ -6,7 +6,7 @@ get_slide_body_length) and the orchestrator class methods with mocked LLM calls.
 """
 
 import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +17,6 @@ from src.services.material_orchestrator import (
     deduplicate_rag_hits,
     get_slide_body_length,
 )
-
 
 # ---------------------------------------------------------------------------
 # cosine_similarity
@@ -150,7 +149,16 @@ class TestDeduplicateRagHits:
 
 class TestBudgets:
     def test_budgets_keys(self):
-        expected_keys = {"visual_highlight", "card_grid", "two_column_comparison", "standard_list", "table"}
+        expected_keys = {
+            "visual_highlight",
+            "card_grid",
+            "two_column_comparison",
+            "standard_list",
+            "table",
+            "hero_image_split",
+            "pros_cons_comparison",
+            "metric_callout",
+        }
         assert set(BUDGETS.keys()) == expected_keys
 
     def test_all_budgets_positive(self):

@@ -1,4 +1,7 @@
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def escape_xml(s: str) -> str:
@@ -161,7 +164,7 @@ def render_slide_to_svg(s: dict, theme: str, idx: int) -> str:
                 break
 
         # Embed Mermaid SVG nested on the right side
-        svg_lines.append(f'  <svg x="640" y="160" width="560" height="430" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">')
+        svg_lines.append('  <svg x="640" y="160" width="560" height="430" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">')
         svg_lines.append(rendered_mermaid_svg)
         svg_lines.append('  </svg>')
 
@@ -202,7 +205,7 @@ def render_slide_to_svg(s: dict, theme: str, idx: int) -> str:
 
         # Draw image on left
         svg_lines.append(
-            f'  <rect x="80" y="160" width="520" height="420" rx="8" fill="rgba(255,255,255,0.05)" />'
+            '  <rect x="80" y="160" width="520" height="420" rx="8" fill="rgba(255,255,255,0.05)" />'
         )
         svg_lines.append(
             f'  <image href="{img_url}" x="80" y="160" width="520" height="420" preserveAspectRatio="xMidYMid slice" clip-path="inset(0% round 8px)" />'

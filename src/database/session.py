@@ -41,13 +41,15 @@ Base = declarative_base()
 def run_db_migrations():
     """Chạy Alembic migrations tự động khi startup để giữ schema đồng bộ."""
     import logging
-    from alembic import command
+
     from alembic.config import Config
-    
+
+    from alembic import command
+
     logger = logging.getLogger(__name__)
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     ini_path = os.path.join(base_dir, "alembic.ini")
-    
+
     if os.path.exists(ini_path):
         logger.info("[MIGRATION] Running Alembic migrations upgrade head...")
         alembic_cfg = Config(ini_path)

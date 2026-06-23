@@ -1,17 +1,27 @@
 import json
 import logging
 from datetime import datetime
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, QuizAggregate, QuizSession, User, AIGenerationTrace
+from src.database.models import (
+    CLO,
+    AIGenerationTrace,
+    Chapter,
+    Course,
+    Question,
+    QuizAggregate,
+    QuizSession,
+    User,
+)
 from src.database.session import get_db
 from src.models.schemas import (
+    AssessmentAnalyticsResponse,
     CLOAchievement,
     ImprovementRecord,
-    AssessmentAnalyticsResponse,
     QuizResponseSubmit,
     QuizSessionCreate,
     QuizSessionResponse,
@@ -159,11 +169,12 @@ def export_questions_to_kahoot(
         query = query.filter(Question.chapter_id == chapter_id)
     questions = query.all()
 
-    from src.services.assessment_service import generate_kahoot_export
     import io
-    
+
+    from src.services.assessment_service import generate_kahoot_export
+
     file_bytes, ext, media_type = generate_kahoot_export(questions)
-    
+
     return StreamingResponse(
         io.BytesIO(file_bytes),
         media_type=media_type,
@@ -189,7 +200,7 @@ async def import_kahoot_results(
     # 1. Tạo một QuizSession mới đại diện cho kết quả import này
     timestamp_str = datetime.now().strftime("%d/%m/%Y %H:%M")
     session_name = f"Imported Kahoot - {timestamp_str}"
-    
+
     # Close any other active sessions
     active_sessions = db.query(QuizSession).filter(
         QuizSession.course_id == course_id,
@@ -214,8 +225,8 @@ async def import_kahoot_results(
     contents = await file.read()
     filename = file.filename.lower() if file.filename else ""
 
-    from src.services.assessment_service import parse_kahoot_file, distribute_incorrect_choices
-    
+    from src.services.assessment_service import distribute_incorrect_choices, parse_kahoot_file
+
     try:
         parsed_rows = parse_kahoot_file(contents, filename, db_questions)
     except ValueError as ve:

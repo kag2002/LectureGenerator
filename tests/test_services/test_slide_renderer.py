@@ -8,7 +8,6 @@ import pytest
 
 from src.services.slide_renderer import escape_xml, render_slide_to_svg
 
-
 # ---------------------------------------------------------------------------
 # escape_xml
 # ---------------------------------------------------------------------------
