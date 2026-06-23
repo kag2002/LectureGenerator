@@ -1,4 +1,3 @@
-import re
 
 GREEK_SYMBOLS = {
     r"\alpha": "α",

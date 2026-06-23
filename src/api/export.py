@@ -22,8 +22,8 @@ from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question,
 from src.database.session import get_db
 from src.services.slide_renderer import render_slide_to_svg
 from src.utils.active_learning_parser import parse_active_learning_into_notes
-from src.utils.markdown_to_slidej import parse_markdown_to_slides
 from src.utils.latex_parser import latex_to_omml
+from src.utils.markdown_to_slidej import parse_markdown_to_slides
 
 router = APIRouter(prefix="/api/courses", tags=["export"])
 

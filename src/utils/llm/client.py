@@ -22,23 +22,10 @@ Mock fallback data is in mock.py.
 import datetime
 import json
 import os
-from pathlib import Path
 
 from .shared import (
-    FREE_MODELS,
-    calculate_cost,
-    format_gemini_contents,
-    format_openai_messages,
-    get_local_llm_config,
-    get_token_usage,
-    init_token_tracker,
-    langfuse,
     log_generation_to_langfuse,
-    log_to_langfuse,
-    robust_parse_json,
-    token_tracker,
 )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # PUBLIC API — Fallback Chain Orchestration with Mocking & Caching

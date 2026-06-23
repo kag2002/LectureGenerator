@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 
 from src.database.models import ChatMessage, Course
-from src.utils.llm import langfuse, FREE_MODELS
+from src.utils.llm import FREE_MODELS, langfuse
 
 # Khai báo các tools hỗ trợ giảng viên
 CHATBOT_TOOLS = [

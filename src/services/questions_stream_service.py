@@ -8,7 +8,7 @@ from src.prompts.questions import (
     build_generator_system_prompt_compact,
     build_generator_user_prompt_compact,
 )
-from src.utils.llm import call_llm_json, get_token_usage, init_token_tracker, langfuse
+from src.utils.llm import call_llm_json, init_token_tracker, langfuse
 from src.utils.parser import safe_parse_bloom_level
 from src.utils.sse import format_sse
 

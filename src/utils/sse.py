@@ -1,5 +1,7 @@
 import json
+
 from src.utils.llm import get_token_usage
+
 
 def format_sse(event: str, data: dict, trace_id: str = None, include_usage: bool = False) -> str:
     """Format an event and data dictionary as a Server-Sent Events (SSE) string."""

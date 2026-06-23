@@ -9,6 +9,13 @@ from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, MaterialRevision, OdinActionLog, User
 from src.database.session import get_db
 from src.database.vector_db import search_rag_isolated
+from src.prompts.materials import (
+    LANGUAGE_MAP,
+    build_consistency_checker_system_prompt,
+    build_reconcile_active_learning_system_prompt,
+    build_revision_system_prompt,
+    build_single_slide_revision_system_prompt,
+)
 from src.schemas.schemas import (
     AppendSlideRequest,
     MaterialGenerateFromStoryboardRequest,
@@ -19,17 +26,10 @@ from src.schemas.schemas import (
     RevisionRequest,
     SingleSlideRevisionRequest,
 )
-from src.prompts.materials import (
-    LANGUAGE_MAP,
-    build_consistency_checker_system_prompt,
-    build_reconcile_active_learning_system_prompt,
-    build_revision_system_prompt,
-    build_single_slide_revision_system_prompt,
-)
 from src.services.image_service import process_markdown_images
+from src.services.lock_service import check_context_lock
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
 from src.utils.llm import call_llm_json, get_token_usage, init_token_tracker, langfuse
-from src.services.lock_service import check_context_lock
 from src.utils.task_manager import task_manager
 
 router = APIRouter(prefix="/api/courses", tags=["materials"])

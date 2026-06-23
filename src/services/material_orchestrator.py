@@ -13,7 +13,7 @@ from src.prompts.materials import (
     build_slide_writer_system_prompt,
     build_storyboard_architect_system_prompt,
 )
-from src.utils.llm import call_llm_json, async_call_llm_json
+from src.utils.llm import async_call_llm_json, call_llm_json
 
 BUDGETS = {
     "visual_highlight": 250,

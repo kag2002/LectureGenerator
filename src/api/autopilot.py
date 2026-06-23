@@ -1,6 +1,5 @@
 import asyncio
 import json
-from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -8,15 +7,17 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.auth import get_current_user
-from src.database.models import ChapterMaterial, Course, OdinActionLog, OdinLock, Question, User
+from src.database.models import ChapterMaterial, Course, OdinActionLog, Question, User
 from src.database.session import get_db
 from src.services.lock_service import (
-    NotificationManager,
     acquire_lock as service_acquire_lock,
-    check_context_lock,
+)
+from src.services.lock_service import (
     get_active_locks_list,
     notification_manager,
     publish_autopilot_event,
+)
+from src.services.lock_service import (
     release_lock as service_release_lock,
 )
 

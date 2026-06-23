@@ -13,7 +13,11 @@ from src.services.chatbot_agent import run_chatbot_agent_loop
 from src.services.chatbot_eval import run_chatbot_evaluation
 from src.services.lock_service import (
     LockHeartbeat,
+)
+from src.services.lock_service import (
     acquire_lock as lock_service_acquire_lock,
+)
+from src.services.lock_service import (
     release_lock as lock_service_release_lock,
 )
 from src.utils.task_manager import task_manager
@@ -733,6 +737,7 @@ def direct_action_stream(
         send = format_sse
 
         from datetime import datetime
+
         from src.database.models import CLO, Chapter, ChapterMaterial, OdinActionLog, Question
 
         heartbeat = None
