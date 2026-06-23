@@ -36,6 +36,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from src.api import (
     admin,
+    assessments,
     auth,
     autopilot,
     chatbot,
@@ -49,166 +50,17 @@ from src.api import (
     trash,
 )
 from src.config import get_settings
-from src.database.session import Base, engine
+from src.database.session import Base, engine, run_db_migrations
 from src.services import web_search_agent
 
-# Initialize SQLite database tables if they do not exist
-Base.metadata.create_all(bind=engine)
+# Initialize database with migrations
+run_db_migrations()
 
 logger = logging.getLogger(__name__)
 
-class JsonFormatter(logging.Formatter):
-    def format(self, record):
-        log_record = {
-            "timestamp": self.formatTime(record, self.datefmt),
-            "level": record.levelname,
-            "message": record.getMessage(),
-            "module": record.module,
-            "filename": record.filename,
-            "line_number": record.lineno
-        }
-        if record.exc_info:
-            log_record["exception"] = self.formatException(record.exc_info)
-        return json.dumps(log_record, ensure_ascii=False)
+from src.core.logging import setup_production_logging
+from src.core.monitoring import system_alert_monitoring_loop, system_snapshot_loop
 
-def setup_production_logging():
-    """Đổi log format sang JSON ở môi trường production."""
-    settings = get_settings()
-    if settings.app_env == "production":
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.INFO)
-
-        # Remove old handlers
-        for handler in list(root_logger.handlers):
-            root_logger.removeHandler(handler)
-
-        # Add new console handler with JsonFormatter
-        ch = logging.StreamHandler()
-        ch.setFormatter(JsonFormatter())
-        root_logger.addHandler(ch)
-        print("[LOGGING] Custom structured JSON logs enabled for production.")
-
-async def system_alert_monitoring_loop():
-    """Vòng lặp ngầm chạy mỗi 5 phút để kiểm tra tài nguyên và gửi cảnh báo Slack/Telegram."""
-    print("[OBSERVABILITY] System Alert Monitoring Loop started.")
-    # Chờ 30s sau khi startup để hệ thống ổn định trước khi scan tài nguyên lần đầu
-    await asyncio.sleep(30)
-    from src.utils.alerting import check_system_thresholds
-    while True:
-        try:
-            check_system_thresholds()
-        except Exception as e:
-            print(f"[OBSERVABILITY ERROR] Alert check failed: {e}")
-        await asyncio.sleep(300) # 5 phút
-
-async def system_snapshot_loop():
-    """Vòng lặp ngầm chạy mỗi 60 giây để ghi nhận snapshot tài nguyên hệ thống (timeline)."""
-    print("[OBSERVABILITY] System Resource Snapshot Loop started.")
-    from src.utils.telemetry import record_system_snapshot
-    settings = get_settings()
-    while True:
-        try:
-            record_system_snapshot(settings.database_url)
-        except Exception as e:
-            print(f"[OBSERVABILITY ERROR] Snapshot capture failed: {e}")
-        await asyncio.sleep(60) # 1 phút
-
-# Auto-migration for Course fields
-try:
-    inspector = inspect(engine)
-
-    # Courses
-    columns = [col["name"] for col in inspector.get_columns("courses")]
-    if "required_textbooks" not in columns:
-        logger.info("[MIGRATION] Adding column 'required_textbooks' to table 'courses'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE courses ADD COLUMN required_textbooks TEXT"))
-    if "recommended_readings" not in columns:
-        logger.info("[MIGRATION] Adding column 'recommended_readings' to table 'courses'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE courses ADD COLUMN recommended_readings TEXT"))
-    if "deleted_at" not in columns:
-        logger.info("[MIGRATION] Adding column 'deleted_at' to table 'courses'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE courses ADD COLUMN deleted_at DATETIME"))
-    if "is_deleted" not in columns:
-        logger.info("[MIGRATION] Adding column 'is_deleted' to table 'courses'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE courses ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
-
-    # Chapters
-    chapter_columns = [col["name"] for col in inspector.get_columns("chapters")]
-    if "deleted_at" not in chapter_columns:
-        logger.info("[MIGRATION] Adding column 'deleted_at' to table 'chapters'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE chapters ADD COLUMN deleted_at DATETIME"))
-    if "is_deleted" not in chapter_columns:
-        logger.info("[MIGRATION] Adding column 'is_deleted' to table 'chapters'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE chapters ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
-
-    # RAGDocument fields
-    rag_doc_columns = [col["name"] for col in inspector.get_columns("rag_documents")]
-    if "error_message" not in rag_doc_columns:
-        logger.info("[MIGRATION] Adding column 'error_message' to table 'rag_documents'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE rag_documents ADD COLUMN error_message TEXT"))
-
-    # ChatMessage fields
-    chat_msg_columns = [col["name"] for col in inspector.get_columns("chat_messages")]
-    if "is_archived" not in chat_msg_columns:
-        logger.info("[MIGRATION] Adding column 'is_archived' to table 'chat_messages'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE chat_messages ADD COLUMN is_archived BOOLEAN DEFAULT 0"))
-
-    # Users
-    user_columns = [col["name"] for col in inspector.get_columns("users")]
-    if "role" not in user_columns:
-        print("[MIGRATION] Adding column 'role' to table 'users'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'"))
-
-    # Questions status & created_by & updated_at
-    q_columns = [col["name"] for col in inspector.get_columns("questions")]
-    if "status" not in q_columns:
-        print("[MIGRATION] Adding column 'status' to table 'questions'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE questions ADD COLUMN status TEXT DEFAULT 'approved'"))
-    if "created_by" not in q_columns:
-        print("[MIGRATION] Adding column 'created_by' to table 'questions'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE questions ADD COLUMN created_by TEXT DEFAULT 'user'"))
-    if "updated_at" not in q_columns:
-        print("[MIGRATION] Adding column 'updated_at' to table 'questions'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE questions ADD COLUMN updated_at DATETIME"))
-            conn.execute(text("UPDATE questions SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
-    if "deleted_at" not in q_columns:
-        logger.info("[MIGRATION] Adding column 'deleted_at' to table 'questions'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE questions ADD COLUMN deleted_at DATETIME"))
-    if "is_deleted" not in q_columns:
-        logger.info("[MIGRATION] Adding column 'is_deleted' to table 'questions'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE questions ADD COLUMN is_deleted BOOLEAN DEFAULT 0"))
-
-    # ChapterMaterials status & created_by & updated_at
-    cm_columns = [col["name"] for col in inspector.get_columns("chapter_materials")]
-    if "status" not in cm_columns:
-        print("[MIGRATION] Adding column 'status' to table 'chapter_materials'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE chapter_materials ADD COLUMN status TEXT DEFAULT 'approved'"))
-    if "created_by" not in cm_columns:
-        print("[MIGRATION] Adding column 'created_by' to table 'chapter_materials'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE chapter_materials ADD COLUMN created_by TEXT DEFAULT 'user'"))
-    if "updated_at" not in cm_columns:
-        print("[MIGRATION] Adding column 'updated_at' to table 'chapter_materials'...")
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE chapter_materials ADD COLUMN updated_at DATETIME"))
-            conn.execute(text("UPDATE chapter_materials SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL"))
-except Exception as e:
-    logger.warning(f"[MIGRATION WARNING] Failed to migrate SQLite/PostgreSQL columns: {e}")
 
 
 @asynccontextmanager
@@ -289,9 +141,15 @@ cors_origins_list = [origin.strip() for origin in settings.cors_origins.split(",
 if not cors_origins_list:
     cors_origins_list = ["*"] if settings.app_env != "production" else []
 
+cors_allow_origin_regex = None
+if settings.app_env != "production":
+    # Allow localhost/127.0.0.1 with any port, Cloudflare Quick Tunnels, and Cloudflare Pages previews
+    cors_allow_origin_regex = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.trycloudflare\.com$|^https://.*\.pages\.dev$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins_list,
+    allow_origin_regex=cors_allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -369,11 +227,17 @@ async def log_traffic_middleware(request: Request, call_next):
     return response
 
 # Register all Routers
+from fastapi.staticfiles import StaticFiles
+# Ensure static directory exists
+os.makedirs("static/uploads/ai_images", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 app.include_router(auth.router)
 app.include_router(courses.router)
 app.include_router(outline.router)
 app.include_router(materials.router)
 app.include_router(questions.router)
+app.include_router(assessments.router)
 app.include_router(chatbot.router)
 app.include_router(web_search_agent.router)
 app.include_router(export.router)

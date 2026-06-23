@@ -135,6 +135,7 @@ YÊU CẦU THIẾT KẾ SLIDE:
 - BẮT BUỘC GẮN TAG CLO & BLOOM:
   + Ở dòng cuối cùng của mỗi slide giảng dạy nội dung (trừ slide tiêu đề và slide tài liệu tham khảo), hãy gán nhãn Chuẩn đầu ra (CLO) liên quan nhất và mức Bloom tương ứng của slide đó (chọn từ danh sách CLO môn học được cung cấp).
   + Cú pháp bắt buộc: `[CLO: mã_clo] [Bloom: mức_bloom]`. Ví dụ: `[CLO: CLO1] [Bloom: 2]`. Chỉ gắn tag nếu slide trực tiếp giảng dạy nội dung của CLO đó.
+- Nếu bạn tạo sơ đồ luồng Mermaid (```mermaid ... ```), bạn BẮT BUỘC phải đặt nhãn mô tả chi tiết cho từng nút thay vì chỉ dùng các chữ cái A, B, C trống. Ví dụ: `B[Thu thập dữ liệu] --> C[Xử lý dữ liệu]` thay vì `B --> C`. Nhãn phải ngắn gọn và đại diện cho bước thực hiện tương ứng.
 
 Trả về nội dung Markdown trực tiếp (KHÔNG dùng JSON, KHÔNG bao quanh bằng các ký tự ```markdown, chỉ trả về text Markdown thô)."""
 
@@ -302,7 +303,7 @@ Mô tả chương: {chapter_description or "N/A"}
     }}
   ]
 }}
-Layout gợi ý chọn từ: 'visual_highlight', 'standard_list', 'card_grid', 'two_column_comparison', 'table', 'timeline_flow', 'split_intro', 'quadrant_matrix', 'three_column'."""
+Layout gợi ý chọn từ: 'visual_highlight', 'standard_list', 'card_grid', 'two_column_comparison', 'table', 'timeline_flow', 'split_intro', 'quadrant_matrix', 'three_column', 'metric_callout', 'hero_image_split', 'pros_cons_comparison'."""
 
 
 def build_content_allocator_system_prompt(*, outline_json: str, rag_context: str) -> str:
@@ -325,6 +326,9 @@ Hãy phân bổ nội dung và chọn loại layout tối ưu cho mỗi slide:
 - Câu trích dẫn ngắn, số liệu thống kê hoặc định nghĩa cốt lõi siêu nổi bật -> chọn 'visual_highlight'
 - Danh sách liệt kê thông tin chung -> chọn 'standard_list'
 - Dữ liệu dạng bảng đối chiếu -> chọn 'table'
+- Số liệu thống kê hoặc dữ liệu tỷ lệ phần trăm định lượng cực kỳ lớn và nổi bật -> chọn 'metric_callout'
+- Slide giới thiệu kèm theo hình ảnh minh họa lớn làm trọng tâm -> chọn 'hero_image_split'
+- So sánh các ưu và nhược điểm (Pros & Cons) của một giải pháp -> chọn 'pros_cons_comparison'
 
 Đầu ra BẮT BUỘC là đối tượng JSON theo cấu trúc sau (Không viết thêm bất kỳ từ giải thích nào ngoài JSON):
 {{
@@ -397,6 +401,9 @@ YÊU CẦU HÀM LƯỢNG TRI THỨC VÀ SƯ PHẠM (CRITICAL):
   + 'two_column_comparison': So sánh đối chiếu 2 phần rõ rệt, mỗi cột có tiêu đề in đậm và gạch đầu dòng phân tích cụ thể.
   + 'visual_highlight': Một câu định nghĩa lớn, trích dẫn triết lý học thuật hoặc số liệu mang tính đột phá, nhấn mạnh ý nghĩa thực tế. Tối đa 2 dòng.
   + 'table': Bảng Markdown chuẩn hóa dữ liệu.
+  + 'metric_callout': Một con số nổi bật đi kèm giải thích rất ngắn gọn. Định dạng: `* **95%** (hoặc con số khác): Nhãn/mô tả ngắn của con số (1 câu).`
+  + 'hero_image_split': Chứa 1-2 gạch đầu dòng ngắn kèm theo 1 ảnh minh họa lớn. Định dạng: `* **Ý chính**: Diễn giải...` theo sau là thẻ ảnh `![alt](url)`.
+  + 'pros_cons_comparison': Một bảng/danh sách chia hai cột chỉ rõ ưu điểm và nhược điểm. Định dạng: `* **Ưu điểm**: ...` và `* **Nhược điểm**: ...`.
 
 HẠN MỨC KÝ TỰ (CHARACTER BUDGET) NGHIÊM NGẶT THEO LAYOUT:
 - 'visual_highlight': Tối đa 250 ký tự.
@@ -408,8 +415,12 @@ HẠN MỨC KÝ TỰ (CHARACTER BUDGET) NGHIÊM NGẶT THEO LAYOUT:
 - 'two_column_comparison': Tối đa 800 ký tự.
 - 'standard_list': Tối đa 900 ký tự.
 - 'table': Tối đa 800 ký tự.
+- 'metric_callout': Tối đa 150 ký tự.
+- 'hero_image_split': Tối đa 450 ký tự.
+- 'pros_cons_comparison': Tối đa 750 ký tự.
 
-HỖ TRỢ VẼ HÌNH VECTOR (SVG DIAGRAMS) VÀ HÌNH ẢNH MINH HỌA:
+HỖ TRỢ VẼ HÌNH VECTOR (SVG DIAGRAMS), SƠ ĐỒ MERMAID VÀ HÌNH ẢNH MINH HỌA:
+- **Sơ đồ luồng Mermaid (```mermaid ... ```)**: Nếu slide có chứa sơ đồ luồng Mermaid, bạn BẮT BUỘC phải đặt nhãn mô tả chữ cho từng khối thay vì chỉ dùng các chữ cái trống A, B, C làm nhãn. Cú pháp: `ID[Nhãn mô tả]` (Ví dụ: `B[Thu thập dữ liệu] --> C[Xử lý dữ liệu]` thay vì `B --> C`). Nhãn phải ngắn gọn và mô tả chính xác nội dung học tập tương ứng.
 - **Sơ đồ Vector (SVG)**: Nếu slide cần thể hiện mô hình tư duy, sơ đồ luồng (flowchart) hoặc cấu trúc dữ liệu trực quan (như cây nhị phân BST/AVL, đồ thị, danh sách liên kết), bạn ĐƯỢC PHÉP và KHUYẾN NGHỊ viết mã nhúng SVG thô đặt trực tiếp dưới dạng một khối mã trong slide Markdown (ví dụ: ngay dưới tiêu đề `# {title}` hoặc sau các bullet points).
   + Chỉ sử dụng các thẻ SVG cơ bản: `<svg>`, `<circle cx="..." cy="..." r="..." fill="..." stroke="..." />`, `<rect x="..." y="..." width="..." height="..." fill="..." stroke="..." rx="..." />`, `<line x1="..." y1="..." x2="..." y2="..." stroke="..." stroke-width="..." />`, `<text x="..." y="..." fill="..." font-size="...">Văn bản</text>`.
   + KHÔNG dùng CSS hay các bộ lọc phức tạp trong SVG, chỉ dùng các thuộc tính trực tiếp (`fill`, `stroke`, `stroke-width`, `font-size`, `text-anchor`).

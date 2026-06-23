@@ -17,9 +17,11 @@ from src.models.schemas import (
     CourseUpdate,
     DocumentMetadataUpdate,
     SearchTestRequest,
+    SyllabusGenerateRequest,
 )
 from src.services.document_service import process_document_background
 from src.services.syllabus_service import generate_syllabus_parse_events
+from src.utils.llm_client import async_call_llm_stream
 from src.utils.parser import safe_parse_bloom_level
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])
@@ -315,6 +317,64 @@ def upload_and_parse_syllabus_stream(
     return StreamingResponse(
         generate_syllabus_parse_events(temp_file_path=temp_file_path, course_id=course_id),
         media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/{course_id}/generate-syllabus-stream")
+async def generate_syllabus_stream(
+    course_id: int,
+    req: SyllabusGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Sinh nội dung Syllabus chi tiết bằng AI dưới dạng markdown và stream về client.
+    """
+    # Kiểm tra quyền sở hữu môn học
+    course = db.query(Course).filter(Course.id == course_id, Course.user_id == current_user.id).first()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Môn học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    system_prompt = """Bạn là chuyên gia sư phạm đại học quốc tế chuyên về phát triển chương trình đào tạo theo chuẩn AUN-QA và ABET.
+Nhiệm vụ của bạn là soạn thảo một Đề cương chi tiết môn học (Syllabus) hoàn chỉnh, chuẩn sư phạm dựa trên các thông tin được cung cấp bởi Giảng viên.
+
+Đề cương môn học được tạo ra phải tuân theo cấu trúc chuẩn để hệ thống bóc tách tự động có thể phân tích được sau này. Cụ thể, đề cương phải bao gồm các phần rõ ràng sau:
+1. Thông tin chung: Mã môn học, Tên môn học, Trình độ/Đối tượng người học, Thời lượng (tuần).
+2. Mô tả môn học (Course Description) & Mục tiêu môn học (Course Objectives).
+3. Chuẩn đầu ra môn học (CLOs - Course Learning Outcomes):
+   - Phải thiết lập tối thiểu 3-5 chuẩn đầu ra (CLO1, CLO2, CLO3, CLO4, CLO5...).
+   - Mỗi CLO phải bắt đầu bằng một ĐỘNG TỪ HÀNH ĐỘNG đo lường được theo các cấp độ nhận thức Bloom (Bloom levels 1 đến 6).
+   - Hãy ghi rõ mức độ Bloom tương ứng ở cuối mỗi CLO. Ví dụ: "CLO1: Giải thích được các nguyên lý cơ bản... (Bloom Level: 2 - Understand)" hoặc "CLO2: Vận dụng được thuật toán... (Bloom Level: 3 - Apply)".
+4. Giáo trình bắt buộc (Required Textbooks) và Tài liệu tham khảo (Recommended Readings).
+5. Kế hoạch giảng dạy theo từng tuần (Weekly Outline):
+   - Liệt kê chi tiết nội dung học tập và hoạt động cho từng tuần dựa trên số tuần được yêu cầu.
+   - Gắn các CLO liên quan vào mỗi tuần. Ví dụ: "Tuần 1: ... (CLO1, CLO2)".
+
+Ngôn ngữ viết đề cương phải trùng khớp với ngôn ngữ được yêu cầu (Tiếng Việt hoặc Tiếng Anh). Hãy tạo ra một đề cương chi tiết, thực tế, chuyên nghiệp và đầy đủ nội dung, không viết tắt, không sử dụng ký tự placeholder hay dấu ba chấm lửng (...).
+"""
+
+    prompt = f"Tên môn học: {req.course_name}\n"
+    if req.course_code:
+        prompt += f"Mã môn học: {req.course_code}\n"
+    if req.course_description:
+        prompt += f"Mô tả/Mục tiêu môn học: {req.course_description}\n"
+    if req.audience:
+        prompt += f"Đối tượng/Trình độ học viên: {req.audience}\n"
+    prompt += f"Thời lượng: {req.duration_weeks} tuần\n"
+    if req.learning_outcomes_focus:
+        prompt += f"Định hướng chuẩn đầu ra (CLO): {req.learning_outcomes_focus}\n"
+    prompt += f"Ngôn ngữ soạn thảo: {'Tiếng Việt' if req.language == 'vi' else 'Tiếng Anh'}\n"
+
+    async def event_generator():
+        async for chunk in async_call_llm_stream(prompt, system_instruction=system_prompt, temperature=0.3):
+            yield chunk
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/plain",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 

@@ -7,38 +7,48 @@
 Write-Host "=============================================================" -ForegroundColor Cyan
 Write-Host "   AI Lecture Assistant - Cloudflare Tunnel Launcher" -ForegroundColor Cyan
 Write-Host "=============================================================" -ForegroundColor Cyan
+# Clear existing processes on ports 8000 (Backend) and 3000 (Frontend) to prevent conflicts
+foreach ($port in @(8000, 3000)) {
+    $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq "Listen" }
+    if ($conn) {
+        $procId = $conn.OwningProcess[0]
+        try {
+            $procName = (Get-Process -Id $procId).ProcessName
+            Write-Host "[CLEANUP] Stopping existing process $procName (PID $procId) on port $port..." -ForegroundColor Yellow
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+        } catch {
+            # Silent fallback
+        }
+    }
+}
 Write-Host ""
 
 # ---- Kiểm tra cloudflared ----
 if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] 'cloudflared' chưa được cài. Đang cài..." -ForegroundColor Red
+    Write-Host "[ERROR] 'cloudflared' not found. Installing..." -ForegroundColor Red
     winget install --id Cloudflare.cloudflared -e --silent
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[ERROR] Không cài được cloudflared. Hãy cài thủ công: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" -ForegroundColor Red
+        Write-Host "[ERROR] Failed to install cloudflared. Please install manually: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" -ForegroundColor Red
         exit 1
     }
 }
 
 # ---- 1. Start Backend (FastAPI port 8000) ----
-Write-Host "[BACKEND] Khởi động FastAPI backend (port 8000)..." -ForegroundColor Green
+Write-Host "[BACKEND] Starting FastAPI backend (port 8000)..." -ForegroundColor Green
 $backendJob = $null
 if (Test-Path ".venv\Scripts\python.exe") {
-    $backendJob = Start-Process powershell -ArgumentList "-NoExit", "-Command", `
-        "Write-Host 'Backend starting...' -ForegroundColor Green; " + `
-        ".\.venv\Scripts\Activate.ps1; " + `
-        "uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload" `
-        -WindowStyle Normal -PassThru
+    $backendCmd = "Write-Host 'Backend starting...' -ForegroundColor Green; .\.venv\Scripts\Activate.ps1; uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
+    $backendJob = Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal -PassThru
 } else {
-    $backendJob = Start-Process powershell -ArgumentList "-NoExit", "-Command", `
-        "uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload" `
-        -WindowStyle Normal -PassThru
+    $backendCmd = "uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
+    $backendJob = Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal -PassThru
 }
 
-Write-Host "[BACKEND] Đang chờ backend khởi động..." -ForegroundColor Yellow
+Write-Host "[BACKEND] Waiting for backend to start..." -ForegroundColor Yellow
 Start-Sleep -Seconds 8
 
 # ---- 2. Tạo tunnel cho Backend (port 8000) để lấy API URL ----
-Write-Host "[TUNNEL-API] Tạo Cloudflare Quick Tunnel cho Backend..." -ForegroundColor Magenta
+Write-Host "[TUNNEL-API] Creating Cloudflare Quick Tunnel for Backend..." -ForegroundColor Magenta
 
 # File tạm để capture output từ cloudflared
 $apiTunnelLog = "$env:TEMP\cf_tunnel_api.log"
@@ -49,7 +59,7 @@ $apiTunnelProc = Start-Process cloudflared `
     -ArgumentList "tunnel", "--url", "http://localhost:8000", "--no-autoupdate", "--logfile", $apiTunnelLog `
     -PassThru -WindowStyle Minimized
 
-Write-Host "[TUNNEL-API] Đang chờ lấy URL tunnel backend..." -ForegroundColor Yellow
+Write-Host "[TUNNEL-API] Waiting for backend tunnel URL..." -ForegroundColor Yellow
 $apiTunnelUrl = $null
 $maxWait = 30
 $waited = 0
@@ -81,36 +91,31 @@ if (-not $apiTunnelUrl -and (Test-Path $apiTunnelLog)) {
 
 if ($apiTunnelUrl) {
     Write-Host ""
-    Write-Host "✅ [TUNNEL-API] Backend tunnel URL: $apiTunnelUrl" -ForegroundColor Green
+    Write-Host "[SUCCESS] [TUNNEL-API] Backend tunnel URL: $apiTunnelUrl" -ForegroundColor Green
 } else {
-    Write-Host "[WARNING] Không lấy được backend tunnel URL từ log. Dùng localhost fallback." -ForegroundColor Yellow
+    Write-Host "[WARNING] Could not retrieve backend tunnel URL from log. Using localhost fallback." -ForegroundColor Yellow
     $apiTunnelUrl = "http://localhost:8000"
 }
 
 # ---- 3. Set NEXT_PUBLIC_API_URL và start Frontend ----
 Write-Host ""
-Write-Host "[FRONTEND] Khởi động Next.js frontend với API URL = $apiTunnelUrl" -ForegroundColor Green
+Write-Host "[FRONTEND] Starting Next.js frontend with API URL = $apiTunnelUrl" -ForegroundColor Green
 
-$frontendJob = Start-Process powershell -ArgumentList "-NoExit", "-Command", `
-    "Set-Location '$PSScriptRoot\frontend'; " + `
-    "`$env:NEXT_PUBLIC_API_URL='$apiTunnelUrl'; " + `
-    "`$env:NEXT_PUBLIC_API_BASE_URL='$apiTunnelUrl'; " + `
-    "Write-Host 'Frontend starting with API=$apiTunnelUrl' -ForegroundColor Cyan; " + `
-    "npm run dev" `
-    -WindowStyle Normal -PassThru
+$frontendCmd = "Set-Location '$PSScriptRoot\frontend'; `$env:NEXT_PUBLIC_API_URL='$apiTunnelUrl'; `$env:NEXT_PUBLIC_API_BASE_URL='$apiTunnelUrl'; Write-Host 'Frontend starting with API=$apiTunnelUrl' -ForegroundColor Cyan; npm run dev"
+$frontendJob = Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -WindowStyle Normal -PassThru
 
-Write-Host "[FRONTEND] Đang chờ Next.js frontend khởi động (port 3000)..." -ForegroundColor Yellow
+Write-Host "[FRONTEND] Waiting for Next.js frontend to start (port 3000)..." -ForegroundColor Yellow
 Start-Sleep -Seconds 12
 
 # ---- 4. Tạo tunnel cho Frontend (port 3000) ----
 Write-Host ""
-Write-Host "[TUNNEL-UI] Tạo Cloudflare Quick Tunnel cho Frontend (port 3000)..." -ForegroundColor Magenta
+Write-Host "[TUNNEL-UI] Creating Cloudflare Quick Tunnel for Frontend (port 3000)..." -ForegroundColor Magenta
 
 $frontendTunnelProc = Start-Process cloudflared `
     -ArgumentList "tunnel", "--url", "http://localhost:3000", "--no-autoupdate", "--logfile", $apiFrontendLog `
     -PassThru -WindowStyle Minimized
 
-Write-Host "[TUNNEL-UI] Đang chờ lấy URL tunnel frontend..." -ForegroundColor Yellow
+Write-Host "[TUNNEL-UI] Waiting for frontend tunnel URL..." -ForegroundColor Yellow
 $frontendTunnelUrl = $null
 $waited = 0
 while (-not $frontendTunnelUrl -and $waited -lt 30) {
@@ -126,21 +131,21 @@ while (-not $frontendTunnelUrl -and $waited -lt 30) {
 
 Write-Host ""
 Write-Host "=============================================================" -ForegroundColor Cyan
-Write-Host "  🚀 APP ĐANG CHẠY VÀ CÓ THỂ TRUY CẬP TỪ INTERNET!" -ForegroundColor Green
+Write-Host "  [RUNNING] APP IS RUNNING AND ACCESSIBLE FROM INTERNET!" -ForegroundColor Green
 Write-Host "=============================================================" -ForegroundColor Cyan
 Write-Host ""
 if ($frontendTunnelUrl) {
-    Write-Host "  🌐 LINK TRUY CẬP (share link này): $frontendTunnelUrl" -ForegroundColor Yellow
+    Write-Host "  [LINK] ACCESS LINK (share this link): $frontendTunnelUrl" -ForegroundColor Yellow
 } else {
-    Write-Host "  🌐 Frontend tunnel đang khởi động. Kiểm tra file: $apiFrontendLog" -ForegroundColor Yellow
+    Write-Host "  [LINK] Frontend tunnel is starting. Check log: $apiFrontendLog" -ForegroundColor Yellow
 }
-Write-Host "  🔧 API Backend tunnel:  $apiTunnelUrl" -ForegroundColor Cyan
-Write-Host "  💻 Local Frontend:      http://localhost:3000" -ForegroundColor Cyan
-Write-Host "  💻 Local Backend:       http://localhost:8000" -ForegroundColor Cyan
+Write-Host "  [API] API Backend tunnel:  $apiTunnelUrl" -ForegroundColor Cyan
+Write-Host "  [LOCAL] Local Frontend:      http://localhost:3000" -ForegroundColor Cyan
+Write-Host "  [LOCAL] Local Backend:       http://localhost:8000" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  ⚠️  Giữ cửa sổ này MỞ để duy trì kết nối tunnel." -ForegroundColor Red
-Write-Host "  ⚠️  Link sẽ thay đổi mỗi lần restart script." -ForegroundColor Red
+Write-Host "  [WARNING] Keep this window OPEN to maintain tunnel connection." -ForegroundColor Red
+Write-Host "  [WARNING] Link will change each time script restarts." -ForegroundColor Red
 Write-Host "=============================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Nhấn Enter để thoát launcher (các tunnel & server vẫn chạy)..." -ForegroundColor Gray
+Write-Host "Press Enter to exit launcher (tunnels and servers will keep running)..." -ForegroundColor Gray
 Read-Host

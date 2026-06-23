@@ -118,7 +118,197 @@ def render_slide_to_svg(s: dict, theme: str, idx: int) -> str:
     )
     svg_lines.append('  <rect x="80" y="105" width="1120" height="3" fill="url(#lineGrad)" rx="1.5" />')
 
-    if use_cards and num_text <= 4:
+    # Mermaid rendering block
+    mermaid_code = s.get("mermaid_content", None)
+    rendered_mermaid_svg = ""
+    if mermaid_code:
+        try:
+            from src.utils.mermaid_renderer import render_mermaid_to_svg
+            rendered_mermaid_svg = render_mermaid_to_svg(mermaid_code, theme)
+            # Remove XML declaration and doctype
+            rendered_mermaid_svg = re.sub(r'<\?xml.*?\?>', '', rendered_mermaid_svg, flags=re.DOTALL)
+            rendered_mermaid_svg = re.sub(r'<!DOCTYPE.*?>', '', rendered_mermaid_svg, flags=re.DOTALL)
+        except Exception as e:
+            logger.error(f"Failed to render mermaid diagram in slide_renderer: {e}")
+
+    if rendered_mermaid_svg:
+        # Split layout: text items on the left, Mermaid SVG on the right
+        col_font = min(body_font, 18)
+        col_lh = int(col_font * 1.7)
+        cy = 180
+        for item in text_items:
+            raw = escape_xml(item.get("raw_text", "").replace("**", "").strip())
+            prefix = "• " if item.get("bullet", True) else ""
+            words = (prefix + raw).split()
+            max_chars = max(20, int(520 / (col_font * 0.45)))
+            curr = []
+            for w in words:
+                if len(" ".join(curr + [w])) > max_chars:
+                    svg_lines.append(
+                        f'  <text x="80" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">{" ".join(curr)}</text>'
+                    )
+                    cy += col_lh
+                    curr = [w]
+                else:
+                    curr.append(w)
+            if curr:
+                svg_lines.append(
+                    f'  <text x="80" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">{" ".join(curr)}</text>'
+                )
+                cy += col_lh
+            cy += 8
+            if cy > 600:
+                break
+
+        # Embed Mermaid SVG nested on the right side
+        svg_lines.append(f'  <svg x="640" y="160" width="560" height="430" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">')
+        svg_lines.append(rendered_mermaid_svg)
+        svg_lines.append('  </svg>')
+
+    elif slide_layout == "metric_callout":
+        all_text = " ".join(escape_xml(it.get("raw_text", "").strip()) for it in text_items)
+        number_text, label_text = "", all_text
+        bold_match = re.match(r"^\*\*(.*?)\*\*\s*[:\-—]?\s*(.*)$", all_text)
+        if not bold_match:
+            bold_match = re.match(r"^(.*?)\s*[:\-—]\s*(.*)$", all_text)
+        if bold_match:
+            number_text = bold_match.group(1).replace("**", "")
+            label_text = bold_match.group(2)
+        else:
+            parts = all_text.split(" ", 1)
+            if parts:
+                number_text = parts[0]
+                label_text = parts[1] if len(parts) > 1 else ""
+
+        svg_lines.append(
+            f'  <text x="640" y="320" text-anchor="middle" font-family="Arial, sans-serif" font-size="96" font-weight="800" fill="{colors["accent"]}">{number_text}</text>'
+        )
+        if label_text:
+            svg_lines.append(
+                f'  <text x="640" y="380" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="{colors["text"]}">{label_text}</text>'
+            )
+
+    elif slide_layout == "hero_image_split":
+        img_url = "https://images.unsplash.com/photo-placeholder"
+        clean_text_items = []
+        for it in text_items:
+            raw = it.get("raw_text", "")
+            img_match = re.search(r"!\[.*?\]\((.*?)\)", raw)
+            if img_match:
+                img_url = img_match.group(1)
+            clean_raw = re.sub(r"!\[.*?\]\((.*?)\)", "", raw).strip()
+            if clean_raw:
+                clean_text_items.append(clean_raw)
+
+        # Draw image on left
+        svg_lines.append(
+            f'  <rect x="80" y="160" width="520" height="420" rx="8" fill="rgba(255,255,255,0.05)" />'
+        )
+        svg_lines.append(
+            f'  <image href="{img_url}" x="80" y="160" width="520" height="420" preserveAspectRatio="xMidYMid slice" clip-path="inset(0% round 8px)" />'
+        )
+
+        # Draw text on right
+        col_font = min(body_font, 18)
+        col_lh = int(col_font * 1.7)
+        cy = 180
+        for raw in clean_text_items:
+            raw_clean = escape_xml(raw.replace("**", "").strip())
+            words = raw_clean.split()
+            max_chars = max(20, int(520 / (col_font * 0.45)))
+            curr = []
+            for w in words:
+                if len(" ".join(curr + [w])) > max_chars:
+                    svg_lines.append(
+                        f'  <text x="640" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">• {" ".join(curr)}</text>'
+                    )
+                    cy += col_lh
+                    curr = [w]
+                else:
+                    curr.append(w)
+            if curr:
+                svg_lines.append(
+                    f'  <text x="640" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">• {" ".join(curr)}</text>'
+                )
+                cy += col_lh
+            cy += 10
+
+    elif slide_layout == "pros_cons_comparison":
+        pros = []
+        cons = []
+        for item in text_items:
+            raw = item.get("raw_text", "").replace("**", "")
+            raw_lower = raw.lower()
+            if any(k in raw_lower for k in ["ưu điểm", "pro", "lợi ích", "advantages", "thuận lợi", "tích cực"]):
+                pros.append(raw)
+            elif any(k in raw_lower for k in ["nhược điểm", "con", "hạn chế", "disadvantages", "khó khăn", "tiêu cực"]):
+                cons.append(raw)
+            else:
+                if len(pros) <= len(cons):
+                    pros.append(raw)
+                else:
+                    cons.append(raw)
+
+        col_font = min(body_font, 16)
+        col_lh = int(col_font * 1.7)
+
+        svg_lines.append(
+            '  <line x1="640" y1="160" x2="640" y2="600" stroke="rgba(255,255,255,0.08)" stroke-width="1" />'
+        )
+
+        # Pros (Left)
+        svg_lines.append(
+            f'  <text x="80" y="190" font-family="Arial, sans-serif" font-size="{col_font + 2}" font-weight="700" fill="#10B981">▲ Ưu điểm &amp; Lợi ích</text>'
+        )
+        cy = 230
+        for p in pros:
+            raw_clean = escape_xml(p.strip())
+            words = raw_clean.split()
+            max_chars = max(20, int(480 / (col_font * 0.45)))
+            curr = []
+            for w in words:
+                if len(" ".join(curr + [w])) > max_chars:
+                    svg_lines.append(
+                        f'  <text x="80" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">• {" ".join(curr)}</text>'
+                    )
+                    cy += col_lh
+                    curr = [w]
+                else:
+                    curr.append(w)
+            if curr:
+                svg_lines.append(
+                    f'  <text x="80" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">• {" ".join(curr)}</text>'
+                )
+                cy += col_lh
+            cy += 8
+
+        # Cons (Right)
+        svg_lines.append(
+            f'  <text x="680" y="190" font-family="Arial, sans-serif" font-size="{col_font + 2}" font-weight="700" fill="#EF4444">▼ Nhược điểm &amp; Hạn chế</text>'
+        )
+        cy = 230
+        for c in cons:
+            raw_clean = escape_xml(c.strip())
+            words = raw_clean.split()
+            max_chars = max(20, int(480 / (col_font * 0.45)))
+            curr = []
+            for w in words:
+                if len(" ".join(curr + [w])) > max_chars:
+                    svg_lines.append(
+                        f'  <text x="680" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">• {" ".join(curr)}</text>'
+                    )
+                    cy += col_lh
+                    curr = [w]
+                else:
+                    curr.append(w)
+            if curr:
+                svg_lines.append(
+                    f'  <text x="680" y="{cy}" font-family="Arial, sans-serif" font-size="{col_font}" fill="{colors["text"]}">• {" ".join(curr)}</text>'
+                )
+                cy += col_lh
+            cy += 8
+
+    elif use_cards and num_text <= 4:
         # Card grid layout
         card_configs = {
             1: [{"x": 120, "y": 155, "w": 1040, "h": 430}],

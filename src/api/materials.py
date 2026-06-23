@@ -50,7 +50,7 @@ def get_chapter_materials(
     material = db.query(ChapterMaterial).filter(ChapterMaterial.chapter_id == chapter_id).first()
     if not material:
         # Trả về đối tượng trống nếu chưa có
-        return {"id": 0, "chapter_id": chapter_id, "slide_content": "", "active_learning_script": ""}
+        return {"id": 0, "chapter_id": chapter_id, "slide_content": "", "active_learning_script": "", "diagram_layouts": None}
     return material
 
 
@@ -77,12 +77,14 @@ def save_chapter_materials(
             chapter_id=chapter_id,
             slide_content=processed_slides,
             active_learning_script=material_data.active_learning_script,
+            diagram_layouts=material_data.diagram_layouts,
             created_by="user",
         )
         db.add(material)
     else:
         material.slide_content = processed_slides
         material.active_learning_script = material_data.active_learning_script
+        material.diagram_layouts = material_data.diagram_layouts
         material.created_by = "user"
 
     db.commit()
@@ -1105,3 +1107,34 @@ def revert_chapter_revision(
         "active_learning_script": material.active_learning_script,
         "message": f"Đã khôi phục thành công trường {revision.field} về phiên bản cũ.",
     }
+
+
+from pydantic import BaseModel
+
+class GenerateAIImageRequest(BaseModel):
+    keyword: str
+    theme: str = "warm_academic"
+
+@router.post("/chapters/{chapter_id}/generate-ai-image")
+def generate_ai_image(
+    chapter_id: int,
+    req: GenerateAIImageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Sinh ảnh minh họa bằng AI (DALL-E 3) cho slide bài giảng."""
+    chapter = db.query(Chapter).join(Course).filter(Chapter.id == chapter_id, Course.user_id == current_user.id).first()
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Chương học không tồn tại hoặc bạn không có quyền truy cập."
+        )
+
+    from src.services.image_service import generate_ai_illustration
+    
+    try:
+        image_url = generate_ai_illustration(keyword=req.keyword, theme=req.theme)
+        return {"image_url": image_url}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Lỗi khi sinh ảnh AI: {str(e)}"
+        )

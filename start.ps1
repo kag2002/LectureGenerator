@@ -2,6 +2,20 @@
 Write-Host "=====================================================================" -ForegroundColor Cyan
 Write-Host "             AI20K Project Development Launcher (Windows)" -ForegroundColor Cyan
 Write-Host "=====================================================================" -ForegroundColor Cyan
+# Clear existing processes on ports 8000 (Backend) and 3000 (Frontend) to prevent conflicts
+foreach ($port in @(8000, 3000)) {
+    $conn = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Where-Object { $_.State -eq "Listen" }
+    if ($conn) {
+        $procId = $conn.OwningProcess[0]
+        try {
+            $procName = (Get-Process -Id $procId).ProcessName
+            Write-Host "[CLEANUP] Stopping existing process $procName (PID $procId) on port $port..." -ForegroundColor Yellow
+            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+        } catch {
+            # Silent fallback
+        }
+    }
+}
 Write-Host ""
 
 # Check for .env file in root

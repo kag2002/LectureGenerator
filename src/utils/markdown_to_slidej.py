@@ -214,12 +214,27 @@ def parse_markdown_to_slides(md_content: str, default_color: str = "E2E8F0", bol
         in_svg = False
         svg_lines = []
 
+        in_mermaid = False
+        mermaid_lines = []
+
         for line in slide["lines"]:
             if not line:
                 continue
 
-            # SVG detection
             line_stripped = line.strip()
+
+            # Mermaid code block detection
+            if line_stripped.startswith("```mermaid") or line_stripped.startswith("``` mermaid"):
+                in_mermaid = True
+                continue
+            elif in_mermaid:
+                if line_stripped.startswith("```"):
+                    in_mermaid = False
+                    continue
+                mermaid_lines.append(line)
+                continue
+
+            # SVG detection
             if line_stripped.startswith("<svg"):
                 in_svg = True
                 svg_lines.append(line)
@@ -296,6 +311,7 @@ def parse_markdown_to_slides(md_content: str, default_color: str = "E2E8F0", bol
                 "citations": citations,
                 "layout": slide_layout,
                 "svg_content": "\n".join(svg_lines) if svg_lines else None,
+                "mermaid_content": "\n".join(mermaid_lines) if mermaid_lines else None,
             }
         )
 

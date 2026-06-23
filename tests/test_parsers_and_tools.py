@@ -103,3 +103,42 @@ async def test_web_search_ingest_route(client, auth_headers, test_course, db):
         # Verify patches were called
         mock_search.assert_called_once_with("avl-trees" if "avl-trees" in mock_search.call_args[0][0] else "avl trees", max_results=1)
         mock_add_vector.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_syllabus_stream(client, auth_headers, test_course, db):
+    """
+    Test the generate syllabus stream route by verifying the streaming response.
+    Mocks the async LLM stream generator function.
+    """
+    course_id = test_course.id
+    payload = {
+        "course_name": "Nhập môn Lập trình Web",
+        "course_code": "COMP2040",
+        "course_description": "Học về HTML, CSS, JS",
+        "audience": "Undergraduate",
+        "duration_weeks": 15,
+        "learning_outcomes_focus": "Lập trình frontend và backend",
+        "language": "vi"
+    }
+
+    async def mock_async_generator(*args, **kwargs):
+        yield "Dòng 1: Đề cương môn học"
+        yield "\n"
+        yield "Dòng 2: Nội dung chi tiết"
+
+    # Patch async_call_llm_stream in src.api.courses
+    with patch("src.api.courses.async_call_llm_stream", side_effect=mock_async_generator) as mock_stream:
+        response = await client.post(
+            f"/api/courses/{course_id}/generate-syllabus-stream",
+            json=payload,
+            headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        # Read the streamed body
+        text = response.text
+        assert "Dòng 1: Đề cương môn học" in text
+        assert "Dòng 2: Nội dung chi tiết" in text
+        mock_stream.assert_called_once()
+

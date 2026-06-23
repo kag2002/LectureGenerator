@@ -15,7 +15,16 @@ from src.prompts.materials import (
 )
 from src.utils.llm_client import call_llm_json
 
-BUDGETS = {"visual_highlight": 250, "card_grid": 600, "two_column_comparison": 800, "standard_list": 900, "table": 800}
+BUDGETS = {
+    "visual_highlight": 250,
+    "card_grid": 600,
+    "two_column_comparison": 800,
+    "standard_list": 900,
+    "table": 800,
+    "metric_callout": 150,
+    "hero_image_split": 450,
+    "pros_cons_comparison": 750,
+}
 
 
 def cosine_similarity(a, b):

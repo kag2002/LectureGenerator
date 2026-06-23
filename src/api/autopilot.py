@@ -39,25 +39,35 @@ async def publish_autopilot_event(course_id: int, event_data: dict):
 
 
 def check_context_lock(db: Session, course_id: int, context_key: str, current_user_email: str):
-    """Kiểm tra xem context_key có đang bị khóa bởi người khác hoặc odin_autopilot không."""
+    """Kiểm tra xem context_key có đang bị khóa bởi người khác hoặc odin_autopilot không (hỗ trợ kiểm tra phân cấp/tiền tố)."""
     now = datetime.now()
-    active_lock = db.query(OdinLock).filter(
+    active_locks = db.query(OdinLock).filter(
         OdinLock.course_id == course_id,
-        OdinLock.context_key == context_key,
         OdinLock.expires_at > now
-    ).first()
+    ).all()
 
-    if active_lock:
-        if active_lock.locked_by == "odin_autopilot":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Đối tượng này đang được chỉnh sửa tự động bởi Trợ lý Mascot (Autopilot). Giao diện tạm thời bị khóa."
-            )
-        elif active_lock.locked_by != current_user_email:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Đối tượng này đang được chỉnh sửa bởi {active_lock.locked_by}. Vui lòng thử lại sau."
-            )
+    for lock in active_locks:
+        # Điều kiện khóa chặn context_key:
+        # 1. Khớp chính xác (exact match)
+        # 2. Khóa chi tiết trong DB chặn yêu cầu thô (ví dụ: DB có chapter_1_materials, yêu cầu chapter_1)
+        # 3. Khóa thô trong DB chặn yêu cầu chi tiết (ví dụ: DB có chapter_1, yêu cầu chapter_1_materials)
+        is_blocked = (
+            lock.context_key == context_key
+            or lock.context_key.startswith(context_key + "_")
+            or context_key.startswith(lock.context_key + "_")
+        )
+
+        if is_blocked:
+            if lock.locked_by == "odin_autopilot":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Đối tượng này đang được chỉnh sửa tự động bởi Trợ lý Mascot (Autopilot). Giao diện tạm thời bị khóa."
+                )
+            elif lock.locked_by != current_user_email:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Đối tượng này đang được chỉnh sửa bởi {lock.locked_by}. Vui lòng thử lại sau."
+                )
 
 
 # --- SCHEMAS ---

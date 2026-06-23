@@ -85,6 +85,7 @@ class ChapterMaterial(Base):
     chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="CASCADE"), nullable=False, index=True)
     slide_content = Column(Text, nullable=True)  # Markdown text
     active_learning_script = Column(Text, nullable=True)  # Text guide
+    diagram_layouts = Column(Text, nullable=True)  # JSON string of visual coordinates and custom layouts
     is_active = Column(Boolean, default=True)
     status = Column(String(20), default="approved", nullable=True)
     created_by = Column(String(50), default="user", nullable=True)
@@ -309,6 +310,37 @@ class OdinActionLog(Base):
     created_at = Column(DateTime, server_default=func.now())
 
 
+class QuizSession(Base, SoftDeleteMixin):
+    __tablename__ = "quiz_sessions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id", ondelete="SET NULL"), nullable=True, index=True)
+    session_name = Column(String(255), nullable=False)
+    status = Column(String(50), default="active", nullable=False)  # "active" | "closed"
+    created_at = Column(DateTime, server_default=func.now())
+
+    # Quan hệ
+    course = relationship("Course")
+    chapter = relationship("Chapter")
+    aggregates = relationship("QuizAggregate", back_populates="session", cascade="all, delete-orphan")
+
+
+class QuizAggregate(Base):
+    __tablename__ = "quiz_aggregates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("quiz_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    total_responses = Column(Integer, default=0, nullable=False)
+    correct_responses = Column(Integer, default=0, nullable=False)
+    choices_distribution = Column(Text, nullable=True)  # JSON string of options and their selection counts, e.g., {"A": 12, "B": 24}
+
+    # Quan hệ
+    session = relationship("QuizSession", back_populates="aggregates")
+    question = relationship("Question")
+
+
 # --- Soft-Delete Event Hooks & Monkeypatching ---
 
 @event.listens_for(Session, "do_orm_execute")
@@ -322,6 +354,7 @@ def _add_soft_delete_filter(execute_state):
                 include_aliases=True,
             )
         )
+
 
 @event.listens_for(Session, "before_flush")
 def _intercept_deletes(session, flush_context, instances):
@@ -346,8 +379,16 @@ def _intercept_deletes(session, flush_context, instances):
                     {"is_deleted": True, "deleted_at": now_time},
                     synchronize_session="evaluate"
                 )
+                session.query(QuizSession).filter(QuizSession.course_id == obj.id).update(
+                    {"is_deleted": True, "deleted_at": now_time},
+                    synchronize_session="evaluate"
+                )
             elif isinstance(obj, Chapter):
                 session.query(Question).filter(Question.chapter_id == obj.id).update(
+                    {"is_deleted": True, "deleted_at": now_time},
+                    synchronize_session="evaluate"
+                )
+                session.query(QuizSession).filter(QuizSession.chapter_id == obj.id).update(
                     {"is_deleted": True, "deleted_at": now_time},
                     synchronize_session="evaluate"
                 )

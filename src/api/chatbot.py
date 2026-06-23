@@ -866,6 +866,7 @@ def direct_action_stream(
                 if not chapter:
                     yield send("error", {"message": "Không tìm thấy chương học"})
                     return
+                session_duration = params.get("session_duration", 90)
                 clos = db.query(CLO).filter(CLO.course_id == course_id).all()
                 clos_context = "Danh sách Chuẩn đầu ra (CLOs):\n" + "\n".join([f"- [{c.clo_code}] {c.description}" for c in clos])
                 orchestrator = MaterialOrchestrator(
@@ -874,7 +875,7 @@ def direct_action_stream(
                     clos_context=clos_context,
                     rag_context="",
                     target_lang="Tiếng Việt (Vietnamese)",
-                    session_duration=90,
+                    session_duration=int(session_duration),
                     user_id=user_id,
                     course_id=course_id,
                     chapter_id=chapter_id,
@@ -912,13 +913,18 @@ def direct_action_stream(
                     yield send("error", {"message": "Không tìm thấy chương học"})
                     return
 
+                class_size = params.get("class_size", 40)
+                has_wifi = params.get("has_wifi", True)
+                furniture_type = params.get("furniture_type", "movable")
+                session_duration = params.get("session_duration", 90)
+
                 stream_gen = generate_chapter_materials_stream_generator(
                     chapter_id=int(chapter_id),
                     req_language="vi",
-                    req_session_duration=90,
-                    req_class_size=40,
-                    req_has_wifi=True,
-                    req_furniture_type="movable",
+                    req_session_duration=int(session_duration),
+                    req_class_size=int(class_size),
+                    req_has_wifi=bool(has_wifi),
+                    req_furniture_type=str(furniture_type),
                     chapter_title=chapter.title,
                     chapter_description=chapter.description or "",
                     course_id=course_id,
@@ -1009,13 +1015,18 @@ def direct_action_stream(
                 from src.services.material_orchestrator import MaterialOrchestrator
                 clos = db.query(CLO).filter(CLO.course_id == course_id).all()
                 clos_context = "Danh sách Chuẩn đầu ra (CLOs):\n" + "\n".join([f"- [{c.clo_code}] {c.description}" for c in clos])
+                class_size = params.get("class_size", 40)
+                has_wifi = params.get("has_wifi", True)
+                furniture_type = params.get("furniture_type", "movable")
+                session_duration = params.get("session_duration", 90)
+
                 orchestrator = MaterialOrchestrator(
                     chapter_title=chapter.title,
                     chapter_description=chapter.description or "",
                     clos_context=clos_context,
                     rag_context="",
                     target_lang="Tiếng Việt (Vietnamese)",
-                    session_duration=90,
+                    session_duration=int(session_duration),
                     user_id=user_id,
                     course_id=course_id,
                     chapter_id=chapter_id,
@@ -1028,10 +1039,10 @@ def direct_action_stream(
                 stream_gen = generate_chapter_materials_stream_generator(
                     chapter_id=int(chapter_id),
                     req_language="vi",
-                    req_session_duration=90,
-                    req_class_size=40,
-                    req_has_wifi=True,
-                    req_furniture_type="movable",
+                    req_session_duration=int(session_duration),
+                    req_class_size=int(class_size),
+                    req_has_wifi=bool(has_wifi),
+                    req_furniture_type=str(furniture_type),
                     chapter_title=chapter.title,
                     chapter_description=chapter.description or "",
                     course_id=course_id,

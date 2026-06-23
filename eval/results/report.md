@@ -9,7 +9,7 @@
 | Metric | Target | Actual | Status |
 |--------|--------|--------|--------|
 | Response accuracy | >80% | 66.7% | ⏳ |
-| Response latency | <3s | 1.97s | ✅ |
+| Response latency | <3s | 9.65s | ⏳ |
 | User satisfaction | >4/5 | — | ⏳ |
 | Test coverage | >60% | — | ⏳ |
 

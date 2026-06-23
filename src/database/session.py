@@ -38,6 +38,30 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+def run_db_migrations():
+    """Chạy Alembic migrations tự động khi startup để giữ schema đồng bộ."""
+    import logging
+    from alembic import command
+    from alembic.config import Config
+    
+    logger = logging.getLogger(__name__)
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    ini_path = os.path.join(base_dir, "alembic.ini")
+    
+    if os.path.exists(ini_path):
+        logger.info("[MIGRATION] Running Alembic migrations upgrade head...")
+        alembic_cfg = Config(ini_path)
+        alembic_cfg.set_main_option("script_location", os.path.join(base_dir, "alembic"))
+        try:
+            command.upgrade(alembic_cfg, "head")
+            logger.info("[MIGRATION] Database migrations upgrade completed.")
+        except Exception as e:
+            logger.warning(f"[MIGRATION WARNING] Alembic migration failed: {e}")
+    else:
+        logger.warning(f"[MIGRATION WARNING] alembic.ini not found at {ini_path}. Fallback to create_all.")
+        Base.metadata.create_all(bind=engine)
+
+
 # Dependency cung cấp session DB cho các routers FastAPI
 def get_db():
     db = SessionLocal()

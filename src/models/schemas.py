@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 # --- CHATBOT SCHEMAS ---
@@ -111,6 +112,7 @@ class ChapterResponse(BaseModel):
 class MaterialSave(BaseModel):
     slide_content: str = Field(..., description="Slide outline dạng Markdown")
     active_learning_script: str = Field(..., description="Kịch bản hoạt động active learning")
+    diagram_layouts: str | None = Field(None, description="Tọa độ sắp xếp các node sơ đồ trực quan")
 
 
 class MaterialResponse(BaseModel):
@@ -118,6 +120,7 @@ class MaterialResponse(BaseModel):
     chapter_id: int
     slide_content: str | None
     active_learning_script: str | None
+    diagram_layouts: str | None = None
     created_by: str | None = None
     status: str | None = None
 
@@ -229,3 +232,63 @@ class QuestionResponse(BaseModel):
 class SearchTestRequest(BaseModel):
     query: str
     top_k: int = 5
+
+
+class SyllabusGenerateRequest(BaseModel):
+    course_name: str = Field(..., description="Tên môn học")
+    course_code: str | None = Field(None, description="Mã môn học")
+    course_description: str | None = Field(None, description="Mô tả hoặc mục tiêu môn học")
+    audience: str | None = Field("Undergraduate", description="Đối tượng/Trình độ học viên")
+    duration_weeks: int = Field(15, description="Số tuần học (thời lượng)")
+    learning_outcomes_focus: str | None = Field(None, description="Định hướng chuẩn đầu ra mong muốn")
+    language: str = Field("vi", description="Ngôn ngữ sinh syllabus ('vi' hoặc 'en')")
+
+
+# --- ASSESSMENT & LOOP HUB SCHEMAS ---
+
+class QuizSessionCreate(BaseModel):
+    chapter_id: int | None = Field(None, description="ID của chương học")
+    session_name: str = Field(..., description="Tên phiên chơi game")
+
+
+class QuizSessionResponse(BaseModel):
+    id: int
+    course_id: int
+    chapter_id: int | None
+    session_name: str
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QuizResponseSubmit(BaseModel):
+    question_id: int = Field(..., description="ID của câu hỏi")
+    selected_option: str = Field(..., description="Đáp án được chọn (A, B, C, D...)")
+    is_correct: bool = Field(..., description="Trạng thái trả lời đúng/sai")
+
+
+class CLOAchievement(BaseModel):
+    clo_id: int
+    clo_code: str
+    description: str
+    bloom_level: int
+    cas_score: float
+    status: str  # "passing" | "warning" | "critical"
+
+
+class ImprovementRecord(BaseModel):
+    id: int
+    chapter_id: int
+    chapter_title: str
+    proposed_content: str | None
+    edited_content: str | None
+    pedagogical_reason: str | None
+    created_at: datetime
+
+
+class AssessmentAnalyticsResponse(BaseModel):
+    clos: list[CLOAchievement]
+    improvements: list[ImprovementRecord]
+
+
