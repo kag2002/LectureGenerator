@@ -1,7 +1,7 @@
 # Worklog — Team 023
 
 > [!NOTE]
-> **Last updated:** 2026-06-22. Active development worklog.
+> **Last updated:** 2026-06-23. Active development worklog.
 
 > Ghi lại tất cả công việc đã làm theo ngày. Ai làm gì, kết quả gì.
 
@@ -87,6 +87,18 @@
 | Phạm Thành Nam | Cập nhật eval report với test results | ✅ Done | 241 tests, 51% coverage, metrics updated | 0.5h |
 
 **Tổng kết:** Documentation day — cập nhật toàn bộ deliverables trước Demo Day.
+
+---
+
+## 2026-06-23
+
+| Member | Task | Status | Output | Time |
+|--------|------|--------|--------|------|
+| Lê Thiên Khang | Giải quyết Code Smells: Khử các inline imports trùng lặp, tách helper function `extract_layout` ra cấp module | ✅ Done | Code sạch hơn, giảm trùng lặp imports | 2h |
+| Lê Thiên Khang | Tối ưu hóa cấu trúc thư mục backend và modular hóa tích hợp LLM | ✅ Done | `models` -> `schemas`, nhóm LLM vào `src/utils/llm`, bổ sung `__init__.py` | 3h |
+| Lê Thiên Khang | Chạy kiểm thử toàn diện & cập nhật đánh giá | ✅ Done | 308/308 tests pass thành công, cập nhật `walkthrough.md` | 1h |
+
+**Tổng kết:** Refactoring & Optimization day — chuẩn hóa cấu trúc thư mục, đóng gói module LLM và loại bỏ các code smells.
 
 ---
 
