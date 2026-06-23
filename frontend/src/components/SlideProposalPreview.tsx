@@ -6,7 +6,7 @@ import { renderBoldRuns, renderMarkdownInline } from '../utils/markdown';
 import { 
   Loader2, BookOpen, BarChart2, Presentation, LayoutGrid, Plus, 
   ChevronLeft, ChevronRight, Sparkles, X, Check, AlertTriangle, 
-  Maximize2, Minimize2, Settings, Play, GitFork, CheckCircle2, Layers 
+  Maximize2, Minimize2
 } from 'lucide-react';
 import MermaidDiagram from './MermaidDiagram';
 import { 
@@ -36,23 +36,13 @@ const ReadOnlyCustomNode = ({ data }: any) => {
   
   // Determine accent color for this node type
   let accentColor = theme.accents[0] || '#8C6239'; // Default gold accent
-  let IconComponent = Settings;
-  let labelType = 'Tiến trình';
 
   if (type === 'input') {
     accentColor = '#10B981'; // Green
-    IconComponent = Play;
-    labelType = 'Đầu vào';
   } else if (type === 'decision') {
     accentColor = '#FF9100'; // Amber
-    IconComponent = GitFork;
-    labelType = 'Quyết định';
   } else if (type === 'output') {
     accentColor = '#3b82f6'; // Blue
-    IconComponent = CheckCircle2;
-    labelType = 'Kết quả';
-  } else {
-    IconComponent = Layers;
   }
 
   // Base layout styles aligning with the theme card styles
@@ -121,11 +111,6 @@ const ReadOnlyCustomNode = ({ data }: any) => {
           justifyContent: 'center',
           gap: '2px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px', fontWeight: 'bold' }}>
-            <IconComponent size={10} />
-            <span>{labelType}</span>
-          </div>
-
           <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', userSelect: 'none', fontSize: '12px', lineHeight: '1.2' }}>
             {data.label}
           </div>
@@ -142,11 +127,6 @@ const ReadOnlyCustomNode = ({ data }: any) => {
       <Handle type="source" position={Position.Right} id="s-right" style={{ opacity: 0, pointerEvents: 'none' }} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '9px', textTransform: 'uppercase', color: accentColor, letterSpacing: '0.5px', fontWeight: 'bold' }}>
-          <IconComponent size={10} />
-          <span>{labelType}</span>
-        </div>
-
         <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', userSelect: 'none', fontSize: '13px', lineHeight: '1.3' }}>
           {data.label}
         </div>
