@@ -2,7 +2,7 @@
 
 > Báo cáo đánh giá chất lượng sản phẩm VinUni AI Lecture Assistant theo tiêu chí BTC.
 >
-> **Last updated:** 2026-06-22
+> **Last updated:** 2026-06-23
 
 ---
 
@@ -14,21 +14,21 @@
 | Response latency | <3s | 9.03s | ⏳ |
 | User satisfaction | >4/5 | — | ⏳ Chưa khảo sát |
 | Test coverage | >60% | 51% | ⏳ Đang nâng lên |
-| Tests passing | 100% | 100% (241/241) | ✅ Đạt |
+| Tests passing | 100% | 100% (308/308) | ✅ Đạt |
 
 ## 2. Test Results
 
 ### Unit Tests
 ```
 $ python -m pytest tests/ --tb=short -q
-241 passed, 593 warnings in 57.15s
+308 passed, 219 warnings in 63.79s
 ```
 
 ### Coverage Report
 ```
 $ python -m pytest tests/ --cov=src --cov-report=term-missing -q
 TOTAL    7332   3623    51%
-241 passed, 593 warnings in 68.98s
+308 passed, 219 warnings in 74.52s
 ```
 
 ### Coverage Breakdown (Top modules)
@@ -46,23 +46,17 @@ TOTAL    7332   3623    51%
 | `src/utils/telemetry.py` | 80% | System metrics |
 | `src/services/material_orchestrator.py` | 12% | Needs improvement |
 | `src/services/slide_renderer.py` | 39% | Needs improvement |
-| `src/utils/llm_client.py` | 28% | Needs improvement |
+| `src/utils/llm/` | 28% | Needs improvement |
 
 ### Test Categories
 
-| Category | Count | Description |
-|----------|-------|-------------|
-| API endpoint tests | ~60 | CRUD, auth, pagination |
+| API endpoint tests | ~130 | CRUD, auth, pagination |
+| Service layer tests | ~90 | Business logic, slide/mermaid rendering |
 | Agent/graph tests | ~30 | State machine, nodes, tools |
-| Chatbot SSE tests | ~15 | Streaming, sessions |
 | Parser format tests | ~20 | PDF, DOCX, TXT parsing |
-| Auth tests | ~10 | JWT, login, registration |
-| Soft delete tests | ~10 | Delete, restore, constraints |
-| Memory architecture tests | ~15 | Agent memory, summarization |
-| AI generation tests | ~20 | Outline, materials, questions |
-| Integration tests | ~30 | E2E, service integration |
-| Export tests | ~10 | PPTX, DOCX, ZIP |
-| **Total** | **241** | **All passing** |
+| Auth & Soft delete tests | ~20 | Login, registration, delete/restore |
+| Memory & Integration tests | ~18 | Agent memory, E2E workflow |
+| **Total** | **308** | **All passing** |
 
 ### Integration Tests
 - End-to-end flow: Login → Create Course → Upload Syllabus → Generate Outline → Generate Questions → Export

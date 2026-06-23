@@ -94,7 +94,7 @@ cd frontend && npm install && npm run dev
 │   │   ├── trash.py         #    Soft-delete & restore
 │   │   └── telemetry.py     #    System metrics & monitoring
 │   ├── services/            # 🔧 Business logic (LLM, RAG, export)
-│   ├── models/              # 📋 Pydantic schemas
+│   ├── schemas/             # 📋 Pydantic schemas
 │   ├── database/            # 💾 SQLAlchemy models + session
 │   ├── prompts/             # 📝 LLM prompt templates
 │   ├── utils/               # 🛠 Utilities (parser, cache, alerting)
@@ -102,7 +102,7 @@ cd frontend && npm install && npm run dev
 │   └── main.py              # 🚀 App entry point
 ├── frontend/                # 🎨 Next.js React Frontend
 │   └── src/views/           #    14 view components
-├── tests/                   # 🧪 241 tests (51% coverage)
+├── tests/                   # 🧪 308 tests (51% coverage)
 │   ├── test_agents/         #    Agent/graph tests
 │   ├── test_api/            #    API endpoint tests
 │   ├── test_integration/    #    Integration tests
@@ -172,10 +172,10 @@ graph TB
 ## Test Results
 
 ```
-241 passed, 0 failed in 57s
+308 passed, 0 failed in 63s
 Test coverage: 51%
 Response accuracy: 66.7%
-Response latency: < 2s average
+Response latency: < 3s target (Actual: 9.03s)
 ```
 
 ## Deliverables Checklist
