@@ -17,6 +17,8 @@ import {
   BaseEdge, 
   EdgeLabelRenderer, 
   getSmoothStepPath,
+  ReactFlowProvider,
+  useReactFlow,
   type EdgeProps
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -221,6 +223,45 @@ const ReadOnlyEditableEdge = ({
         </EdgeLabelRenderer>
       )}
     </>
+  );
+};
+
+// --- Read-Only Canvas Component wrapping ReactFlow and triggering fitView ---
+interface ReadOnlyFlowCanvasProps {
+  nodes: any[];
+  edges: any[];
+  nodeTypes: any;
+  edgeTypes: any;
+}
+
+const ReadOnlyFlowCanvas = ({ nodes, edges, nodeTypes, edgeTypes }: ReadOnlyFlowCanvasProps) => {
+  const { fitView } = useReactFlow();
+
+  useEffect(() => {
+    // Fit view after a brief timeout to make sure dimensions are ready in the DOM
+    const timer = setTimeout(() => {
+      fitView({ padding: 0.15 });
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [nodes, edges, fitView]);
+
+  return (
+    <ReactFlow
+      nodes={nodes}
+      edges={edges}
+      nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      nodesDraggable={false}
+      nodesConnectable={false}
+      elementsSelectable={false}
+      panOnDrag={true}
+      zoomOnScroll={true}
+      preventScrolling={true}
+      zoomOnDoubleClick={false}
+      fitView
+    >
+      <Background color="rgba(255,255,255,0.05)" gap={12} size={1} />
+    </ReactFlow>
   );
 };
 
@@ -605,25 +646,17 @@ export default function SlideProposalPreview({
                 })}
               </ul>
             </div>
-            <div className="slide-svg-graphic-col" style={{ position: 'relative' }}>
+            <div className="slide-svg-graphic-col" style={{ position: 'relative', alignSelf: 'stretch' }}>
               {customLayout ? (
-                <div style={{ width: '100%', height: '100%', minHeight: '280px', position: 'relative' }}>
-                  <ReactFlow
-                    nodes={customLayout.nodes}
-                    edges={customLayout.edges}
-                    nodeTypes={nodeTypes}
-                    edgeTypes={edgeTypes}
-                    fitView
-                    nodesDraggable={false}
-                    nodesConnectable={false}
-                    elementsSelectable={false}
-                    panOnDrag={false}
-                    zoomOnScroll={false}
-                    preventScrolling={true}
-                    zoomOnDoubleClick={false}
-                  >
-                    <Background color="rgba(255,255,255,0.05)" gap={12} size={1} />
-                  </ReactFlow>
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                  <ReactFlowProvider>
+                    <ReadOnlyFlowCanvas
+                      nodes={customLayout.nodes}
+                      edges={customLayout.edges}
+                      nodeTypes={nodeTypes}
+                      edgeTypes={edgeTypes}
+                    />
+                  </ReactFlowProvider>
                   <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: 'var(--vinuni-gold)', zIndex: 10, backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' }}>
                     ✨ Bố cục tùy chỉnh
                   </div>
@@ -640,25 +673,17 @@ export default function SlideProposalPreview({
             <Presentation size={12} aria-hidden="true" /> [Sơ đồ Mermaid{customLayout ? ' (Tùy chỉnh)' : ''}]
           </div>
         ) : (
-          <div className="slide-body-svg full-view" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="slide-body-svg full-view" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'stretch', justifyContent: 'center' }}>
             {customLayout ? (
-              <div style={{ width: '100%', height: '100%', minHeight: '350px', position: 'relative' }}>
-                <ReactFlow
-                  nodes={customLayout.nodes}
-                  edges={customLayout.edges}
-                  nodeTypes={nodeTypes}
-                  edgeTypes={edgeTypes}
-                  fitView
-                  nodesDraggable={false}
-                  nodesConnectable={false}
-                  elementsSelectable={false}
-                  panOnDrag={false}
-                  zoomOnScroll={false}
-                  preventScrolling={true}
-                  zoomOnDoubleClick={false}
-                >
-                  <Background color="rgba(255,255,255,0.05)" gap={12} size={1} />
-                </ReactFlow>
+              <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                <ReactFlowProvider>
+                  <ReadOnlyFlowCanvas
+                    nodes={customLayout.nodes}
+                    edges={customLayout.edges}
+                    nodeTypes={nodeTypes}
+                    edgeTypes={edgeTypes}
+                  />
+                </ReactFlowProvider>
                 <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', color: 'var(--vinuni-gold)', zIndex: 10, backdropFilter: 'blur(4px)', border: '1px solid rgba(255,255,255,0.1)' }}>
                   ✨ Bố cục tùy chỉnh
                 </div>
