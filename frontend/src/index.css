@@ -398,3 +398,42 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .login-title, .roadmap-title, .planner-titl
 .empty-suggestions-item:hover {
   color: var(--text-primary);
 }
+
+/* ============================================================
+   GLOW & BOUNCE HINT FOR LECTURE PREPARATION BUTTONS
+   ============================================================ */
+@keyframes glowBounceHint {
+  0%, 100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 0 rgba(197, 168, 128, 0);
+  }
+  12% {
+    transform: translateY(-8px);
+    box-shadow: 0 0 20px 6px rgba(197, 168, 128, 0.75), 0 8px 16px rgba(0, 0, 0, 0.2);
+    border-color: var(--vinuni-gold) !important;
+  }
+  24% {
+    transform: translateY(1px);
+    box-shadow: 0 0 6px 2px rgba(197, 168, 128, 0.2);
+  }
+  36% {
+    transform: translateY(-4px);
+    box-shadow: 0 0 14px 4px rgba(197, 168, 128, 0.6), 0 4px 10px rgba(0, 0, 0, 0.15);
+  }
+  48% {
+    transform: translateY(0);
+    box-shadow: 0 0 8px 2px rgba(197, 168, 128, 0.4);
+  }
+  60%, 95% {
+    transform: translateY(0);
+    box-shadow: 0 0 4px 1px rgba(197, 168, 128, 0.15);
+  }
+}
+
+.glow-bounce-hint {
+  animation: glowBounceHint 3.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite;
+  border-color: var(--vinuni-gold) !important;
+  position: relative;
+  z-index: 10;
+}
+
