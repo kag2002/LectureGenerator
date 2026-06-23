@@ -117,8 +117,9 @@
 | Lê Thiên Khang | Giải quyết Code Smells: Khử các inline imports trùng lặp, tách helper function `extract_layout` ra cấp module | ✅ Done | Loại bỏ 27+ inline imports trùng lặp | 2h |
 | Lê Thiên Khang | Tối ưu hóa cấu trúc thư mục backend và modular hóa tích hợp LLM | ✅ Done | `models` -> `schemas`, đóng gói LLM vào `src/utils/llm`, thêm package initializers | 3h |
 | Lê Thiên Khang | Chạy kiểm thử toàn diện & cập nhật đánh giá | ✅ Done | 308/308 tests pass thành công, cập nhật `walkthrough.md` | 1h |
+| Lê Thiên Khang | Khắc phục lỗi overlap giao diện: Sử dụng React Portal để đưa ReactFlowEditorModal ra body level | ✅ Done | Modal hiển thị đè lên top header/sidebar đúng z-index | 0.5h |
 
-**Tổng kết:** Refactoring & Optimization Day — Đại tu cấu trúc thư mục backend/frontend, loại bỏ code smells, mở rộng kiểm thử toàn diện đạt 308 tests pass.
+**Tổng kết:** Refactoring & Optimization Day — Đại tu cấu trúc thư mục backend/frontend, loại bỏ code smells, mở rộng kiểm thử toàn diện đạt 308 tests pass, khắc phục lỗi chồng lấp giao diện của React Flow editor.
 
 ---
 
