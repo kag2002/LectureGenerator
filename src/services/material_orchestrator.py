@@ -13,7 +13,7 @@ from src.prompts.materials import (
     build_slide_writer_system_prompt,
     build_storyboard_architect_system_prompt,
 )
-from src.utils.llm_client import call_llm_json
+from src.utils.llm import call_llm_json, async_call_llm_json
 
 BUDGETS = {
     "visual_highlight": 250,
@@ -477,7 +477,6 @@ Nội dung slide hiện tại để sửa đổi:
         )
         user_prompt = "Hãy thiết kế Đề cương slide bài giảng dạng JSON chứa danh sách các slide."
 
-        from src.utils.llm_client import async_call_llm_json
 
         res = await async_call_llm_json(
             user_prompt,
@@ -500,7 +499,6 @@ Nội dung slide hiện tại để sửa đổi:
         )
         user_prompt = "Hãy phân chia thông tin RAG và gán nhãn layout cho từng slide."
 
-        from src.utils.llm_client import async_call_llm_json
 
         res = await async_call_llm_json(
             user_prompt,
@@ -649,7 +647,6 @@ Nội dung slide hiện tại để sửa đổi:
 
         user_prompt = "Hãy viết mã nguồn Markdown cho slide này dưới dạng JSON."
 
-        from src.utils.llm_client import async_call_llm_json
 
         # Thử lần 1 bất đồng bộ
         res = await async_call_llm_json(
@@ -742,7 +739,6 @@ Nội dung slide hiện tại để sửa đổi:
         )
         scheduler_user_prompt = "Hãy lập danh sách các hoạt động active learning xen kẽ cho bài giảng."
 
-        from src.utils.llm_client import async_call_llm_json
 
         scheduler_res = await async_call_llm_json(
             scheduler_user_prompt,
@@ -833,7 +829,6 @@ Nội dung slide hiện tại để sửa đổi:
         )
         user_prompt = "Hãy tiến hành kiểm toán logic bài học."
 
-        from src.utils.llm_client import async_call_llm_json
 
         res = await async_call_llm_json(
             user_prompt,

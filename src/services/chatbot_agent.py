@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 from sqlalchemy.orm import Session
 
 from src.database.models import ChatMessage, Course
-from src.utils.llm_client import langfuse
+from src.utils.llm import langfuse, FREE_MODELS
 
 # Khai báo các tools hỗ trợ giảng viên
 CHATBOT_TOOLS = [
@@ -258,7 +258,6 @@ def get_candidate_models() -> list[dict]:
         openrouter_client = AsyncOpenAI(
             base_url="https://openrouter.ai/api/v1", api_key=os.environ.get("OPENROUTER_API_KEY")
         )
-        from src.utils.llm_client import FREE_MODELS
 
         for m in FREE_MODELS[:3]:
             candidate_models.append(

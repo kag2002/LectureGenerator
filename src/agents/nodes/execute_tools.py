@@ -5,7 +5,7 @@ from typing import Any
 from src.agents.nodes.helpers import TOOL_FRIENDLY_NAMES
 from src.agents.state import AgentState
 from src.services.chatbot_tools import execute_chatbot_tool
-from src.utils.llm_client import langfuse
+from src.utils.llm import langfuse
 
 logger = logging.getLogger(__name__)
 

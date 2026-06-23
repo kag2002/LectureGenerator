@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, Question, RAGDocument, User
 from src.database.session import get_db
-from src.models.schemas import (
+from src.schemas.schemas import (
     CLOCreate,
     CLOResponse,
     CourseCreate,
@@ -21,7 +21,7 @@ from src.models.schemas import (
 )
 from src.services.document_service import process_document_background
 from src.services.syllabus_service import generate_syllabus_parse_events
-from src.utils.llm_client import async_call_llm_stream
+from src.utils.llm import async_call_llm_stream
 from src.utils.parser import safe_parse_bloom_level
 
 router = APIRouter(prefix="/api/courses", tags=["courses"])

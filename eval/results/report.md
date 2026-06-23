@@ -11,7 +11,7 @@
 | Metric | Target | Actual | Status |
 |--------|--------|--------|--------|
 | Response accuracy | >80% | 66.7% | ⏳ |
-| Response latency | <3s | 6.43s | ⏳ |
+| Response latency | <3s | 8.78s | ⏳ |
 | User satisfaction | >4/5 | — | ⏳ Chưa khảo sát |
 | Test coverage | >60% | 51% | ⏳ Đang nâng lên |
 | Tests passing | 100% | 100% (241/241) | ✅ Đạt |

@@ -18,7 +18,7 @@ from src.database.models import (
     User,
 )
 from src.database.session import get_db
-from src.models.schemas import (
+from src.schemas.schemas import (
     AssessmentAnalyticsResponse,
     CLOAchievement,
     ImprovementRecord,

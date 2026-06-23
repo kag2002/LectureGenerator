@@ -203,7 +203,7 @@ def test_search_rag_isolated():
     )
 
     # Search with testing mode query expansion bypass (or mocked LLM)
-    with patch("src.utils.llm_client.call_llm_json") as mock_llm:
+    with patch("src.utils.llm.call_llm_json") as mock_llm:
         mock_llm.return_value = {"expanded_queries": ["BST nhị phân", "cây tìm kiếm"]}
         results = search_rag_isolated("BST", user_id, course_id, top_k=2, chapter_id=1)
         assert len(results) > 0

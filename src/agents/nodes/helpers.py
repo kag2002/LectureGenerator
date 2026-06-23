@@ -3,7 +3,7 @@ import os
 
 from openai import AsyncOpenAI
 
-from src.utils.llm_client import FREE_MODELS
+from src.utils.llm import FREE_MODELS
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 # Ensure we import llm client functions
-from src.utils.llm_client import call_llm_json
+from src.utils.llm import call_llm_json
 
 DATASET_FILE = Path(__file__).parent / "dataset.json"
 REPORT_FILE = Path(__file__).parent.parent / "results" / "report.md"

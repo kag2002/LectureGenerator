@@ -9,7 +9,7 @@ from src.auth import get_current_user
 from src.database.models import CLO, Chapter, ChapterMaterial, Course, OdinActionLog, Question, User
 from src.database.session import get_db
 from src.database.vector_db import search_rag_isolated
-from src.models.schemas import (
+from src.schemas.schemas import (
     QuestionCreateRequest,
     QuestionGenerateRequest,
     QuestionResponse,
@@ -22,7 +22,7 @@ from src.prompts.questions import (
     build_generator_user_prompt,
     build_solver_prompt,
 )
-from src.utils.llm_client import call_llm_json, get_token_usage, init_token_tracker, langfuse
+from src.utils.llm import call_llm_json, get_token_usage, init_token_tracker, langfuse
 from src.utils.parser import safe_parse_bloom_level
 from src.services.lock_service import check_context_lock
 

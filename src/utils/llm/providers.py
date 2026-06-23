@@ -19,7 +19,7 @@ from google import genai
 from google.genai import types
 from openai import AsyncOpenAI, OpenAI
 
-from .llm_shared import (
+from .shared import (
     FREE_MODELS,
     format_gemini_contents,
     format_openai_messages,

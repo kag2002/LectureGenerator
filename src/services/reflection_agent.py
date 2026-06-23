@@ -3,7 +3,7 @@ import json
 from sqlalchemy.orm import Session
 
 from src.database.models import Chapter, MaterialRevision, SystemRule
-from src.utils.llm_client import async_call_llm_json
+from src.utils.llm import async_call_llm_json
 
 REFLECTION_SYSTEM_PROMPT = """Bạn là trợ lý AI phản tư sư phạm chuyên nghiệp (Pedagogical Reflection Agent).
 Nhiệm vụ của bạn là phân tích lịch sử chỉnh sửa slide bài giảng hoặc kịch bản active learning của giảng viên,

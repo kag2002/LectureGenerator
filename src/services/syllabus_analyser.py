@@ -1,4 +1,4 @@
-from src.utils.llm_client import call_llm_json, langfuse
+from src.utils.llm import call_llm_json, langfuse
 
 SYSTEM_INSTRUCTION = """Bạn là chuyên gia sư phạm đại học quốc tế chuyên về kiểm định chất lượng giáo dục (AUN-QA, ABET).
 Nhiệm vụ của bạn là đọc văn bản đề cương môn học (Syllabus) và bóc tách các thông tin khóa học sau:

@@ -4,8 +4,7 @@ import time
 
 import pytest
 
-from src.utils.llm_cache import CACHE_DIR
-from src.utils.llm_client import async_call_llm_json, call_llm_json, call_llm_stream
+from src.utils.llm import CACHE_DIR, async_call_llm_json, call_llm_json, call_llm_stream
 
 
 @pytest.fixture(autouse=True)

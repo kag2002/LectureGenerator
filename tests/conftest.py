@@ -240,7 +240,7 @@ def mock_llm():
 @pytest.fixture()
 def mock_call_llm_json():
     """Patch call_llm_json to return a controllable dict."""
-    with patch("src.utils.llm_client.call_llm_json") as m:
+    with patch("src.utils.llm.call_llm_json") as m:
         m.return_value = {"chapters": []}
         yield m
 

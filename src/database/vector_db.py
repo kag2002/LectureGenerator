@@ -622,7 +622,7 @@ def search_rag_isolated(
         # B. Mở rộng bằng LLM (chỉ chạy khi không ở chế độ test, có key và không bị tắt bởi config)
         if os.environ.get("TESTING") != "1" and os.environ.get("DISABLE_QUERY_EXPANSION") != "true":
             try:
-                from src.utils.llm_client import call_llm_json
+                from src.utils.llm import call_llm_json
 
                 expansion_prompt = (
                     "Bạn là trợ lý AI chuyên về RAG. Hãy phân tích câu hỏi/truy vấn của người dùng "

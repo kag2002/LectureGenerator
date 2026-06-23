@@ -12,7 +12,7 @@ from src.prompts.materials import (
 )
 from src.services.image_service import process_markdown_images
 from src.services.material_orchestrator import MaterialOrchestrator, deduplicate_rag_hits
-from src.utils.llm_client import call_llm_json, call_llm_stream, get_token_usage, init_token_tracker, langfuse
+from src.utils.llm import call_llm_json, call_llm_stream, get_token_usage, init_token_tracker, langfuse
 from src.utils.sse import format_sse
 from src.utils.task_manager import task_manager
 

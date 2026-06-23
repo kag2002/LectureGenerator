@@ -177,7 +177,7 @@ def get_mock_json_response(prompt, system_instruction: str = None) -> dict:
 
 def get_mock_stream_content() -> str:
     """Trả về nội dung mock cho streaming fallback."""
-    mock_slide = "# Chương 1: Tổng quan về Cây BST\n* Cây nhị phân tìm kiếm là cấu trúc cây có nhánh trái luôn nhỏ hơn và nhánh phải luôn lớn hơn nút gốc.\n* Thời gian tìm kiếm trung bình là O(log n).\n[Nguồn: slide_dsa.pdf - Trang: 1]\n\n# Slide 2: Hiệu năng của BST\n* Trường hợp xấu nhất, cây có thể suy biến thành danh sách liên kết với độ phức tạp O(n).\n[Nguồn: slide_dsa.pdf - Trang: 2]"
+    mock_slide = "# Chương 1: Tổng quan về Cây BST\n* Cây nhị phân tìm kiếm là cấu trúc cây có nhánh trái luôn nhỏ hơn và nhánh phải luôn lớn hơn nút gốc.\n* Thời gian tìm kiếm trung bình là O(log n).\n[Nguồn: slide_dsa.pdf - Trang: 1]\n\n# Slide 2: Hiệu năng của BST\n* Trường hợp xấu nhất, cây có thể suy biến thành danh sách kết với độ phức tạp O(n).\n[Nguồn: slide_dsa.pdf - Trang: 2]"
     mock_act = "### Hoạt động: Think-Pair-Share (5 phút)\n- **Bước 1:** Giảng viên đưa ra một dãy số và bắt học viên vẽ cây BST của họ (2 phút).\n- **Bước 2:** Trao đổi chéo với bạn bên cạnh để so sánh kết quả (2 phút).\n- **Bước 3:** Gọi 1 cặp lên bảng vẽ cây BST đúng nhất (1 phút)."
     return f"---SLIDES---\n{mock_slide}\n---ACTIVE_LEARNING---\n{mock_act}"
 

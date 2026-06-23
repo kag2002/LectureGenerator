@@ -11,7 +11,7 @@ from src.database.models import Course, RAGDocument, User
 from src.database.session import get_db
 from src.database.vector_db import add_document_vector
 from src.services.web_search_mock_data import MOCK_SEARCH_RESULTS_AVL, MOCK_SEARCH_RESULTS_DEFAULT
-from src.utils.llm_client import call_llm_json
+from src.utils.llm import call_llm_json
 
 router = APIRouter(prefix="/api/courses", tags=["web_search"])
 

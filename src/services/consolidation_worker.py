@@ -4,7 +4,7 @@ import gzip
 from sqlalchemy.orm import Session
 
 from src.database.models import ChatMessage, ChatSession
-from src.utils.llm_client import async_call_llm_json
+from src.utils.llm import async_call_llm_json
 
 CONSOLIDATION_SYSTEM_PROMPT = """Bạn là trợ lý AI tóm tắt phiên làm việc (Session Consolidation Agent).
 Nhiệm vụ: Hãy phân tích toàn bộ lịch sử trò chuyện của phiên làm việc dưới đây, tự động trích xuất các thông tin chính quan trọng:

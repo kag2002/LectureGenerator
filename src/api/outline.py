@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from src.auth import get_current_user
 from src.database.models import CLO, Chapter, Course, User
 from src.database.session import get_db
-from src.models.schemas import ChapterCreate, ChapterResponse
-from src.utils.llm_client import async_call_llm_stream, call_llm_json, langfuse
+from src.schemas.schemas import ChapterCreate, ChapterResponse
+from src.utils.llm import async_call_llm_stream, call_llm_json, langfuse
 
 router = APIRouter(prefix="/api/courses", tags=["outline"])
 

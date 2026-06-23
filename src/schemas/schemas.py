@@ -291,5 +291,3 @@ class ImprovementRecord(BaseModel):
 class AssessmentAnalyticsResponse(BaseModel):
     clos: list[CLOAchievement]
     improvements: list[ImprovementRecord]
-
-

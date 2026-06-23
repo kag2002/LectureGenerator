@@ -9,7 +9,7 @@ from src.auth import create_access_token, get_password_hash, verify_password
 from src.config import get_settings
 from src.database.models import User
 from src.database.session import get_db
-from src.models.schemas import GoogleLoginRequest, TokenResponse, UserLogin, UserRegister
+from src.schemas.schemas import GoogleLoginRequest, TokenResponse, UserLogin, UserRegister
 
 settings = get_settings()
 
