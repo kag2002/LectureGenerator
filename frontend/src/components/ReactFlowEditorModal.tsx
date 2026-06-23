@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   ReactFlow, 
   Controls, 
@@ -1468,11 +1469,18 @@ function ReactFlowEditor({
 // Wrapper component to provide ReactFlowProvider context to ReactFlowEditor hooks
 export default function ReactFlowEditorModal(props: ReactFlowEditorModalProps) {
   if (!props.isOpen) return null;
-  return (
+  
+  const content = (
     <ReactFlowProvider>
       <ReactFlowEditor {...props} />
     </ReactFlowProvider>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(content, document.body);
+  }
+
+  return content;
 }
 
 interface ReactFlowEditorModalProps {
